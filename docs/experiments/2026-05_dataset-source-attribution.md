@@ -132,8 +132,17 @@ Conclusions:
    is no separate "later years subset" to ingest.
 3. The 13 "only in JAMSTEC" are exactly the 13 that `unzip` failed on in
    2026-04 — they may be recoverable by retrying extraction from the
-   JAMSTEC copy. That recovery is now scoped as task
-   `05-11-recover-bad-subzips`.
+   JAMSTEC copy. That recovery was scoped as task
+   `05-11-recover-bad-subzips`, investigated, and **deliberately
+   skipped** (2026-05-11): the JAMSTEC copies turned out to be
+   byte-identical to the bad copies (same source archive, same
+   corruption), and the salvageable share via per-entry extraction
+   (~1.5% of cruises, ~3% of data) was below the threshold worth the
+   recovery effort. Full investigation, per-cruise breakdown, and
+   revive-ready recovery design preserved at
+   `.trellis/tasks/archive/2026-05/05-11-recover-bad-subzips/prd.md`;
+   sidecar status note at
+   `NCEI_multibeam/docs/bad_subzips_investigation_2026-05.md`.
 4. My earlier guess that JAMSTEC was "2016+ years" was wrong — its cruise
    prefixes span 2000–2022, fully overlapping NCEI_multibeam's coverage.
 
