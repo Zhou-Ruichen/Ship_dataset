@@ -1,0 +1,6 @@
+file_id	input_path	output_path	rows_read	rows_used	n_cells	n_points_total	n_points_min	n_points_max	n_points_mean	median_depth_min	median_depth_max	status	notes
+KR10-10_leg2_bathymetry_dmo::20100821.dat	derived/points_qc/KR10-10_leg2_bathymetry_dmo__20100821.parquet	derived/file_cells_1min_sample/KR10-10_leg2_bathymetry_dmo__20100821.parquet	2612605	2612605	326	2612605	5	39747	8014.125766871166	141.005	2543.5350000000003	ok	
+KY07-11_bathymetry_dmo::20070831.dat	derived/points_qc/KY07-11_bathymetry_dmo__20070831.parquet	derived/file_cells_1min_sample/KY07-11_bathymetry_dmo__20070831.parquet	260661	260661	89	260661	1	17801	2928.775280898876	2871.7	3833.6	ok	
+KR05-17_bathymetry_dmo::20051222.dat	derived/points_qc/KR05-17_bathymetry_dmo__20051222.parquet	derived/file_cells_1min_sample/KR05-17_bathymetry_dmo__20051222.parquet	393008	393008	656	393008	1	2572	599.0975609756098	1171.5	3350.0	ok	
+KR13-08_bathymetry_dmo::20130506.dat	derived/points_qc/KR13-08_bathymetry_dmo__20130506.parquet	derived/file_cells_1min_sample/KR13-08_bathymetry_dmo__20130506.parquet	231825	231825	495	231825	1	3377	468.3333333333333	706.5	5675.1	ok	
+KR03-01_bathymetry_dmo::20030114.dat	derived/points_qc/KR03-01_bathymetry_dmo__20030114.parquet	derived/file_cells_1min_sample/KR03-01_bathymetry_dmo__20030114.parquet	329321	329321	1584	329321	1	1006	207.9046717171717	3190.6	6497.95	ok	

@@ -1,0 +1,2 @@
+output_path	n_cells	n_points_total	n_excluded_files	n_included_files	quality_filter_version	status
+derived/cells_1min_qcfiltered/cells.parquet	2394115	2689636565	98	4985	v1_extreme_bias_exclusion	ok

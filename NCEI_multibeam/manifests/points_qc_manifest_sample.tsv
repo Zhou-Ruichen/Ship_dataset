@@ -1,0 +1,6 @@
+file_id	input_path	output_path	rows_read	rows_written	qc_pass_count	qc_fail_count	qc_pass_rate	fail_lon	fail_lat	fail_depth_positive	fail_depth_extreme	fail_elev_negative	fail_nan	fail_zero_depth	status	notes
+KR10-10_leg2_bathymetry_dmo::20100821.dat	derived/points_raw/KR10-10_leg2_bathymetry_dmo__20100821.parquet	derived/points_qc_sample/KR10-10_leg2_bathymetry_dmo__20100821.parquet	2612605	2612605	2612605	0	1.0	0	0	0	0	0	0	0	ok	
+KY07-11_bathymetry_dmo::20070831.dat	derived/points_raw/KY07-11_bathymetry_dmo__20070831.parquet	derived/points_qc_sample/KY07-11_bathymetry_dmo__20070831.parquet	260661	260661	260661	0	1.0	0	0	0	0	0	0	0	ok	
+KR05-17_bathymetry_dmo::20051222.dat	derived/points_raw/KR05-17_bathymetry_dmo__20051222.parquet	derived/points_qc_sample/KR05-17_bathymetry_dmo__20051222.parquet	393008	393008	393008	0	1.0	0	0	0	0	0	0	0	ok	
+KR13-08_bathymetry_dmo::20130506.dat	derived/points_raw/KR13-08_bathymetry_dmo__20130506.parquet	derived/points_qc_sample/KR13-08_bathymetry_dmo__20130506.parquet	231825	231825	231825	0	1.0	0	0	0	0	0	0	0	ok	
+KR03-01_bathymetry_dmo::20030114.dat	derived/points_raw/KR03-01_bathymetry_dmo__20030114.parquet	derived/points_qc_sample/KR03-01_bathymetry_dmo__20030114.parquet	329321	329321	329321	0	1.0	0	0	0	0	0	0	0	ok	

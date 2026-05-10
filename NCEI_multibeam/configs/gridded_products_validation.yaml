@@ -1,0 +1,129 @@
+# gridded_products_validation.yaml
+#
+# Configuration for 08_validate_gridded_products_against_ship_cells.py
+#
+# Full documentation: docs/model_validation_config_guide.md
+#
+# Quick reference:
+#
+#   z_convention:
+#     elevation_negative_ocean: z < 0 in ocean (elevation, e.g., GEBCO, ETOPO)
+#     depth_positive_down: z > 0 in ocean (depth, e.g., some older products)
+#
+#   sampling_method:
+#     cell_median: aggregate all product pixels within 1min cell, take median
+#     cell_mean: aggregate all product pixels within 1min cell, take mean
+#     center_bilinear: bilinear interpolation at lon_center/lat_center
+#     center_nearest: nearest-neighbor at lon_center/lat_center
+#
+#   lon_convention:
+#     -180_180: longitude range [-180, 180]
+#     0_360: longitude range [0, 360]
+#
+#   footprint (optional, for regional/local models):
+#     lon_min / lon_max / lat_min / lat_max: bounding box in degrees
+#     Only ship cells within the footprint are used for validation.
+#
+#   format:
+#     netcdf: NetCDF (.nc), opened via xarray
+#     npz: NumPy archive, requires lon_name/lat_name/z_name keys
+#     geotiff / tiff: GeoTIFF, opened via rasterio
+#     grd: GMT netCDF grid, opened via scipy or xarray
+
+products:
+  - name: GEBCO_2024
+    path: /mnt/data2/00-Data/bathymetry/GEBCO/GEBCO_2024.nc
+    format: netcdf
+    lon_name: lon
+    lat_name: lat
+    z_name: elevation
+    z_convention: elevation_negative_ocean
+    resolution_hint: 15s
+    sampling_method: cell_median
+    lon_convention: -180_180
+    enabled: true
+
+  - name: ETOPO_2022
+    path: /mnt/data2/00-Data/bathymetry/ETOPO/ETOPO_2022_v1_60s_N90W180_bed.nc
+    format: netcdf
+    lon_name: lon
+    lat_name: lat
+    z_name: z
+    z_convention: elevation_negative_ocean
+    resolution_hint: 1min
+    sampling_method: center_bilinear
+    lon_convention: -180_180
+    enabled: true
+
+  - name: SRTM15_V2.7
+    path: /mnt/data2/00-Data/bathymetry/SRTM/SRTM15_V2.7.nc
+    format: netcdf
+    lon_name: lon
+    lat_name: lat
+    z_name: z
+    z_convention: elevation_negative_ocean
+    resolution_hint: 15s
+    sampling_method: cell_median
+    lon_convention: -180_180
+    enabled: true
+
+  - name: SDUST_2023
+    path: /mnt/data2/00-Data/bathymetry/SDUST/SDUST2023BCO.nc
+    format: netcdf
+    lon_name: lon
+    lat_name: lat
+    z_name: z
+    z_convention: elevation_negative_ocean
+    resolution_hint: 15s
+    sampling_method: cell_median
+    lon_convention: 0_360
+    enabled: true
+
+  - name: TOPO_25.1
+    path: /mnt/data2/00-Data/bathymetry/TOPO/topo_25.1.nc
+    format: netcdf
+    lon_name: lon
+    lat_name: lat
+    z_name: z
+    z_convention: elevation_negative_ocean
+    resolution_hint: 15s
+    sampling_method: cell_median
+    lon_convention: -180_180
+    enabled: true
+
+  - name: SWOT_T1
+    path: /mnt/data2/06-Projects/01-SWOT/04-SWOT_seafloor/output/3-evaluations/unet-multi-p128-b96-lr1e-4-1112-0646-ab40/reconstructed_absolute/swot_absolute_T1.npz
+    format: npz
+    lon_name: lons
+    lat_name: lats
+    z_name: prediction_absolute
+    z_convention: elevation_negative_ocean
+    sampling_method: center_bilinear
+    lon_convention: -180_180
+    enabled: true
+    footprint:
+      lon_min: 105.0
+      lon_max: 120.0
+      lat_min: -45.0
+      lat_max: -35.0
+
+  # ── Local / regional model template ──────────────────────────────
+  # Copy this block for each local model product.
+  # See docs/model_validation_config_guide.md for full instructions.
+  #
+  # - name: MY_LOCAL_MODEL
+  #   path: /path/to/my/model_output.nc
+  #   format: netcdf
+  #   lon_name: lon
+  #   lat_name: lat
+  #   z_name: elevation
+  #   z_convention: elevation_negative_ocean
+  #   resolution_hint: 15s
+  #   sampling_method: center_bilinear
+  #   lon_convention: -180_180
+  #   enabled: false
+  #   footprint:
+  #     lon_min: null
+  #     lon_max: null
+  #     lat_min: null
+  #     lat_max: null
