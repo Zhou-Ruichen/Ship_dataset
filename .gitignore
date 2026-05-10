@@ -7,10 +7,15 @@
 
 # ---------------------------------------------------------------------------
 # Heavy data dirs (raw inputs, derived outputs, source archives)
+# Note: list dataset archive dirs explicitly so we don't shadow
+# .trellis/tasks/archive/ which IS tracked (Trellis archived tasks).
 # ---------------------------------------------------------------------------
 **/raw/
 **/derived/
-**/archive/
+/archive/
+NCEI_multibeam/archive/
+NCEI_singlebeam/archive/
+JAMSTEC/archive/
 JAMSTEC/bathymetry_data/
 JAMSTEC/gravity_data/
 NCEI_singlebeam/singlebeam.xyz
