@@ -5,11 +5,26 @@
 
 ## Provenance
 
-- **Origin**: NCEI public singlebeam track archive.
-- **Confirmation**: An earlier codex investigation verified the zip
-  against the NCEI singlebeam track archive; notes saved at
-  `~/.codex/ncei_singlebeam_README.md` (per
-  `docs/experiments/2026-05_dataset-source-attribution.md`).
+Two separable concerns here — keep them distinct:
+
+- **Content origin** (factual, codex-verified): NCEI public singlebeam
+  track archive. An earlier codex investigation verified the bytes of
+  `NCEI_singlebeam_tracks_raw_2018files.zip` against the NCEI singlebeam
+  track archive; notes saved at `~/.codex/ncei_singlebeam_README.md`
+  (per `docs/experiments/2026-05_dataset-source-attribution.md`).
+- **Transfer chain** (high-confidence inference, 2026-05-16): the source
+  `.zip` almost certainly arrived alongside `singlebeam.xyz` as part of
+  a single transfer from **孙明智** to the user in late 2024 / early
+  2025. Evidence: (a) file timestamps `NCEI_singlebeam_tracks_raw_2018files.zip`
+  = Dec 18 2024 and `singlebeam.xyz` = Jan 18 2025 (one-month window);
+  (b) the codex notes treat both files as the two pieces of a single
+  "NCEI Singlebeam Data" investigation and no separate download is
+  recorded; (c) user recollection of receiving the singlebeam data from
+  孙明智, with no memory of a direct NCEI download. Treat this as a
+  high-confidence inference, not a confirmed fact — provenance is not
+  actively chased (Q8-style stance). See
+  `ncei/archive/sunmingzhi_singlebeam_xyz/SOURCE.md` for the sibling
+  transfer artifact.
 - **Source archive**: `NCEI_singlebeam_tracks_raw_2018files.zip` (463 MB).
   Originally lived at `/mnt/data2/00-Data/`; relocated 2026-05-16
   to `ncei/archive/source_zips/` as part of PR-C.

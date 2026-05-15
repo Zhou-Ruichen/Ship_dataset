@@ -12,6 +12,19 @@
 - **Pre-PR-C location**: `ship/NCEI_singlebeam/singlebeam.xyz` (later
   `ship/ncei/singlebeam.xyz` after PR-B). Moved here 2026-05-16 by
   PR-C; not extracted, not modified — same bytes as the legacy file.
+- **Transfer-chain scope** (2026-05-16 clarification): 孙明智's
+  late-2024 / early-2025 transfer almost certainly included BOTH this
+  flat `.xyz` dump AND the per-track `.nc` archive now living at
+  `ncei/tracklines_nc/`. Evidence: file timestamps
+  `NCEI_singlebeam_tracks_raw_2018files.zip` = Dec 18 2024,
+  `singlebeam.xyz` = Jan 18 2025 (one-month window); codex notes
+  (`~/.codex/ncei_singlebeam_README.md`) treat both files as a single
+  cohesive "NCEI Singlebeam Data" investigation; user has no memory of
+  a separate direct-from-NCEI download. The dirname
+  `sunmingzhi_singlebeam_xyz` therefore reflects the specific legacy
+  flat file kept here as a frozen artifact, **not** the full scope of
+  what 孙明智 transferred. Cross-reference:
+  `ncei/tracklines_nc/SOURCE.md` (transfer chain section).
 
 ## Contents
 
