@@ -99,6 +99,7 @@ union, not replace. 91.7% coverage of nc + 2.7× superset.
 | 7 | Cleaning step required for M.rar (positive depths, extreme negatives) | ✅ implicit, to be designed in task |
 | 8 | Union strategy needed for xyz + nc: 168 nc-only tracks must be retained | ✅ confirmed |
 | 9 | **Existing uppercase `JAMSTEC/` tree absorbed into new `jamstec/` in PR-A** (one atomic refactor, no temporary case-collision). Final layout: `jamstec/multibeam/` (← `NCEI_multibeam/`), `jamstec/gravity_data/` (← `JAMSTEC/gravity_data/`), `jamstec/archive/source_zips/` (← `JAMSTEC/archive/`, ~27 GB), `jamstec/archive/bathymetry_data/` (← `JAMSTEC/bathymetry_data/`, ~25 GB). Empty placeholder dirs (`JAMSTEC/{code,derived,docs,figures,output}`) dropped. All on same mount → `mv` is instant rename. | ✅ confirmed 2026-05-16 |
+| 10 | **NCEI .nc raw archive is dual-consumed across sibling projects**: SHA256 `1a9b2c5b7e72f1ca1d17b0f1b7172186ebf56be1ebde67113ad8978a48514eed` lives in two byte-identical copies — bath pipeline at `ship/ncei/archive/source_zips/NCEI_singlebeam_tracks_raw_2018files.zip` (consumed via `depth` field) and gravity project at `/mnt/data2/00-Data/gravity/NCEI/archive/NCEI.zip` (consumed via `gobs` / `faa` fields). Byte-identical duplicate **by design**. Do not dedupe; each project owns its consumer-side copy. Two projects, one source. | ✅ confirmed 2026-05-16 |
 
 ## Open Questions (to resolve in this brainstorm)
 

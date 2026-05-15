@@ -283,3 +283,86 @@ The external zip filename `NCEI_singlebeam_tracks_raw_2018files.zip`
 (at `/mnt/data2/00-Data/`) is unchanged — it is an upstream-archive
 filename, not a path under our control, and is preserved verbatim
 wherever referenced.
+
+---
+
+## Footer 2026-05-16 (transfer-chain finalization)
+
+Three findings nailed down on 2026-05-16 that the prior footers left
+fuzzy or only implicitly addressed. Pure metadata/provenance — none of
+this changes active pipeline behavior.
+
+### 1. 郭恒洋 transfer chain confirmed for `国外水深*.zip`
+
+The two source zips at `jamstec/multibeam/archive/国外水深第{一,二}部分.zip`
+(10.5 GB + 14.0 GB = 24.5 GB combined) arrived from
+**郭恒洋 → user** in approximately **December 2024**. Evidence:
+file mtimes Dec 16 / Dec 17 2024 (both physical files, not symlinks;
+verified via `readlink -f`) + user recollection 2026-05-16.
+**High-confidence inference, not externally verified.** Provenance is
+not actively chased; recorded here as the durable attribution record.
+
+### 2. `国外水深*.zip` ≡ `bathymetry.7z` packaging coincidence
+
+Internal entry timestamps `2024-07-24` inside the `国外水深*.zip`
+pair match the mtime `Jul 25 2024` of
+`jamstec/archive/source_zips/bathymetry.7z`. → **Same packaging
+event, two compression formats** of the same JAMSTEC cruise bundle.
+This compounds the 2026-05-11 "JAMSTEC/bathymetry_data IS the source
+archive of NCEI_multibeam" finding: the JAMSTEC bathymetry corpus
+exists on this disk in **three independent packagings**
+(`国外水深*.zip` 24.5 GB + `bathymetry.7z` 26 GB +
+`bathymetry_data/*.zip` 25 GB = ~51 GB triplicate storage).
+
+**Decision (locked, user 2026-05-16)**: keep all three; do not dedupe.
+`multibeam/archive/国外水深*.zip` is the active pipeline anchor and
+Step 08 bit-identical baseline; the other two are frozen archives
+retained for reproducibility from alternate entry points. Full
+mapping is recorded in `jamstec/SOURCE.md`.
+
+### 3. `NCEI.zip` byte-identical duplicate in the gravity tree
+
+A duplicate of the NCEI singlebeam-tracks archive lives at
+`/mnt/data2/00-Data/gravity/NCEI/archive/NCEI.zip` (463 MB,
+SHA256 `1a9b2c5b7e72f1ca1d17b0f1b7172186ebf56be1ebde67113ad8978a48514eed`
+— byte-equal to
+`ship/ncei/archive/source_zips/NCEI_singlebeam_tracks_raw_2018files.zip`).
+
+This explains the long-standing dual-listing in the codex notes
+(`~/.codex/ncei_singlebeam_README.md`) and the parallel `NCEI/` dir
+under the `gravity/` sibling project: **the same source archive is
+consumed by two sibling projects** — the bath pipeline (this `ship/`
+tree) via the `depth` field; the gravity project
+(`/mnt/data2/00-Data/gravity/`) via the `gobs` / `faa` fields.
+
+**User decision 2026-05-16**: keep both copies, do not dedupe. Each
+project owns its consumer-side copy where its pipelines expect it.
+Two projects, one source.
+
+### 4. Dual-content composition of the MGD77+ NetCDF tracklines
+
+20-file random sample (seed=1) of `ncei/tracklines_nc/*.nc`,
+433,127 total records:
+
+| Field | Meaning | Non-null records | Non-null % | Files with any data |
+|---|---|---:|---:|---:|
+| `depth` | bathymetry | 278,726 | **64.4%** | 20/20 |
+| `gobs` | gravity observation | 236,685 | **54.6%** | 12/20 |
+| `faa` | free-air anomaly | 423,931 | **97.9%** | 20/20 |
+
+The MGD77+ NetCDF format stores sensor measurements interleaved along
+each cruise's time series; depth and gravity sensors may sample
+different sub-intervals of the same trackline, so per-record non-null
+counts vary by sensor. The corpus is **genuinely bath+gravity**, not
+"bathymetry-only with some gravity columns ignored". This is the
+empirical basis for the dual-consumption finding in §3.
+
+### 5. Net effect on "Don't rename the directory" caveat
+
+**No change** to the line-205-area caveat above. The caveat was about
+active-pipeline path-dependence; the rename has already been
+**executed** (PR-A on the multibeam side, PR-B on the singlebeam
+side, both 2026-05-16) with the path-rewrite script plus Step 08
+bit-identical verification (hash-only smoke check passed). This
+2026-05-16 footer is purely metadata/provenance — no downstream
+processing impact.

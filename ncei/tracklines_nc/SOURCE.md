@@ -62,6 +62,47 @@ the zip header includes). The "3-file discrepancy" flagged in PRD Q6
 resolves cleanly: 2,018 .nc is correct; the +3 was the wrapper dir +
 the 2 .txt sidecars.
 
+## Dual content (bathymetry + gravity)
+
+20-file random sample (seed=1) drawn 2026-05-16, 433,127 total records:
+
+| Field | Meaning | Non-null records | Non-null % | Files with any data |
+|---|---|---:|---:|---:|
+| `depth` | bathymetry | 278,726 | **64.4%** | 20/20 |
+| `gobs` | gravity observation | 236,685 | **54.6%** | 12/20 |
+| `faa` | free-air anomaly | 423,931 | **97.9%** | 20/20 |
+
+The MGD77+ NetCDF format stores **sensor measurements interleaved
+along each cruise's time series**: depth and gravity sensors may
+sample different sub-intervals of the same trackline, so per-record
+non-null counts vary by sensor. An earlier 1-file spot check
+(`64018.nc`, ~1% depth non-null) was a per-file outlier, not the
+corpus norm — the 20-file random sample establishes the actual
+composition. **This corpus is a legitimate dual-purpose source:
+bathymetry for `ship/` pipelines, gravity for parallel gravity
+projects.**
+
+### Byte-identical duplicate in the gravity tree
+
+The same archive is also present at
+`/mnt/data2/00-Data/gravity/NCEI/archive/NCEI.zip` (463 MB,
+SHA256 `1a9b2c5b7e72f1ca1d17b0f1b7172186ebf56be1ebde67113ad8978a48514eed`
+— byte-identical to
+`ncei/archive/source_zips/NCEI_singlebeam_tracks_raw_2018files.zip`).
+
+**User decision 2026-05-16**: keep both copies; do not dedupe. The
+bath project (this `ship/` tree) consumes the archive via the
+`depth` field; the gravity project (`/mnt/data2/00-Data/gravity/`)
+consumes the **same bytes** via the `gobs` / `faa` fields. Each
+project owns its consumer-side copy where its pipelines expect it.
+Two projects, one source. (This is the rationale behind the new
+Locked decision #10 in the task PRD.)
+
+The bath singlebeam pipeline (planned PR-E of task
+`05-11-singlebeam-integration`) consumes **only** the `depth` field;
+future gravity pipelines can reuse this same archive via
+`gobs` / `faa` without re-downloading from NCEI.
+
 ## Known unknowns
 
 1. **168 tracks present in `tracklines_nc/` but absent from the new
