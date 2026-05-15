@@ -219,3 +219,24 @@ the same `YYYY-MM_<slug>.md` convention and land here.
 
 Constraints derived from this discovery (cruise prefixes are JAMSTEC,
 don't rename the directory, etc.) are reflected in `.trellis/spec/`.
+
+---
+
+## Footer 2026-05-16: rename has now been executed
+
+The "Long-term: consider renaming the directory" item above was carried
+out by task `05-11-singlebeam-integration` (PR-A). All path strings in
+this document refer to the **pre-rename layout** and are preserved
+verbatim as the historical record that motivated the refactor. Current
+canonical paths are:
+
+| Pre-rename (in this doc) | Post-rename (current) |
+|---|---|
+| `ship/NCEI_multibeam/` | `ship/jamstec/multibeam/` |
+| `ship/JAMSTEC/bathymetry_data/` | `ship/jamstec/archive/bathymetry_data/` |
+| `ship/JAMSTEC/archive/` | `ship/jamstec/archive/source_zips/` |
+| `ship/JAMSTEC/gravity_data/` | `ship/jamstec/gravity_data/` |
+
+The string literal `source_dataset = "NCEI_multibeam"` is deliberately
+kept inside `.py` source as a lineage label so Step 08 bit-identical
+verification stays intact (Q5b locked decision).

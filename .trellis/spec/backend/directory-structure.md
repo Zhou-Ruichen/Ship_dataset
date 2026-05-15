@@ -12,19 +12,25 @@ top-level directory and follows the same internal layout.
 
 ```
 ship/
-├── NCEI_multibeam/      # ⚠️ Misnamed — actually JAMSTEC 2000–2015 multibeam.
-│                        #   Pipeline complete (Step 00–11). Don't rename.
-├── NCEI_singlebeam/     # Correctly named NCEI singlebeam. Raw singlebeam.xyz only.
-├── JAMSTEC/             # JAMSTEC 2016+ cruise zips + gravity. Raw only, no pipeline.
-├── archive/             # Original downloaded zips (do not delete)
-├── docs/                # Cross-dataset documentation
-│   └── experiments/     # Finished investigations / experiment narratives
-├── .trellis/            # Trellis spec / tasks / workspace
-└── AGENTS.md            # Trellis-managed agent instructions
+├── jamstec/                # All JAMSTEC data (2000–2020+), unified under one tree.
+│   ├── multibeam/          # Active processed pipeline (Step 00–11 complete).
+│   │                       #   Formerly ship/NCEI_multibeam/ — renamed 2026-05-16
+│   │                       #   when JAMSTEC provenance was confirmed.
+│   ├── gravity_data/       # JAMSTEC gravity sub-corpus. Raw only, no pipeline.
+│   └── archive/            # Frozen source archives (don't process directly).
+│       ├── source_zips/    # 国外水深第一/第二部分.zip etc. (~27 GB)
+│       └── bathymetry_data/# 776 cruise-named zips (~25 GB; same source as multibeam/raw/subzips)
+├── NCEI_singlebeam/        # NCEI singlebeam (to be renamed to ncei/ in PR-B).
+├── archive/                # Top-level original downloaded zips (do not delete).
+├── docs/                   # Cross-dataset documentation
+│   └── experiments/        # Finished investigations / experiment narratives
+├── .trellis/               # Trellis spec / tasks / workspace
+└── AGENTS.md               # Trellis-managed agent instructions
 ```
 
-For the source-attribution evidence behind the `NCEI_multibeam/` caveat,
-see [`docs/experiments/2026-05_dataset-source-attribution.md`](../../../docs/experiments/2026-05_dataset-source-attribution.md).
+For the source-attribution evidence behind the JAMSTEC provenance (which
+the historical `NCEI_multibeam/` name obscured), see
+[`docs/experiments/2026-05_dataset-source-attribution.md`](../../../docs/experiments/2026-05_dataset-source-attribution.md).
 
 Each dataset directory follows the same internal layout when populated:
 

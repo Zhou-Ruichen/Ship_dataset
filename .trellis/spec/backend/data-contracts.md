@@ -3,7 +3,7 @@
 > Schemas that downstream stages depend on. Treat these as breaking-change
 > boundaries: adding a column is fine, removing or renaming one is not.
 
-Authoritative per-stage report files in `NCEI_multibeam/docs/` always win
+Authoritative per-stage report files in `jamstec/multibeam/docs/` always win
 over this document if they disagree — but please update this file when
 they do.
 
@@ -25,7 +25,7 @@ Rules:
 
 ### `cruise_id_guess` ship prefixes (all JAMSTEC)
 
-Despite the misleading `NCEI_multibeam/` directory name, every cruise
+Despite the misleading `jamstec/multibeam/` directory name, every cruise
 prefix in this dataset is a JAMSTEC research vessel:
 
 | Prefix | Vessel | Operator |
@@ -38,7 +38,7 @@ prefix in this dataset is a JAMSTEC research vessel:
 | `KH` | R/V Hakuho-maru | U. Tokyo ORI (JAMSTEC collaboration) |
 
 See `docs/experiments/2026-05_dataset-source-attribution.md` for why the
-directory is named `NCEI_multibeam` despite holding JAMSTEC data, and
+directory is named `jamstec/multibeam` despite holding JAMSTEC data, and
 why the regex in `01_build_multibeam_manifest.py` only matches these
 prefixes.
 
@@ -47,7 +47,7 @@ prefixes.
 ## Point table (`derived/points_raw/*.parquet`, `derived/points_qc/*.parquet`)
 
 Output of Step 02; carried through Step 03 with QC columns appended.
-Authoritative source: `NCEI_multibeam/docs/point_schema_v1.md`.
+Authoritative source: `jamstec/multibeam/docs/point_schema_v1.md`.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|

@@ -2,7 +2,7 @@
 
 > **目的**: 解释每一步做了什么、输入输出是什么、为什么这样设计，以便下次能快速回忆。
 >
-> **项目根目录**: `/mnt/data2/00-Data/ship/NCEI_multibeam/`
+> **项目根目录**: `/mnt/data2/00-Data/ship/jamstec/multibeam/`
 
 ---
 
@@ -343,8 +343,8 @@ lat_center = -90 + (lat_bin + 0.5) * cell_deg
 ### 命令
 
 ```bash
-python3 /mnt/data2/00-Data/ship/NCEI_multibeam/code/08_validate_gridded_products_against_ship_cells.py \
-  --config /mnt/data2/00-Data/ship/NCEI_multibeam/configs/gridded_products_validation.yaml \
+python3 /mnt/data2/00-Data/ship/jamstec/multibeam/code/08_validate_gridded_products_against_ship_cells.py \
+  --config /mnt/data2/00-Data/ship/jamstec/multibeam/configs/gridded_products_validation.yaml \
   --overwrite
 ```
 

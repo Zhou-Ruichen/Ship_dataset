@@ -13,11 +13,14 @@
 **/raw/
 **/derived/
 /archive/
-NCEI_multibeam/archive/
+# JAMSTEC tree (unified 2026-05-16 by task 05-11-singlebeam-integration PR-A;
+# the heavy zip / 7z payloads are also caught by the binary-extension block
+# below, but explicit dir entries keep `git status` predictable):
+jamstec/multibeam/archive/
+jamstec/archive/
+jamstec/gravity_data/
+# NCEI singlebeam (to be reorganized in PR-B / PR-C):
 NCEI_singlebeam/archive/
-JAMSTEC/archive/
-JAMSTEC/bathymetry_data/
-JAMSTEC/gravity_data/
 NCEI_singlebeam/singlebeam.xyz
 
 # ---------------------------------------------------------------------------

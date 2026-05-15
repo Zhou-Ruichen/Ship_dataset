@@ -8,8 +8,8 @@
 
 ## Stage 1 — File-level flags (Step 06b)
 
-Output: `NCEI_multibeam/manifests/file_quality_flags_1min.parquet`
-Report: `NCEI_multibeam/docs/file_quality_flags_1min_report.md`
+Output: `jamstec/multibeam/manifests/file_quality_flags_1min.parquet`
+Report: `jamstec/multibeam/docs/file_quality_flags_1min_report.md`
 
 For each of the 5,083 multibeam files, exactly one flag is assigned:
 
@@ -43,7 +43,7 @@ exclude list requires:
 
 ## Stage 2 — Cell-level tiers (Step 07)
 
-Output: `NCEI_multibeam/derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet`
+Output: `jamstec/multibeam/derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet`
 
 Each of the 2,394,115 cells gets exactly one tier. Evaluated **in order**
 (first match wins):

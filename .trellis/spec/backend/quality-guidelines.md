@@ -3,7 +3,7 @@
 > Code quality conventions for the Python data pipeline.
 
 The audience for these rules is the AI sub-agents that write or modify
-pipeline scripts. Match the existing patterns in `NCEI_multibeam/code/`
+pipeline scripts. Match the existing patterns in `jamstec/multibeam/code/`
 unless there is a documented reason not to.
 
 ---

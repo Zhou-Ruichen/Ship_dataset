@@ -111,7 +111,7 @@ Never:
 - A script that takes config takes it via `--config <path>`. The script
   must validate required keys explicitly and error out on missing keys.
 
-Example: `NCEI_multibeam/configs/gridded_products_validation.yaml`
+Example: `jamstec/multibeam/configs/gridded_products_validation.yaml`
 declares the 6 gridded-bathymetry products plus their sampling methods —
 this is the canonical pattern for new config-driven stages.
 

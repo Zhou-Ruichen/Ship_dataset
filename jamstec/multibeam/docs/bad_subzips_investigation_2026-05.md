@@ -20,8 +20,8 @@ inside it would be wiped — this sidecar persists across re-runs.
   entry inside and it is the corrupt one — unrecoverable.
 - The "JAMSTEC sibling archive holds clean copies" hypothesis from the
   original recovery task description is **false**: MD5 SAME for all
-  13 vs `JAMSTEC/bathymetry_data/<same name>.zip`. JAMSTEC is the
-  source archive of `NCEI_multibeam/`, not a clean alternative.
+  13 vs `jamstec/archive/bathymetry_data/<same name>.zip`. JAMSTEC is the
+  source archive of `jamstec/multibeam/`, not a clean alternative.
 - Decision: **skip recovery**. Recoverable share (~1.5% of cruises,
   ~3% of data on top of 88 GB / 763 cruises / 5,140 .dat files) is
   below the noise floor for the downstream products this dataset

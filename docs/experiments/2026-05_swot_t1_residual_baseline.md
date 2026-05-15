@@ -33,7 +33,7 @@ using ship-supervised cells as ground truth?
 | Global product fusion (Linear, diagnostic) | **29.87** | −81% (upper bound; uses other products' depths as features, not deployable for SWOT-only inference) |
 
 Full numbers in
-`NCEI_multibeam/derived/ship_supervised_residual_T1/baselines_block025/residual_baseline_report.md`.
+`jamstec/multibeam/derived/ship_supervised_residual_T1/baselines_block025/residual_baseline_report.md`.
 
 ---
 
@@ -91,7 +91,7 @@ Full numbers in
 
 ## Provenance / reproducibility
 
-- Source scripts: `NCEI_multibeam/code/{09,10,10b,11}_*.py`
+- Source scripts: `jamstec/multibeam/code/{09,10,10b,11}_*.py`
 - Inputs:
   - `derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet`
   - `derived/swot_t1_batch_validation/` (Step 09 batch outputs)

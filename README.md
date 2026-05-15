@@ -17,11 +17,11 @@ exact exclusion list.
 
 | Tracked | Not tracked (regenerable or external) |
 |---|---|
-| `NCEI_multibeam/code/` — 11-stage pipeline scripts | `**/raw/` (124 GB) — extracted `.dat` files |
-| `NCEI_multibeam/configs/` — YAML configs | `**/derived/` (178 GB) — points / cells / models |
-| `NCEI_multibeam/manifests/*.tsv` — small inventories | `**/archive/` (52 GB) — source zip / 7z |
-| `NCEI_multibeam/figures/*.png` — paper figures | `*.parquet`, `*.zip`, `*.7z`, `*.nc`, `*.npz`, ... |
-| `NCEI_multibeam/docs/*.md` — per-stage reports | `NCEI_singlebeam/singlebeam.xyz` (3.1 GB flat dump) |
+| `jamstec/multibeam/code/` — 11-stage pipeline scripts | `**/raw/` (124 GB) — extracted `.dat` files |
+| `jamstec/multibeam/configs/` — YAML configs | `**/derived/` (178 GB) — points / cells / models |
+| `jamstec/multibeam/manifests/*.tsv` — small inventories | `**/archive/` (52 GB) — source zip / 7z |
+| `jamstec/multibeam/figures/*.png` — paper figures | `*.parquet`, `*.zip`, `*.7z`, `*.nc`, `*.npz`, ... |
+| `jamstec/multibeam/docs/*.md` — per-stage reports | `NCEI_singlebeam/singlebeam.xyz` (3.1 GB flat dump) |
 | `docs/` — cross-dataset reference docs | `**/output/logs/` — per-script run logs |
 | `.trellis/` — workflow + spec + tasks | |
 | `.claude/` — AI agent configuration | |
@@ -35,12 +35,12 @@ source archives (see "Reproducibility" below).
 
 | Directory | Source | Era | Pipeline status |
 |---|---|---|---|
-| `NCEI_multibeam/` | **JAMSTEC** (despite the directory name; see note below) | 2000–2015 | Step 00–11 complete |
-| `JAMSTEC/bathymetry_data/` | Same JAMSTEC archive, alternate packaging | same | Source archive only; 13 `subzips_bad` recoverable from here |
-| `JAMSTEC/gravity_data/` | JAMSTEC gravity | — | Raw only, not yet processed |
+| `jamstec/multibeam/` | **JAMSTEC** (despite the directory name; see note below) | 2000–2015 | Step 00–11 complete |
+| `jamstec/archive/bathymetry_data/` | Same JAMSTEC archive, alternate packaging | same | Source archive only; 13 `subzips_bad` recoverable from here |
+| `jamstec/gravity_data/` | JAMSTEC gravity | — | Raw only, not yet processed |
 | `NCEI_singlebeam/` | NCEI singlebeam track archive | — | Raw `.nc` zip + flat `.xyz`; pipeline not yet built |
 
-> **Naming caveat**: the `NCEI_multibeam/` directory is a historical
+> **Naming caveat**: the `jamstec/multibeam/` directory is a historical
 > mislabel — its content is entirely JAMSTEC multibeam (ship codes
 > KY/KR/MR/KS = R/V Kaiyo / Kairei / Mirai / Kairei-Sonar, plus a few
 > KH from U. Tokyo ORI). The directory name is preserved for now because
@@ -99,7 +99,7 @@ documented in
 
 ```
 ship/
-├── NCEI_multibeam/        # JAMSTEC multibeam pipeline (mislabeled dir)
+├── jamstec/multibeam/        # JAMSTEC multibeam pipeline (mislabeled dir)
 │   ├── code/              # 11-stage Python + shell scripts (tracked)
 │   ├── configs/           # YAML for Step 08 product validation
 │   ├── docs/              # Per-stage reports + schemas + cruise inventory
@@ -112,7 +112,7 @@ ship/
 ├── NCEI_singlebeam/       # NCEI singlebeam — pipeline not yet built
 │   ├── docs/              # README + reference paper
 │   └── singlebeam.xyz     # 3.1 GB flat dump (ignored)
-├── JAMSTEC/               # JAMSTEC source archive (same multibeam data)
+├── jamstec/               # JAMSTEC source archive (same multibeam data)
 │   ├── bathymetry_data/   # 776 cruise zips (ignored)
 │   ├── gravity_data/      # Gravity zips (ignored, not yet processed)
 │   └── archive/           # bathymetry.7z + gravity.7z (ignored)
@@ -161,14 +161,14 @@ These are formalized in `.trellis/spec/backend/`:
 To rebuild the data products from a fresh clone you need:
 
 1. The two JAMSTEC source archives (~25 GB total) placed at
-   `NCEI_multibeam/archive/{国外水深第一部分.zip,国外水深第二部分.zip}`
-   *or* equivalently at `JAMSTEC/archive/bathymetry.7z`.
+   `jamstec/multibeam/archive/{国外水深第一部分.zip,国外水深第二部分.zip}`
+   *or* equivalently at `jamstec/archive/source_zips/bathymetry.7z`.
    These archives are not in git and must be obtained externally.
 2. Python 3 with `pandas`, `numpy`, `pyarrow`, `xarray`, `scipy`,
    `scikit-learn`, `xgboost`, `lightgbm`, `cartopy`, `matplotlib`.
 3. About 350 GB of free disk for `raw/` + `derived/`.
 4. Then run the Step 00 -> Step 11 sequence in
-   [`NCEI_multibeam/docs/PIPELINE_PROCESSING_GUIDE.md`](NCEI_multibeam/docs/PIPELINE_PROCESSING_GUIDE.md).
+   [`jamstec/multibeam/docs/PIPELINE_PROCESSING_GUIDE.md`](jamstec/multibeam/docs/PIPELINE_PROCESSING_GUIDE.md).
    A full run takes ~6–10 hours of single-machine time.
 
 ---

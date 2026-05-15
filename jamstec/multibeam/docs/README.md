@@ -2,8 +2,8 @@
 
 ## 1. Background & Status
 This dataset originates from two large archives:
-- `/mnt/data2/00-Data/ship/NCEI_multibeam/archive/国外水深第一部分.zip`
-- `/mnt/data2/00-Data/ship/NCEI_multibeam/archive/国外水深第二部分.zip`
+- `/mnt/data2/00-Data/ship/jamstec/multibeam/archive/国外水深第一部分.zip`
+- `/mnt/data2/00-Data/ship/jamstec/multibeam/archive/国外水深第二部分.zip`
 
 **Verification:**
 - SHA256 checksums verified (see `docs/sha256_remote.txt`).
@@ -21,7 +21,7 @@ This dataset originates from two large archives:
 
 ## 2. Directory Structure
 ```
-NCEI_multibeam/
+jamstec/multibeam/
 ├── archive/                # Source large zip files
 ├── code/                   # Processing scripts
 │   ├── 01_extract_subzips.sh
