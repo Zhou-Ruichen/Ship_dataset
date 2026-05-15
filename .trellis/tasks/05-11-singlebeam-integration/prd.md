@@ -397,13 +397,94 @@ PR-B execution notes (2026-05-16):
   in `ncei/docs/README.md` are the external zip filename (preserved
   by design); `git check-ignore` confirms the new gitignore rules fire.
 
-**PR-C — New-data ingest**
+**PR-C — New-data ingest** ✅ executed 2026-05-16
 - Extract `total_tracklines_xyz.zip` → `ncei/tracklines_xyz/`.
 - Extract `M.rar` → `ncei/archive/zhoushuai_processed_M/`.
 - Move `NCEI_singlebeam/singlebeam.xyz` → `ncei/archive/sunmingzhi_singlebeam_xyz/`.
 - Write `SOURCE.md` for each (provenance + known unknowns + decisions).
 - Move the two source archives from `/mnt/data2/00-Data/tmp/` to their
   destinations (or symlink — decided in implementation).
+
+PR-C execution notes (2026-05-16):
+- Archive extraction (all on `/mnt/data2`, instant on same mount):
+  - `NCEI_singlebeam_tracks_raw_2018files.zip` (463 MB) → unwrap
+    leading `NCEI/` dir, place 2,018 `.nc` + 2 `.txt` sidecars under
+    `ncei/tracklines_nc/`. Final disk: 1.1 GB.
+  - `total_tracklines_xyz.zip` (854 MB) → unwrap leading
+    `total_tracklines_xyz/` dir, place 5,382 `.xyz` files under
+    `ncei/tracklines_xyz/`. Final disk: 3.2 GB.
+  - `M.rar` (379 MB, `unrar` installed 2026-05-15) → unwrap leading
+    `M/` dir, place 3 quadrant `.txt` files under
+    `ncei/archive/zhoushuai_processed_M/`. Final disk: 4.0 GB.
+- File-count reconciliation:
+  - `.nc` count is **2,018 (canonical)**. The "2,021" `unzip -l` header
+    counted 2,018 .nc + 2 .txt + 1 wrapping dir entry; the Q6
+    "2,019 + 2" evidence was a one-off miscount. The 2 upstream `.txt`
+    sidecars (`NCEI_Ara1.txt`, `validation_results.txt`, ~18 MB total)
+    are kept on disk and gitignored — provenance recorded in
+    `ncei/tracklines_nc/SOURCE.md`.
+  - `.xyz` count is **5,382, not 5,383**. The "5,383 files" in the
+    zip header counted the wrapping `total_tracklines_xyz/` dir entry;
+    actual file count is 5,382. Investigation doc + PRD references to
+    5,383 are off-by-one (now annotated in tracklines_xyz/SOURCE.md).
+- Source archives relocation (all `mv`, instant on same mount):
+  - `tmp/total_tracklines_xyz.zip` → `ncei/archive/source_zips/`.
+  - `tmp/M.rar` → `ncei/archive/zhoushuai_processed_M/M.rar`
+    (kept beside its unpacked content for audit).
+  - `/mnt/data2/00-Data/NCEI_singlebeam_tracks_raw_2018files.zip` →
+    `ncei/archive/source_zips/` (long-standing artifact; rule:
+    upstream archives unpacked into the active tree live alongside
+    unpacked content inside the repo; documented in source_zips/SOURCE.md).
+  - `tmp/` is now empty of the two new archives (other files in `tmp/`,
+    e.g. the older inspection scripts and `random_tracks/`, are
+    untouched).
+- Existing-file relocation:
+  - `ncei/singlebeam.xyz` (3.1 GB) →
+    `ncei/archive/sunmingzhi_singlebeam_xyz/singlebeam.xyz`.
+    `mv` instant on same mount.
+- Final `ncei/` data sizes: tracklines_nc/=1.1G, tracklines_xyz/=3.2G,
+  archive/zhoushuai_processed_M/=4.3G (extracts + M.rar),
+  archive/sunmingzhi_singlebeam_xyz/=3.1G, archive/source_zips/=1.3G
+  (2 zips + SOURCE.md). Cumulative ≈ 13 GB on disk.
+- SOURCE.md sidecars (5 written, all under git):
+  - `ncei/tracklines_nc/SOURCE.md` — NCEI public archive, 168 nc-only
+    tracks recorded as known unknown (Q7).
+  - `ncei/tracklines_xyz/SOURCE.md` — 安德超, mixed sb/mb bundle,
+    R2 classifier handoff (Q2/Q4).
+  - `ncei/archive/zhoushuai_processed_M/SOURCE.md` — 周帅, anomalies +
+    cleaning plan deferred to PR-F (Q3/Q8).
+  - `ncei/archive/sunmingzhi_singlebeam_xyz/SOURCE.md` — 孙明智, legacy
+    flat dump, frozen artifact.
+  - `ncei/archive/source_zips/SOURCE.md` — index doc for the 2 source
+    zips in this dir + convention statement.
+- `.gitignore` changes:
+  - Dropped the old `ncei/singlebeam.xyz` line (file moved to archive).
+  - Dropped the directory-level `ncei/archive/` ignore — replaced by
+    file-by-file ignore via the extension globs (`*.zip`, `*.rar`,
+    `*.xyz`, `*.nc`) plus 2 tightly-scoped `*.txt` rules
+    (`ncei/tracklines_nc/*.txt`,
+    `ncei/archive/zhoushuai_processed_M/*.txt`).
+    Rationale: dir-level ignore would block tracking of provenance
+    sidecars (SOURCE.md, README.md) inside ignored archive subdirs,
+    even with `!` negation rules (git won't descend into a fully-ignored
+    dir).
+  - Added `*.xyz` to the generic-extension block.
+  - Net diff: 12 inserts, 3 deletes in `.gitignore`.
+- Verification:
+  - 5 SOURCE.md trackable (`git check-ignore` exits 1 for each).
+  - All heavy payloads ignored (`.zip`, `.rar`, `.nc`, `.xyz`, scoped
+    `.txt`).
+  - Existing tracked `jamstec/multibeam/docs/{bad_subzips,bad_nested_zips,sha256_remote}.txt`
+    unaffected.
+  - `git ls-files --others --exclude-standard ncei/` returns exactly
+    the 5 SOURCE.md files; no heavy data accidentally exposed.
+  - `git status --short` shows only `M .gitignore` plus the 5
+    untracked SOURCE.md (i.e. exactly the intended PR-C delta plus
+    this PRD update).
+- Out of scope (preserved for later PRs as planned):
+  - R2 sb/mb classifier (PR-D).
+  - M.rar cleaning (PR-F) — extracts are raw and unmodified.
+  - No `.py` files touched.
 
 **PR-D — Shared lib extraction + classifier**
 - Factor algorithmic overlap from JAMSTEC pipeline into `_common/`

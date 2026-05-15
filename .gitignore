@@ -19,10 +19,21 @@
 jamstec/multibeam/archive/
 jamstec/archive/
 jamstec/gravity_data/
-# NCEI tree (renamed from NCEI_singlebeam/ 2026-05-16 in PR-B; PR-C will
-# populate tracklines_{nc,xyz}/ and archive/ subdirs):
-ncei/singlebeam.xyz
-ncei/archive/
+# NCEI tree (renamed from NCEI_singlebeam/ 2026-05-16 in PR-B; PR-C
+# 2026-05-16 populated tracklines_{nc,xyz}/ + archive/ subdirs).
+# tracklines_nc/*.nc and tracklines_xyz/*.xyz are caught by the global
+# extension globs below. The .txt rules are scoped tightly to avoid
+# shadowing tracked .txt files elsewhere (jamstec/multibeam/docs/*.txt):
+# - tracklines_nc/*.txt = 2 upstream sidecars (NCEI_Ara1.txt,
+#   validation_results.txt) totaling ~18 MB.
+# - archive/zhoushuai_processed_M/*.txt = 3 quadrant .txt files from M.rar
+#   totaling ~4 GB.
+# archive/ contents are caught file-by-file (not as a directory) so
+# provenance sidecars (SOURCE.md, README.md) under each archive subdir
+# remain trackable. The big-extension globs (*.zip, *.rar, *.xyz, etc.)
+# below catch the heavy payloads.
+ncei/tracklines_nc/*.txt
+ncei/archive/zhoushuai_processed_M/*.txt
 
 # ---------------------------------------------------------------------------
 # Generic binary / data formats - never commit
@@ -35,6 +46,7 @@ ncei/archive/
 *.tar.gz
 *.tgz
 *.nc
+*.xyz
 *.npz
 *.npy
 *.pkl
