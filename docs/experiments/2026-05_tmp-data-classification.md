@@ -362,18 +362,18 @@ What you SHOULD do in the fresh session:
 
 ---
 
-## Footer 2026-05-16: directory rename has been executed (PR-A landed)
+## Footer 2026-05-16: directory rename has been executed (PR-A + PR-B landed)
 
 The 8 brainstorm questions above are all resolved (see
 `.trellis/tasks/05-11-singlebeam-integration/prd.md` for the locked
-decision table). PR-A of that task executed the directory rename;
-PR-B / PR-C / PR-D+ remain. All path strings below this footer refer
-to the **pre-rename layout** and are preserved verbatim as the
-historical record. Current canonical paths:
+decision table). PR-A and PR-B of that task executed the two top-level
+directory renames; PR-C / PR-D+ remain. All path strings below this
+footer refer to the **pre-rename layout** and are preserved verbatim
+as the historical record. Current canonical paths:
 
 | Pre-rename (in this doc) | Post-rename (current) |
 |---|---|
 | `ship/NCEI_multibeam/` | `ship/jamstec/multibeam/` |
 | `ship/JAMSTEC/{bathymetry_data,archive,gravity_data}/` | `ship/jamstec/{archive/bathymetry_data,archive/source_zips,gravity_data}/` |
-| `ship/NCEI_singlebeam/` | `ship/ncei/...` *(planned in PR-B; not yet executed)* |
+| `ship/NCEI_singlebeam/` | `ship/ncei/` *(PR-B executed 2026-05-16; tracklines_{nc,xyz}/ + archive/ subdirs planned in PR-C)* |
 | `ship/multibeam_processed_M/` *(proposed)* | `ship/ncei/archive/zhoushuai_processed_M/` *(planned in PR-C)* |

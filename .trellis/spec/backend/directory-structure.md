@@ -20,7 +20,10 @@ ship/
 │   └── archive/            # Frozen source archives (don't process directly).
 │       ├── source_zips/    # 国外水深第一/第二部分.zip etc. (~27 GB)
 │       └── bathymetry_data/# 776 cruise-named zips (~25 GB; same source as multibeam/raw/subzips)
-├── NCEI_singlebeam/        # NCEI singlebeam (to be renamed to ncei/ in PR-B).
+├── ncei/                   # NCEI singlebeam track corpus. Formerly
+│                           #   ship/NCEI_singlebeam/ — renamed 2026-05-16
+│                           #   (PR-B). PR-C will populate tracklines_{nc,xyz}/
+│                           #   and archive/ subdirs.
 ├── archive/                # Top-level original downloaded zips (do not delete).
 ├── docs/                   # Cross-dataset documentation
 │   └── experiments/        # Finished investigations / experiment narratives

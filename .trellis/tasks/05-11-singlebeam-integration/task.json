@@ -21,8 +21,8 @@
   "children": [],
   "parent": null,
   "relatedFiles": [
-    "NCEI_singlebeam/singlebeam.xyz",
-    "NCEI_singlebeam/docs/README.md",
+    "ncei/singlebeam.xyz",
+    "ncei/docs/README.md",
     "jamstec/multibeam/code/",
     ".trellis/spec/backend/pipeline-design-decisions.md",
     ".trellis/spec/backend/data-contracts.md",

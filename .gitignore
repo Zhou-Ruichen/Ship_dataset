@@ -19,9 +19,10 @@
 jamstec/multibeam/archive/
 jamstec/archive/
 jamstec/gravity_data/
-# NCEI singlebeam (to be reorganized in PR-B / PR-C):
-NCEI_singlebeam/archive/
-NCEI_singlebeam/singlebeam.xyz
+# NCEI tree (renamed from NCEI_singlebeam/ 2026-05-16 in PR-B; PR-C will
+# populate tracklines_{nc,xyz}/ and archive/ subdirs):
+ncei/singlebeam.xyz
+ncei/archive/
 
 # ---------------------------------------------------------------------------
 # Generic binary / data formats - never commit

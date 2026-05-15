@@ -222,10 +222,11 @@ don't rename the directory, etc.) are reflected in `.trellis/spec/`.
 
 ---
 
-## Footer 2026-05-16: rename has now been executed
+## Footer 2026-05-16: rename has now been executed (PR-A + PR-B)
 
 The "Long-term: consider renaming the directory" item above was carried
-out by task `05-11-singlebeam-integration` (PR-A). All path strings in
+out by task `05-11-singlebeam-integration` (PR-A for the multibeam side,
+PR-B for the symmetric singlebeam-side rename). All path strings in
 this document refer to the **pre-rename layout** and are preserved
 verbatim as the historical record that motivated the refactor. Current
 canonical paths are:
@@ -236,7 +237,13 @@ canonical paths are:
 | `ship/JAMSTEC/bathymetry_data/` | `ship/jamstec/archive/bathymetry_data/` |
 | `ship/JAMSTEC/archive/` | `ship/jamstec/archive/source_zips/` |
 | `ship/JAMSTEC/gravity_data/` | `ship/jamstec/gravity_data/` |
+| `ship/NCEI_singlebeam/` | `ship/ncei/` |
 
 The string literal `source_dataset = "NCEI_multibeam"` is deliberately
 kept inside `.py` source as a lineage label so Step 08 bit-identical
 verification stays intact (Q5b locked decision).
+
+The external zip filename `NCEI_singlebeam_tracks_raw_2018files.zip`
+(at `/mnt/data2/00-Data/`) is unchanged — it is an upstream-archive
+filename, not a path under our control, and is preserved verbatim
+wherever referenced.

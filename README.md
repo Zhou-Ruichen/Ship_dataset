@@ -21,7 +21,7 @@ exact exclusion list.
 | `jamstec/multibeam/configs/` — YAML configs | `**/derived/` (178 GB) — points / cells / models |
 | `jamstec/multibeam/manifests/*.tsv` — small inventories | `**/archive/` (52 GB) — source zip / 7z |
 | `jamstec/multibeam/figures/*.png` — paper figures | `*.parquet`, `*.zip`, `*.7z`, `*.nc`, `*.npz`, ... |
-| `jamstec/multibeam/docs/*.md` — per-stage reports | `NCEI_singlebeam/singlebeam.xyz` (3.1 GB flat dump) |
+| `jamstec/multibeam/docs/*.md` — per-stage reports | `ncei/singlebeam.xyz` (3.1 GB flat dump) |
 | `docs/` — cross-dataset reference docs | `**/output/logs/` — per-script run logs |
 | `.trellis/` — workflow + spec + tasks | |
 | `.claude/` — AI agent configuration | |
@@ -35,20 +35,21 @@ source archives (see "Reproducibility" below).
 
 | Directory | Source | Era | Pipeline status |
 |---|---|---|---|
-| `jamstec/multibeam/` | **JAMSTEC** (despite the directory name; see note below) | 2000–2015 | Step 00–11 complete |
+| `jamstec/multibeam/` | JAMSTEC (R/V Kaiyo / Kairei / Mirai / Kairei-Sonar; formerly mislabeled `NCEI_multibeam/`) | 2000–2015 | Step 00–11 complete |
 | `jamstec/archive/bathymetry_data/` | Same JAMSTEC archive, alternate packaging | same | Source archive only; 13 `subzips_bad` recoverable from here |
 | `jamstec/gravity_data/` | JAMSTEC gravity | — | Raw only, not yet processed |
-| `NCEI_singlebeam/` | NCEI singlebeam track archive | — | Raw `.nc` zip + flat `.xyz`; pipeline not yet built |
+| `ncei/` | NCEI singlebeam track archive | — | Raw `.nc` zip + flat `.xyz`; pipeline not yet built |
 
-> **Naming caveat**: the `jamstec/multibeam/` directory is a historical
-> mislabel — its content is entirely JAMSTEC multibeam (ship codes
-> KY/KR/MR/KS = R/V Kaiyo / Kairei / Mirai / Kairei-Sonar, plus a few
-> KH from U. Tokyo ORI). The directory name is preserved for now because
-> dozens of manifests, reports, and parquet paths embed it; a coordinated
-> rename to `multibeam_jamstec/` is queued as part of the singlebeam
-> integration milestone. Full evidence chain in
+> **Provenance note**: `jamstec/multibeam/` was renamed from
+> `NCEI_multibeam/` on 2026-05-16 (task `05-11-singlebeam-integration`
+> PR-A) once a 2026-05 investigation confirmed the directory's content
+> was entirely JAMSTEC, not NCEI. The string literal
+> `source_dataset = "NCEI_multibeam"` still appears in 3 scripts under
+> `jamstec/multibeam/code/` as a logical lineage label (load-bearing
+> for Step 08 bit-identical verification, not a path). `ncei/` was
+> renamed from `NCEI_singlebeam/` on 2026-05-16 (PR-B) as a symmetric
+> pure-provenance refactor. Full evidence chain in
 > [`docs/experiments/2026-05_dataset-source-attribution.md`](docs/experiments/2026-05_dataset-source-attribution.md).
-> `NCEI_singlebeam/` IS correctly named — it is a real NCEI archive.
 
 ---
 
@@ -99,34 +100,35 @@ documented in
 
 ```
 ship/
-├── jamstec/multibeam/        # JAMSTEC multibeam pipeline (mislabeled dir)
-│   ├── code/              # 11-stage Python + shell scripts (tracked)
-│   ├── configs/           # YAML for Step 08 product validation
-│   ├── docs/              # Per-stage reports + schemas + cruise inventory
-│   ├── figures/           # Paper figures (PNG)
-│   ├── manifests/         # File inventories (TSV tracked, parquet ignored)
-│   ├── raw/               # Extracted .dat files (ignored)
-│   ├── derived/           # Pipeline outputs (ignored)
-│   ├── archive/           # Source zips (ignored, external backup required)
-│   └── output/logs/       # Per-script logs (ignored)
-├── NCEI_singlebeam/       # NCEI singlebeam — pipeline not yet built
-│   ├── docs/              # README + reference paper
-│   └── singlebeam.xyz     # 3.1 GB flat dump (ignored)
-├── jamstec/               # JAMSTEC source archive (same multibeam data)
-│   ├── bathymetry_data/   # 776 cruise zips (ignored)
-│   ├── gravity_data/      # Gravity zips (ignored, not yet processed)
-│   └── archive/           # bathymetry.7z + gravity.7z (ignored)
-├── archive/               # Top-level helper archives (ignored)
-├── docs/                  # Cross-dataset documentation
+├── jamstec/                  # All JAMSTEC data (unified 2026-05-16 in PR-A)
+│   ├── multibeam/            # JAMSTEC multibeam pipeline (formerly NCEI_multibeam/)
+│   │   ├── code/             # 11-stage Python + shell scripts (tracked)
+│   │   ├── configs/          # YAML for Step 08 product validation
+│   │   ├── docs/             # Per-stage reports + schemas + cruise inventory
+│   │   ├── figures/          # Paper figures (PNG)
+│   │   ├── manifests/        # File inventories (TSV tracked, parquet ignored)
+│   │   ├── raw/              # Extracted .dat files (ignored)
+│   │   ├── derived/          # Pipeline outputs (ignored)
+│   │   ├── archive/          # Source zips (ignored, external backup required)
+│   │   └── output/logs/      # Per-script logs (ignored)
+│   ├── gravity_data/         # Gravity zips (ignored, not yet processed)
+│   └── archive/              # Frozen source archives (ignored)
+│       ├── source_zips/      # 国外水深第一/第二部分.zip etc.
+│       └── bathymetry_data/  # 776 cruise zips (same source as multibeam/raw/subzips)
+├── ncei/                     # NCEI singlebeam — pipeline not yet built (renamed 2026-05-16 in PR-B)
+│   ├── docs/                 # README + reference paper
+│   └── singlebeam.xyz        # 3.1 GB flat dump (ignored; PR-C will archive)
+├── archive/                  # Top-level helper archives (ignored)
+├── docs/                     # Cross-dataset documentation
 │   ├── 多波束船测数据处理流程.md   # Authoritative pipeline overview
-│   └── experiments/       # Finished investigations
-├── .trellis/              # Trellis workflow framework
-│   ├── spec/backend/      # Pipeline conventions (English)
-│   ├── tasks/             # Active and archived tasks
-│   ├── workflow.md        # Phase guide
-│   └── scripts/task.py    # Task lifecycle CLI
-├── .claude/               # Claude Code agent / hook / skill config
-├── AGENTS.md              # Trellis instructions for AI assistants
+│   └── experiments/          # Finished investigations
+├── .trellis/                 # Trellis workflow framework
+│   ├── spec/backend/         # Pipeline conventions (English)
+│   ├── tasks/                # Active and archived tasks
+│   ├── workflow.md           # Phase guide
+│   └── scripts/task.py       # Task lifecycle CLI
+├── .claude/                  # Claude Code agent / hook / skill config
+├── AGENTS.md                 # Trellis instructions for AI assistants
 └── .gitignore
 ```
 

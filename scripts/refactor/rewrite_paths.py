@@ -5,7 +5,8 @@ Walks the repo, applies an ordered (longest-first) string-replacement
 mapping to text files of interest, and reports per-file change counts.
 
 Default mode is dry-run: prints a diff-like summary without touching
-files. Pass --apply to actually write changes.
+files. Pass --apply to actually write changes. Select which PR's mapping
+to apply with --pr {A,B}.
 
 Scope:
   - Included extensions: .md .json .yaml .yml .sh
@@ -14,8 +15,7 @@ Scope:
   - .py files are NEVER touched — the 3 `source_dataset = "NCEI_multibeam"`
     literals are load-bearing lineage labels (Q5b locked decision).
 
-The mapping is hardcoded here for auditability. PR-B (ncei/ rename) will
-add a second mapping block; do not generalize prematurely.
+Each mapping is hardcoded here for auditability — explicit beats clever.
 """
 
 from __future__ import annotations
@@ -37,6 +37,23 @@ MAPPING_PR_A: list[tuple[str, str]] = [
     # NOT rewritten — that's a real proper noun.
     ("JAMSTEC/",                "jamstec/"),
 ]
+
+# PR-B: NCEI_singlebeam/ → ncei/.
+# IMPORTANT: NO bare "NCEI_singlebeam" → "ncei" fallback. The external
+# zip filename `NCEI_singlebeam_tracks_raw_2018files.zip` lives outside
+# the repo at /mnt/data2/00-Data/ and must be preserved verbatim wherever
+# it is mentioned. A bare-token rewrite would corrupt it. All in-scope
+# references to the directory consistently use the trailing-slash form
+# (verified by grep before PR-B execution), so the slash form is
+# sufficient and a fallback is unnecessary.
+MAPPING_PR_B: list[tuple[str, str]] = [
+    ("NCEI_singlebeam/", "ncei/"),
+]
+
+MAPPINGS: dict[str, list[tuple[str, str]]] = {
+    "A": MAPPING_PR_A,
+    "B": MAPPING_PR_B,
+}
 
 INCLUDED_SUFFIXES = {".md", ".json", ".yaml", ".yml", ".sh"}
 
@@ -93,10 +110,13 @@ def main() -> int:
     ap.add_argument("--repo-root", default=".", help="Repo root (default: cwd)")
     ap.add_argument("--apply", action="store_true",
                     help="Actually write changes (default: dry-run)")
+    ap.add_argument("--pr", choices=sorted(MAPPINGS), default="A",
+                    help="Which PR's mapping to apply (default: A)")
     args = ap.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
     files = collect_files(repo_root)
+    mapping = MAPPINGS[args.pr]
 
     changed_files: list[tuple[Path, dict[str, int]]] = []
     for f in files:
@@ -104,14 +124,14 @@ def main() -> int:
             text = f.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        new_text, counts = rewrite_text(text, MAPPING_PR_A)
+        new_text, counts = rewrite_text(text, mapping)
         if counts:
             changed_files.append((f, counts))
             if args.apply:
                 f.write_text(new_text, encoding="utf-8")
 
     mode = "APPLY" if args.apply else "DRY-RUN"
-    print(f"[{mode}] scanned {len(files)} files, {len(changed_files)} would change")
+    print(f"[{mode} PR-{args.pr}] scanned {len(files)} files, {len(changed_files)} would change")
     print()
     total_per_pattern: dict[str, int] = {}
     for f, counts in changed_files:
@@ -122,7 +142,7 @@ def main() -> int:
             total_per_pattern[k] = total_per_pattern.get(k, 0) + v
     print()
     print("Totals per pattern:")
-    for old, _ in MAPPING_PR_A:
+    for old, _ in mapping:
         n = total_per_pattern.get(old, 0)
         print(f"  {old!r:42s} -> {n} occurrences")
     return 0

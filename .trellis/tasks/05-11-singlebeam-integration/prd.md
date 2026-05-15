@@ -356,12 +356,46 @@ PR-A execution notes (2026-05-16):
   docs themselves are NOT path-string rewritten (they describe the
   pre-rename state as historical record).
 
-**PR-B — `NCEI_singlebeam/` → `ncei/` rename + .nc reorg**
+**PR-B — `NCEI_singlebeam/` → `ncei/` rename + .nc reorg** ✅ executed 2026-05-16
 - Move existing `NCEI_singlebeam/` `.nc` content under `ncei/tracklines_nc/`.
 - (The flat `singlebeam.xyz` dump is handled in PR-C — archived under
   `ncei/archive/sunmingzhi_singlebeam_xyz/`, not pulled into `tracklines_nc/`.)
 - Path-rewrite script second invocation, narrower scope.
 - Spec update.
+
+PR-B execution notes (2026-05-16):
+- `mv NCEI_singlebeam ncei` atomic on `/mnt/data2`; 2 git-tracked files
+  (`docs/README.md`, `docs/On the accuracy evaluation and correction of
+  global single-beam depths.pdf`) carried over verbatim; the 3.1 GB
+  `singlebeam.xyz` and empty placeholder dirs (`code/`, `derived/`,
+  `figures/`, `output/`) came along untracked / gitignored.
+- The .nc-content relocation under `ncei/tracklines_nc/` is **deferred
+  to PR-C** along with the `total_tracklines_xyz.zip` extraction — PR-B
+  is intentionally a pure rename so the data-ingest churn lands in one
+  PR (PR-C) and PR-B's diff stays auditable as paths-only.
+- Rewrite tool gained a `--pr {A,B}` CLI flag + `MAPPING_PR_B`
+  (`NCEI_singlebeam/` → `ncei/`). **No bare-string fallback**: the
+  external zip `NCEI_singlebeam_tracks_raw_2018files.zip` (at
+  `/mnt/data2/00-Data/`) is an upstream-archive filename and a bare
+  `NCEI_singlebeam` → `ncei` rule would corrupt it. Grep verified all
+  in-scope directory references use the trailing-slash form.
+- 4 files rewritten, 9 occurrences total (`.trellis/spec/backend/directory-structure.md` = 1, `.trellis/tasks/05-11-singlebeam-integration/task.json` = 2, `README.md` = 4, `docs/多波束船测数据处理流程.md` = 2); .py files never touched (no NCEI_singlebeam literals exist in any .py).
+- Manual edits beyond the rewrite tool: README.md "Naming caveat" block
+  replaced with a post-rename provenance note + cleaned-up layout tree
+  (the old layout had a stale duplicate `jamstec/` entry from PR-A);
+  `spec/backend/directory-structure.md` `ncei/` row updated to drop the
+  "to be renamed in PR-B" parenthetical; `.gitignore` swapped the stale
+  `NCEI_singlebeam/{archive,singlebeam.xyz}` entries for
+  `ncei/{singlebeam.xyz,archive/}`.
+- Forward-pointer footers in `docs/experiments/2026-05_dataset-source-attribution.md`
+  and `docs/experiments/2026-05_tmp-data-classification.md` updated to
+  flip the singlebeam row from "planned" to "executed"; those two docs
+  remain path-string-frozen (historical record).
+- Verification = grep returns no `NCEI_singlebeam/` strings outside the
+  explicit allowlist (PRD + 2 historical docs + archived task files in
+  `.trellis/tasks/archive/`); 2 remaining `NCEI_singlebeam_` matches
+  in `ncei/docs/README.md` are the external zip filename (preserved
+  by design); `git check-ignore` confirms the new gitignore rules fire.
 
 **PR-C — New-data ingest**
 - Extract `total_tracklines_xyz.zip` → `ncei/tracklines_xyz/`.
