@@ -512,6 +512,104 @@ PR-C execution notes (2026-05-16):
 - Spec refresh; in-tree READMEs updated.
 - `MEMORY.md` / `CLAUDE.md` audit for stale references.
 
+## Finding 2026-05-16: ncei/ corpora relationship clarification (post-PR-C)
+
+After PR-C landed, read-only row-count + single-track density
+measurements were taken on all three NCEI singlebeam corpora. The
+results corrected an implicit assumption in
+`docs/experiments/2026-05_dataset-source-attribution.md` (2026-05-11
+"Singlebeam reuse note") that `singlebeam.xyz` is the merged form of
+the per-track `.nc` archive. Numbers rule that out.
+
+### Corrected relationship picture
+
+```
+NCEI upstream archive
+  ├─ per-track .nc snapshot (curated; mb pre-filtered) → tracklines_nc/    28.9M points / 2,018 files
+  └─ per-track .xyz snapshot (raw; mb mixed in)         → tracklines_xyz/  123.4M points / 5,382 files
+                                                              │
+                                                              │ flat merge (lossy: per-track ID, time, gobs/faa dropped)
+                                                              ▼
+                                                      孙明智 singlebeam.xyz   114.5M points
+                                                      (≈ tracklines_xyz at an earlier snapshot or
+                                                       upstream-filter variant; 7% point-count delta)
+```
+
+| Set | Files | Total points | Avg / track | Measurement |
+|---|---:|---:|---:|---|
+| `ncei/tracklines_nc/` | 2,018 .nc | ~28,894,834 (28.9M) | ~14,319 | 20-file random sample × 2,018 |
+| `ncei/tracklines_xyz/` | 5,382 .xyz | ~123,352,000 (123.4M) | ~22,920 raw / ~14,000 after mb-strip | sum(file_size) / 27 bytes |
+| `ncei/archive/sunmingzhi_singlebeam_xyz/singlebeam.xyz` | 1 (merged flat) | 114,507,390 (114.5M) | n/a | `wc -l` (authoritative) |
+
+After stripping the 12 confirmed multibeam files from
+`tracklines_xyz/` (each ~4M points → ~48M total mb), the remaining
+~75M / ~5,370 sb tracks ≈ 14,000 pts/track — which **matches**
+`tracklines_nc/`'s 14,319 pts/track. This is strong evidence that the
+nc and xyz corpora are different packagings of the same underlying
+NCEI singlebeam point cloud: xyz wraps an additional multibeam swath
+layer; nc is the curated / mb-filtered view.
+
+### Impact on locked decisions
+
+This finding **does not change any locked decision**, but it sharpens
+the reasoning behind two of them. Audit table:
+
+| # | Decision (verbatim shorthand) | Still correct? | Reasoning |
+|---|---|---|---|
+| 1 | `NCEI_multibeam/` → `jamstec/` | Yes | Multibeam side unaffected — finding is singlebeam-side only. |
+| 2 | `NCEI_singlebeam/` → `ncei/` | Yes | Provenance-based slug still right; finding only clarifies *internal* corpus relationship. |
+| 2a | NCEI internal layout = B1 (`tracklines_{nc,xyz}/`, `derived/{sb,mb}/`) | Yes | Split-by-upstream-form is reinforced: nc and xyz are demonstrably different packagings of the same source, so keeping them as siblings (not collapsing one into the other) is exactly right. |
+| 3 | `total_tracklines_xyz.zip` → `ncei/tracklines_xyz/` | Yes | Placement decision intact. |
+| 4 | Pipeline does sb/mb split, not filesystem | Yes | Sharpened: 14k/track baseline for sb confirms the mb-mix in xyz is a per-file phenomenon (12 files >>14k each), exactly what the R2 pipeline-stage classifier is designed for. |
+| 5 | `M.rar` → `ncei/archive/zhoushuai_processed_M/` | Yes | M.rar is multibeam — finding doesn't touch it. |
+| 6 | `M.rar` = "processed NCEI multibeam, regional" | Yes | Unaffected. |
+| 7 | Cleaning step required for M.rar | Yes | Unaffected. |
+| 8 | Union strategy for xyz + nc: 168 nc-only tracks retained | Yes, **sharpened** | Still correct as a basename-set fact. New framing: the 168 nc-only basenames are NOT corruption of xyz; they reflect snapshot drift / upstream-filter variance between two NCEI snapshots (curated nc filtered differently than raw xyz). Per-track density math (14k/track in both) confirms same physical corpus, different curated views. Union remains the right ingestion strategy. |
+| 9 | `JAMSTEC/` absorbed into `jamstec/` in PR-A | Yes | Already executed; unaffected. |
+
+### Implicit-assumption sharpening (text vs spirit)
+
+Two reasoning chains in the PRD/spec implicitly conflated
+`singlebeam.xyz` with `tracklines_nc/`. The conclusions stand; the
+chains need a footnote:
+
+- **"168 nc-only tracks" framing**: spirit unchanged (union strategy
+  retained). Text correction: the reason for the basename diff is
+  snapshot drift / upstream-filter variance, **not** xyz pipeline bugs
+  or corruption. Documented in this section and propagated to the two
+  SOURCE.md sidecars + attribution doc.
+- **"Build pipeline from `.nc`" decision**: spirit unchanged
+  (`tracklines_nc/` remains the canonical pipeline input for
+  PR-D / PR-E). Text correction: previous reasoning
+  ("singlebeam.xyz lost per-track structure during merging *from the
+  .nc files*") is wrong about the source of that merge. Updated
+  reasoning: (a) per-track structure preserved in `.nc`; (b) `.nc`
+  is mb-filtered upstream → cleaner input that doesn't depend on the
+  R2 classifier being perfect; (c) `.nc` has standardized MGD77+
+  columns (time, gobs, faa) that bare `.xyz` lacks.
+
+### R2 classifier scope (PR-D)
+
+The new per-track density floor (~14,000 pts/track for clean
+singlebeam) is consistent with the PRD's earlier assumption
+("a singlebeam track of 1M points is ~10,000 km long" → ~100 pts/km).
+The 100k–1M borderline band sits 7×–70× above the 14k norm — well
+clear of the singlebeam tail. The R2 thresholds
+(`bbox<5,000 km² OR density>50 pts/km²`) remain appropriate. **No
+change to PR-D classifier scope.** The 96 borderline xyz files +
+~10 borderline nc files still form the calibration scatter set as
+originally planned.
+
+### Where this finding is recorded
+
+- This PRD section (canonical).
+- `ncei/archive/sunmingzhi_singlebeam_xyz/SOURCE.md` — appended
+  "Relationship to other NCEI singlebeam corpora" section.
+- `docs/experiments/2026-05_dataset-source-attribution.md` — inline
+  `[2026-05-16 correction]` paragraph after the "Singlebeam reuse
+  note" section (paragraph is additive; the original historical
+  narrative is preserved).
+
 ## Research References
 
 (Both linked from the broader 2026-05_tmp-data-classification.md

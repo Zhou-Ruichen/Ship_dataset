@@ -164,6 +164,42 @@ re-calibration for singlebeam point density). Scoped under task
 directory rename (`NCEI_multibeam → multibeam_jamstec`,
 `NCEI_singlebeam → singlebeam_ncei`) as a coordinated refactor.
 
+**[2026-05-16 correction]** Empirical row-count + per-track density
+measurements taken after PR-C landed show this paragraph's implicit
+claim — that `singlebeam.xyz` is a merged form of the per-track `.nc`
+archive — is wrong. The actual relationship picture:
+
+```
+NCEI upstream archive
+  ├─ per-track .nc snapshot (curated; mb pre-filtered) → tracklines_nc/    28.9M points / 2,018 files
+  └─ per-track .xyz snapshot (raw; mb mixed in)         → tracklines_xyz/  123.4M points / 5,382 files
+                                                              │
+                                                              │ flat merge (lossy)
+                                                              ▼
+                                                      孙明智 singlebeam.xyz   114.5M points
+                                                      (≈ tracklines_xyz at an earlier snapshot or
+                                                       upstream-filter variant; 7% point-count delta)
+```
+
+| Set | Files | Total points | Avg / track |
+|---|---:|---:|---:|
+| `ncei/tracklines_nc/` | 2,018 | 28.9M | ~14,319 |
+| `ncei/tracklines_xyz/` | 5,382 | 123.4M | ~22,920 raw / ~14,000 after mb-strip |
+| `singlebeam.xyz` | 1 (flat) | 114.5M | n/a |
+
+The 4× point-count gap (114.5M vs 28.9M) rules out `tracklines_nc/`
+as the merge source; the dump is the merged form of an earlier or
+upstream-filter-variant snapshot of the `.xyz` family. The
+**downstream decision** ("build the singlebeam pipeline from
+`tracklines_nc/`, not from `singlebeam.xyz`") is unchanged, but the
+**reason** sharpens: (a) per-track structure is preserved in `.nc`;
+(b) `.nc` is mb-filtered upstream → cleaner input that doesn't depend
+on the R2 classifier being perfect; (c) `.nc` carries standardized
+MGD77+ columns (time, gobs, faa) that the bare `.xyz` lacks. See
+PRD "Finding 2026-05-16" section and
+`ncei/archive/sunmingzhi_singlebeam_xyz/SOURCE.md` for the full
+relationship audit.
+
 ---
 
 ## What does *not* need to change
