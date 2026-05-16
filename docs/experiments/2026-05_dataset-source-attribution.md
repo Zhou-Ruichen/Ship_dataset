@@ -366,3 +366,120 @@ side, both 2026-05-16) with the path-rewrite script plus Step 08
 bit-identical verification (hash-only smoke check passed). This
 2026-05-16 footer is purely metadata/provenance — no downstream
 processing impact.
+
+---
+
+## Footer 2026-05-16 (李杨 finding chain)
+
+Two fingerprint-driven findings landed on 2026-05-16 that finalize the
+JAMSTEC-side transfer-chain unknowns from Footer §1–§3 above AND
+sharpen the NCEI-side framing carried forward in Footers §3–§4. Both
+are additive — the prior footers and the original historical narrative
+above stand as-is.
+
+### 1. 李杨 = JAMSTEC bath/gravity 7z transferer
+
+User clue (2026-05-16): "李杨 sent JAMSTEC bath+gravity; bath includes
+KR06-03, gravity includes KM17-02." Fingerprint-verified by direct
+listing of the 7z internal contents:
+
+- `KR06-03_bathymetry_dmo.zip` found inside
+  `jamstec/archive/source_zips/bathymetry.7z` (internal mtime
+  2024-04-11 09:30:52).
+- `KM17-02_gravity.zip` found inside
+  `jamstec/archive/source_zips/gravity.7z` (internal mtime 2024-04-10
+  17:05:52).
+- `jamstec/gravity_data/` (954 zips on disk) ≡ byte-identical unpack
+  of `gravity.7z` (954 internal zips; per-file diff of
+  `KM17-02_gravity.zip` empty).
+- `jamstec/archive/bathymetry_data/` (776 zips on disk) ≡
+  byte-identical unpack of `bathymetry.7z` (`KR06-03_bathymetry_dmo.zip`
+  present in both locations).
+
+→ All four previously-"unknown" JAMSTEC transfer chains
+(`bathymetry.7z`, `gravity.7z`, `bathymetry_data/*.zip`,
+`gravity_data/*.zip`) resolve to a single **李杨 → user** transfer of
+two compressed packages (`bathymetry.7z` + `gravity.7z`), packaged
+April 2024 internally. The on-disk per-cruise zip directories are
+**byte-identical unpacks** of the 7z's, NOT separate transfer events.
+
+`multibeam/archive/国外水深第{一,二}部分.zip` (24.5 GB) remains
+**郭恒洋 → user** (Footer §1 above; Dec 2024 file mtimes, 2024-07-24
+internal packaging — a different repackaging event from 李杨's
+2024-04-11 packaging of the same JAMSTEC source corpus).
+
+The earlier "Three packagings, one source" framing (Footer §2) is
+therefore superseded: ~51 GB redundancy is now traceable to **two
+independent transferers** working from the same JAMSTEC source corpus
+at different times with different packaging conventions, not three
+coincidental packagings. Locked decision #2 still holds: keep all
+copies; active anchor is `multibeam/archive/`. Full details in
+`jamstec/SOURCE.md`.
+
+### 2. 李杨 = ncei `.nc` archive content converter
+
+5/5 spot-checked `.nc` files in `ncei/tracklines_nc/` carry identical
+NetCDF global-attribute structure:
+
+```
+Author: liyang
+title: Cruise XXXX (NGDC ID XXXX)
+history: Wed Jul 31 [HH:MM:SS] 2024  [liyang] Conversion from MGD77 ASCII to MGD77+ netCDF format
+```
+
+→ The entire 2,018-file archive at `ncei/tracklines_nc/` is **李杨's
+local NetCDF conversion** of NCEI MGD77 ASCII source data, performed
+2024-07-31. The package `NCEI_singlebeam_tracks_raw_2018files.zip`
+(at `ncei/archive/source_zips/`) and its byte-identical duplicate
+`/mnt/data2/00-Data/gravity/NCEI/archive/NCEI.zip` both carry 李杨's
+conversion product. The earlier codex-notes finding (that the bytes
+"matched against the NCEI singlebeam track archive") was about
+**content-value matching against NCEI MGD77 source data** — that
+conclusion stands — but the file format is 李杨's conversion artifact,
+not NCEI's official NetCDF distribution.
+
+**Transfer chain (user confirmed 2026-05-16)**:
+**李杨 (2024-07-31 conversion) → 孙明智 (forwarding, late 2024) → user**.
+The earlier 2026-05-11 "Singlebeam reuse note" (which implicitly
+framed the .nc archive as canonical NCEI distribution) is
+**superseded** by this finding — the archive is 李杨's local
+conversion product, content-equivalent to NCEI MGD77 source but
+format-wise an artifact.
+
+### Implication: 孙明智's role narrows
+
+- 孙明智 (a) **forwarded** 李杨's NetCDF-conversion `.nc` archive to
+  user in late 2024 (file mtime Dec 18 2024).
+- 孙明智 (b) **provided / own-worked** `singlebeam.xyz` (Jan 18 2025
+  file mtime), the 114.5M-row flat-merge dump now at
+  `ncei/archive/sunmingzhi_singlebeam_xyz/`. The flatten/merge origin
+  is undocumented — possibly 孙明智's own work, possibly an upstream
+  snapshot he obtained pre-merged. **Not 李杨's product** in either
+  case.
+
+The dirname `sunmingzhi_singlebeam_xyz` refers only to (b) — the flat
+merge — kept as frozen legacy artifact.
+
+### Downstream-impact audit
+
+**No algorithmic change**. The .nc archive being 李杨's conversion
+does not change parser / QC / aggregation behavior — MGD77+ NetCDF is
+a standard format and `netCDF4.Dataset` reads it identically
+regardless of who performed the conversion. PR-D through PR-G of task
+`05-11-singlebeam-integration` are unaffected. This footer is purely
+provenance refinement.
+
+### Where this finding is recorded
+
+- This footer (canonical narrative).
+- `jamstec/SOURCE.md` — rewritten transfer-chain section (李杨 + 郭恒洋
+  with fingerprint evidence).
+- `ncei/SOURCE.md` — new top-level summary (李杨 conversion +
+  孙明智 dual role).
+- `ncei/tracklines_nc/SOURCE.md` — rewritten Provenance section.
+- `ncei/archive/sunmingzhi_singlebeam_xyz/SOURCE.md` — sharpened
+  Transfer-chain-scope bullet (forwarder vs. own-work split).
+- `ncei/archive/source_zips/SOURCE.md` — updated transfer-chain table
+  row for the .nc zip.
+- PRD: `.trellis/tasks/05-11-singlebeam-integration/prd.md` —
+  "Finding 2026-05-16 (李杨 finding chain)" section.

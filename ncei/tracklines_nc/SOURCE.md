@@ -5,29 +5,44 @@
 
 ## Provenance
 
-Two separable concerns here — keep them distinct:
+Three separable concerns here — keep them distinct:
 
-- **Content origin** (factual, codex-verified): NCEI public singlebeam
-  track archive. An earlier codex investigation verified the bytes of
-  `NCEI_singlebeam_tracks_raw_2018files.zip` against the NCEI singlebeam
-  track archive; notes saved at `~/.codex/ncei_singlebeam_README.md`
-  (per `docs/experiments/2026-05_dataset-source-attribution.md`).
-- **Transfer chain** (high-confidence inference, 2026-05-16): the source
-  `.zip` almost certainly arrived alongside `singlebeam.xyz` as part of
-  a single transfer from **孙明智** to the user in late 2024 / early
-  2025. Evidence: (a) file timestamps `NCEI_singlebeam_tracks_raw_2018files.zip`
-  = Dec 18 2024 and `singlebeam.xyz` = Jan 18 2025 (one-month window);
-  (b) the codex notes treat both files as the two pieces of a single
-  "NCEI Singlebeam Data" investigation and no separate download is
-  recorded; (c) user recollection of receiving the singlebeam data from
-  孙明智, with no memory of a direct NCEI download. Treat this as a
-  high-confidence inference, not a confirmed fact — provenance is not
-  actively chased (Q8-style stance). See
-  `ncei/archive/sunmingzhi_singlebeam_xyz/SOURCE.md` for the sibling
-  transfer artifact.
+- **Content origin** (factual): NCEI MGD77 ASCII source data. Cruise
+  filenames carry NGDC trackline IDs (e.g. `70002`, `64018`, `csio02rr`).
+  The data values match the NCEI public singlebeam track archive — an
+  earlier codex investigation (`~/.codex/ncei_singlebeam_README.md`)
+  established **content-value equivalence** against the NCEI archive.
+  That conclusion stands.
+- **Conversion** (new 2026-05-16 finding): All 2,018 `.nc` files in
+  this dir are **李杨's local MGD77 ASCII → MGD77+ NetCDF conversion**,
+  performed **2024-07-31**. Every NetCDF file carries global attributes
+  matching this pattern (5/5 spot-checked files identical structure):
+  ```
+  Author: liyang
+  title: Cruise XXXX (NGDC ID XXXX)
+  history: Wed Jul 31 [HH:MM:SS] 2024  [liyang] Conversion from MGD77 ASCII to MGD77+ netCDF format
+  ```
+  The archive is therefore **李杨's conversion artifact**, NOT a download
+  of NCEI's official NetCDF distribution. The earlier codex-notes
+  framing — that the files "matched against the NCEI singlebeam track
+  archive" — was about content-value matching against the NCEI MGD77
+  source data, which remains correct. It did NOT establish that the
+  `.nc` files themselves came directly from NCEI; the new attribute
+  evidence shows they were locally re-encoded by 李杨.
+- **Transfer chain** (user confirmed 2026-05-16):
+  **李杨 (2024-07-31 NetCDF conversion) → 孙明智 (forwarding, late 2024) → user**.
+  孙明智's role here is forwarder only — the conversion product is
+  李杨's. This supersedes the earlier high-confidence-inference framing
+  that named 孙明智 as the primary source-side counterparty.
 - **Source archive**: `NCEI_singlebeam_tracks_raw_2018files.zip` (463 MB).
   Originally lived at `/mnt/data2/00-Data/`; relocated 2026-05-16
-  to `ncei/archive/source_zips/` as part of PR-C.
+  to `ncei/archive/source_zips/` as part of PR-C. Byte-identical
+  duplicate at `/mnt/data2/00-Data/gravity/NCEI/archive/NCEI.zip`
+  is kept by design (Locked decision #10 — two sibling projects share
+  one source).
+- **Pre-PR-C inspection residue**: `/mnt/data2/00-Data/tmp/70002.nc`
+  is byte-identical to `ncei/tracklines_nc/70002.nc` (pre-PR-C
+  inspection copy). User-decision-locked; not in scope for cleanup.
 
 ## Contents
 

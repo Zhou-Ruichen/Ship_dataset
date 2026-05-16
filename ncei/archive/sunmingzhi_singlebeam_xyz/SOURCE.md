@@ -12,19 +12,28 @@
 - **Pre-PR-C location**: `ship/NCEI_singlebeam/singlebeam.xyz` (later
   `ship/ncei/singlebeam.xyz` after PR-B). Moved here 2026-05-16 by
   PR-C; not extracted, not modified — same bytes as the legacy file.
-- **Transfer-chain scope** (2026-05-16 clarification): 孙明智's
-  late-2024 / early-2025 transfer almost certainly included BOTH this
-  flat `.xyz` dump AND the per-track `.nc` archive now living at
-  `ncei/tracklines_nc/`. Evidence: file timestamps
-  `NCEI_singlebeam_tracks_raw_2018files.zip` = Dec 18 2024,
-  `singlebeam.xyz` = Jan 18 2025 (one-month window); codex notes
-  (`~/.codex/ncei_singlebeam_README.md`) treat both files as a single
-  cohesive "NCEI Singlebeam Data" investigation; user has no memory of
-  a separate direct-from-NCEI download. The dirname
-  `sunmingzhi_singlebeam_xyz` therefore reflects the specific legacy
-  flat file kept here as a frozen artifact, **not** the full scope of
-  what 孙明智 transferred. Cross-reference:
-  `ncei/tracklines_nc/SOURCE.md` (transfer chain section).
+- **Transfer-chain scope** (2026-05-16 sharpening): 孙明智's role
+  spans two distinct artifacts with **two distinct origins**:
+  - **(a) Forwarder** for 李杨's per-track `.nc` archive now at
+    `ncei/tracklines_nc/`. 李杨 performed the
+    MGD77 ASCII → MGD77+ NetCDF conversion on 2024-07-31 (NetCDF
+    global attrs carry `Author: liyang` + a `Conversion from MGD77
+    ASCII to MGD77+ netCDF format` history line in 5/5 spot-checked
+    files); 孙明智 transferred the resulting package to user in late
+    2024 (file mtime `NCEI_singlebeam_tracks_raw_2018files.zip` =
+    Dec 18 2024). The conversion product is 李杨's; 孙明智 is the
+    forwarder only.
+  - **(b) Provider / own-work** for this flat `singlebeam.xyz`
+    merge dump (file mtime Jan 18 2025). Origin of the underlying
+    flatten/merge step is not externally documented — possibly
+    孙明智's own work, possibly an upstream NCEI snapshot he
+    obtained pre-merged. The dirname `sunmingzhi_singlebeam_xyz`
+    refers only to **this** artifact — the flat merge — kept as a
+    frozen legacy artifact.
+  - User confirmation 2026-05-16. This supersedes the earlier
+    framing that bundled the .nc archive under 孙明智's name.
+    Cross-reference: `ncei/tracklines_nc/SOURCE.md` (李杨 conversion
+    section) and the parent `ncei/SOURCE.md` (transfer-chain table).
 
 ## Contents
 

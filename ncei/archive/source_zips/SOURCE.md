@@ -22,14 +22,19 @@ The two zips here arrived from different upstream channels — content
 origin (both NCEI public archives) is separate from transfer chain
 (who actually moved the bytes onto this disk):
 
-| File | Transfer chain | Date window | Confidence |
+| File | Transfer chain | Date | Confidence |
 |---|---|---|---|
-| `NCEI_singlebeam_tracks_raw_2018files.zip` | 孙明智 → user | Dec 2024 (file timestamp Dec 18 2024) | high-confidence inference — almost certainly part of the same transfer as `singlebeam.xyz` (now at `ncei/archive/sunmingzhi_singlebeam_xyz/`); user has no memory of a separate direct-from-NCEI download. See `ncei/tracklines_nc/SOURCE.md` for full evidence chain. |
+| `NCEI_singlebeam_tracks_raw_2018files.zip` | **李杨 (conversion) → 孙明智 (forwarder) → user** | Conversion: 2024-07-31; transfer to user: Dec 2024 (file mtime Dec 18 2024) | 李杨 conversion = hard evidence (5/5 spot-checked .nc files carry `Author: liyang` + 2024-07-31 conversion-history line); 孙明智 forwarder role = user-confirmed 2026-05-16. |
 | `total_tracklines_xyz.zip` | 安德超 → user | 2026-05-15 | confirmed (PR-C ingest of this same task). |
 
 The third NCEI-related archive on the user's disk — `M.rar` from 周帅
 — is multibeam-side and lives at `ncei/archive/zhoushuai_processed_M/M.rar`,
 not in this dir.
+
+Both source zips here are kept as audit trail for the unpacked content
+in `ncei/tracklines_nc/` and `ncei/tracklines_xyz/` respectively. The
+李杨/孙明智 chain for the `.nc` archive is fully documented in
+`ncei/tracklines_nc/SOURCE.md` and the parent `ncei/SOURCE.md`.
 
 ## Convention
 
