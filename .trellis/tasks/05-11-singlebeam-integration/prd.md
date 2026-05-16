@@ -100,6 +100,7 @@ union, not replace. 91.7% coverage of nc + 2.7× superset.
 | 8 | Union strategy needed for xyz + nc: 168 nc-only tracks must be retained | ✅ confirmed |
 | 9 | **Existing uppercase `JAMSTEC/` tree absorbed into new `jamstec/` in PR-A** (one atomic refactor, no temporary case-collision). Final layout: `jamstec/multibeam/` (← `NCEI_multibeam/`), `jamstec/gravity_data/` (← `JAMSTEC/gravity_data/`), `jamstec/archive/source_zips/` (← `JAMSTEC/archive/`, ~27 GB), `jamstec/archive/bathymetry_data/` (← `JAMSTEC/bathymetry_data/`, ~25 GB). Empty placeholder dirs (`JAMSTEC/{code,derived,docs,figures,output}`) dropped. All on same mount → `mv` is instant rename. | ✅ confirmed 2026-05-16 |
 | 10 | **NCEI .nc raw archive is dual-consumed across sibling projects**: SHA256 `1a9b2c5b7e72f1ca1d17b0f1b7172186ebf56be1ebde67113ad8978a48514eed` lives in two byte-identical copies — bath pipeline at `ship/ncei/archive/source_zips/NCEI_singlebeam_tracks_raw_2018files.zip` (consumed via `depth` field) and gravity project at `/mnt/data2/00-Data/gravity/NCEI/archive/NCEI.zip` (consumed via `gobs` / `faa` fields). Byte-identical duplicate **by design**. Do not dedupe; each project owns its consumer-side copy. Two projects, one source. | ✅ confirmed 2026-05-16 |
+| 11 | **李杨 is the primary external contributor** — NetCDF conversion of 2,018 NCEI MGD77 ASCII tracks (2024-07-31) + the source 7z packagings behind 4 previously-unknown JAMSTEC bathymetry + gravity sub-archives (`bathymetry.7z`, `gravity.7z`, `bathymetry_data/*.zip`, `gravity_data/*.zip`; KR06-03 / KM17-02 fingerprint-verified). 孙明智 = forwarder for `.nc` + own-work provider for `singlebeam.xyz`; 郭恒洋 = independent JAMSTEC transferer with different 2024-07-24 repackaging (`国外水深第{一,二}部分.zip`). | ✅ confirmed 2026-05-16 |
 
 ## Open Questions (to resolve in this brainstorm)
 
@@ -688,6 +689,8 @@ user 2026-05-16: 李杨 (conversion) → 孙明智 (forwarding, late 2024)
 | 9 | `JAMSTEC/` absorbed into `jamstec/` in PR-A | Yes | Already executed; transfer-side findings don't touch path layout. |
 | 10 | NCEI .nc dual-consumed across `ship/` and `gravity/` projects | Yes, **sharpened** | Both byte-identical copies carry 李杨's conversion product (5/5 spot-check applies to both via SHA256 byte-identity). Original "two projects, one source" framing intact; refined wording is "two projects, one source archive, one conversion artifact (李杨's 2024-07-31 NetCDF re-encoding)". |
 | **11** (proposed) | **李杨 (2024-07-31 MGD77 ASCII→NetCDF conversion + JAMSTEC bath/gravity 7z transfer) is the primary external contributor for the .nc + .7z archives; 孙明智 = forwarder for .nc + own-work provider for singlebeam.xyz; 郭恒洋 = independent JAMSTEC transferer with different 2024-07-24 repackaging.** | **✅ confirmed 2026-05-16** | Fingerprint evidence (KR06-03 / KM17-02 in 7z's + `Author: liyang` in 5/5 .nc spot check) + user confirmation 2026-05-16. Supersedes the high-confidence inferences in prior decision/footer narratives. |
+
+**Promoted 2026-05-16 to canonical Locked decisions table (#11).**
 
 ### Downstream-impact audit (PR-D through PR-G)
 
