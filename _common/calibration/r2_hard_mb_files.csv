@@ -1,0 +1,13 @@
+path,file_type,points,bbox_km2,density_ppkm2,label,reason
+ncei/tracklines_xyz/ra022-3.xyz,xyz,4681732,,,mb,hard_mb_points
+ncei/tracklines_xyz/ra304-15.xyz,xyz,4791752,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry418.xyz,xyz,2286087,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry419.xyz,xyz,2610931,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry420.xyz,xyz,2700654,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry421.xyz,xyz,2986580,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry422.xyz,xyz,2925767,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry423.xyz,xyz,1548425,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry424.xyz,xyz,2892350,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry426.xyz,xyz,2842137,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry427.xyz,xyz,2687721,,,mb,hard_mb_points
+ncei/tracklines_xyz/sentry428.xyz,xyz,2924587,,,mb,hard_mb_points

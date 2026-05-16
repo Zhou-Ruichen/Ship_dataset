@@ -488,13 +488,106 @@ PR-C execution notes (2026-05-16):
   - M.rar cleaning (PR-F) — extracts are raw and unmodified.
   - No `.py` files touched.
 
-**PR-D — Shared lib extraction + classifier**
+**PR-D — Shared lib extraction + classifier** ✅ executed 2026-05-16
 - Factor algorithmic overlap from JAMSTEC pipeline into `_common/`
   (exact structure decided during implementation, not pre-designed).
 - Implement R2 classifier as a pipeline stage (post-standardize for
   .nc, post-minimal-parse for .xyz).
 - Tests: 12 confirmed-mb xyz files all → mb; sample of clear sb files → sb;
   borderline files produce the (bbox, density) scatter to calibrate.
+
+PR-D execution notes (2026-05-16):
+- **Package location**: `ship/_common/` (matches the candidate name in
+  the PRD; leading underscore signals "private internal lib, not a
+  published package", visually distinct from dataset dirs).
+- **Scope shipped**: classifier + tiny `.xyz`/`.nc` lon-lat readers +
+  calibration driver + tests + a `README.md` listing the planned
+  PR-E migrations (Step 03 / 04a / 04b / 05 / 06a-d / 08 / 09-11
+  primitives). No `jamstec/multibeam/code/` step was actually migrated
+  in this PR — PR-E owns the migration.
+- **API decisions**:
+  - `classify(lon, lat) -> R2Result` is the single entry point;
+    `classify_from_arrays(..., points=N)` is the cheap-path override
+    for cases where point count is already known.
+  - `R2Result` frozen dataclass exposes `label`, `points`, `bbox_km2`,
+    `density_ppkm2`, `reason`. `bbox_km2`/`density_ppkm2` are `None`
+    when the decision was reached by hard rule (no bbox computed).
+  - Threshold constants exported at module level
+    (`R2_HARD_MB_POINTS = 1_000_000`, `R2_HARD_SB_POINTS = 100_000`,
+    `R2_BBOX_KM2_CUTOFF = 5_000.0`, `R2_DENSITY_PPKM2_CUTOFF = 50.0`).
+  - Edge cases: `bbox_km2 == 0` (all points identical) → mb with
+    density=`+inf`, reason=`borderline_bbox_below_cutoff`.
+    Mismatched/empty arrays → `ValueError`.
+- **Calibration scan** (full corpus, 30 s wall time on `/mnt/data2`):
+  - Scanned 7,400 files (2,018 .nc + 5,382 .xyz).
+  - Per-band counts: `<100k` → 7,260 sb / 0 mb; `100k–1M` →
+    123 sb / 5 mb; `>1M` → 0 sb / 12 mb.
+  - The 12 hard-cutoff mb files match the confirmed multibeam set
+    (10× AUV Sentry sentry418–428, ra022-3, ra304-15) — exactly as
+    predicted.
+  - 5 borderline-mb hits, all defensible:
+    - `nf-10-01-02-crer-rfr.xyz`: 195k pts / 91 km² = 2,141 pts/km²
+      (compact reef survey, clearly mb).
+    - `ra028-09.xyz`: 800k pts / 1,089 km² = 734 pts/km² (R/V Atlantis
+      RA-series, same lineage as the confirmed `ra022-3` / `ra304-15`).
+    - `ab1999.xyz`: 110k pts / 1,089 km² = 101 pts/km².
+    - `at27a.xyz`: 710k pts / 7,874 km² = 90 pts/km² (over density
+      cutoff).
+    - `int_9125.xyz`: 106k pts / 4,237 km² = 25 pts/km² (just under
+      bbox cutoff).
+  - Notable borderline-sb classifications worth a manual look in PR-E
+    if the team wants to tighten further:
+    - `sermilik.xyz` (Sermilik Fjord, Greenland): 372k pts / 10,089 km²
+      = 37 pts/km² — likely an mb survey by mission, but density falls
+      below 50 cutoff. Recorded as starter-threshold-borderline.
+  - Scatter PNG (`_common/calibration/r2_borderline.png`) shows clean
+    separation: mb cluster upper-left (high density / low bbox), sb
+    cluster lower-right (low density / large bbox).
+- **Threshold tuning decision**: **defaults retained**
+  (`R2_HARD_MB_POINTS = 1e6`, `R2_HARD_SB_POINTS = 1e5`,
+  `R2_BBOX_KM2_CUTOFF = 5_000 km²`, `R2_DENSITY_PPKM2_CUTOFF = 50 pts/km²`).
+  Calibration scatter shows clean separation under starter values; the
+  5 borderline-mb hits are all defensible, and the 12 hard-cutoff mb
+  files all land correctly. Any future tightening to catch the
+  ~10–20 likely-mb borderline-sb cases (e.g. `sermilik.xyz`) is a
+  PR-E follow-up once the pipeline can route them through both legs
+  and the user sees actual downstream impact.
+- **Tests** (11 passed under both `python -m unittest` and `pytest`
+  in 1.1–1.3 s): synthetic-array hard-mb / hard-sb / borderline-compact /
+  borderline-dense / borderline-default-sb / zero-bbox-edge /
+  mismatched-arrays / empty-arrays / cheap-path override + 2
+  real-fixture tests (`ra304-15.xyz` → mb, 3 short sb files → sb).
+  Real-fixture tests `pytest.skip` cleanly when files are absent.
+- **No `.py` files in `jamstec/multibeam/code/` touched** (hash-only
+  smoke check pattern). The shared lib has zero consumers in this PR;
+  consumer-side adoption begins in PR-E.
+- **Spec touch**: appended decision #10 (R2 classifier) to
+  `.trellis/spec/backend/pipeline-design-decisions.md`.
+- **`.gitignore` change**: none — the CSV / PNG / .txt summary in
+  `_common/calibration/` are not caught by existing rules
+  (the `*.parquet` / `*.zip` / etc. extension globs do not match).
+- **Files created** (10 total):
+  - `_common/__init__.py`
+  - `_common/r2_classifier.py`
+  - `_common/io_helpers.py`
+  - `_common/r2_calibration.py`
+  - `_common/README.md`
+  - `_common/tests/__init__.py`
+  - `_common/tests/test_r2_classifier.py`
+  - `_common/calibration/r2_borderline.csv` (128 borderline rows)
+  - `_common/calibration/r2_borderline.png` (scatter, 120 dpi)
+  - `_common/calibration/r2_calibration_summary.txt`
+- **Files modified**:
+  - `.trellis/spec/backend/pipeline-design-decisions.md` (new section 10)
+  - `.trellis/tasks/05-11-singlebeam-integration/prd.md` (these notes)
+- **Post-review fix 2026-05-16**: added
+  `_common/calibration/r2_hard_mb_files.csv` sidecar (12-row roster of
+  the hard-mb band: `ra022-3`, `ra304-15`, `sentry418-424`,
+  `sentry426-428`) so the >1M-point set is auditable without re-running
+  the calibration driver. Roster also embedded in
+  `r2_calibration_summary.txt`. Spec gained a source-of-truth pointer
+  to `_common/r2_classifier.py` module-level threshold constants
+  (prevents silent drift when PR-E tunes thresholds).
 
 **PR-E — Singlebeam pipeline build**
 - Step `02_standardize_singlebeam` (only real rewrite: NetCDF reader).

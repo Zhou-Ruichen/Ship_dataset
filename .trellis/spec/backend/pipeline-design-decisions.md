@@ -167,3 +167,62 @@ distribution.
 **Don't**: revert to random split. The naïve random-split RMSE is
 deceptively low (~50 m vs the honest ~141 m) and that gap is reported
 in the Step 11 baseline report as the cautionary example.
+
+---
+
+## 10. R2 sb/mb classifier (NCEI tracklines)
+
+**Choice**: Mixed singlebeam + multibeam bundles (`ncei/tracklines_xyz/`
+in particular) are split at pipeline runtime by the R2 classifier — not
+at filesystem ingestion. The classifier lives in `_common/r2_classifier.py`
+and is invoked post-standardize for `.nc` inputs, post-minimal-parse for
+`.xyz` inputs. Files are then routed to `ncei/derived/singlebeam/` or
+`ncei/derived/multibeam/`.
+
+The rule (R2 = threshold + spatial-spread):
+
+| Point count | Decision |
+|---|---|
+| `> 1,000,000` | mb (hard rule) |
+| `100,000 – 1,000,000` | mb if `bbox < 5,000 km²` OR `density > 50 pts/km²`; else sb |
+| `< 100,000` | sb (hard rule) |
+
+**Canonical values**: the four thresholds above are duplicated here for
+readability; source of truth is `_common/r2_classifier.py` module-level
+constants (`R2_HARD_MB_POINTS`, `R2_HARD_SB_POINTS`, `R2_BBOX_KM2_CUTOFF`,
+`R2_DENSITY_PPKM2_CUTOFF`). Tune there, not here.
+
+bbox formula: `(lon_max − lon_min) × (lat_max − lat_min) × cos(lat_mid)`
+in deg², converted to km² via `(111.32)² ≈ 12,392.34 km²/deg²`.
+density: `points / bbox_km²`.
+
+**Why**:
+- Singlebeam tracks have a stable ~14,000 pts/track baseline (measured
+  post-PR-C across the full nc + xyz corpora). The 12 confirmed-mb files
+  in `tracklines_xyz/` all exceed 2.1M points — well clear of the hard
+  cutoff.
+- The 100k–1M borderline band is genuinely ambiguous by point count
+  alone (long singlebeam transect vs short multibeam swath have similar
+  totals). Bbox + density disambiguates: multibeam swaths concentrate
+  points into compact polygons; singlebeam tracks spread them over long
+  cruise distances.
+- Calibration scatter (committed at `_common/calibration/r2_borderline.png`)
+  shows clean separation: 5 mb / 123 sb in the borderline band under
+  starter thresholds. All 12 confirmed-mb hard-cutoff files classify
+  correctly. The 5 borderline-mb hits include `ra028-09.xyz` from the
+  same R/V Atlantis series as the confirmed `ra022-3` / `ra304-15`
+  fixtures — the rule generalizes.
+
+**Don't**: filesystem-based pre-sorting (e.g. moving big `.xyz` files
+into a `multibeam/` dir before pipeline reads). The bundle stays unified
+in `ncei/tracklines_xyz/`; the classifier owns the sb/mb decision and
+records the call in the manifest. This way threshold changes re-run the
+pipeline cleanly without re-ingesting raw data.
+
+**References**:
+- PRD `.trellis/tasks/05-11-singlebeam-integration/prd.md` Q2 (rule
+  derivation) + Locked decisions #4 (pipeline-stage split) + #11
+  (李杨 finding does not change algorithm).
+- Calibration artifacts: `_common/calibration/r2_borderline.{csv,png}`,
+  `_common/calibration/r2_hard_mb_files.csv`, and
+  `_common/calibration/r2_calibration_summary.txt`.
