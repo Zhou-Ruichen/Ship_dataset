@@ -226,3 +226,40 @@ pipeline cleanly without re-ingesting raw data.
 - Calibration artifacts: `_common/calibration/r2_borderline.{csv,png}`,
   `_common/calibration/r2_hard_mb_files.csv`, and
   `_common/calibration/r2_calibration_summary.txt`.
+
+---
+
+## 11. Python execution convention — run from repo root
+
+**Choice**: All Python scripts in this repo (pipeline steps under
+`jamstec/multibeam/code/`, future `ncei/code/`, calibration drivers and
+tests under `_common/`) are invoked from the **repo root**
+(`/mnt/data2/00-Data/ship/`). Cwd is on `sys.path`, so
+`from _common.r2_classifier import classify` works from any consumer
+without sys.path hacks or `PYTHONPATH`.
+
+**Why**: PR-D introduced `_common/` as the shared lib for the R2
+classifier (decision #10 above) and the PR-E migration of Step 03–11
+algorithmic primitives. The classifier had to be importable from both
+`jamstec/multibeam/code/` and the future `ncei/code/` without
+duplicating code. Three options were on the table:
+
+1. `sys.path.insert(0, REPO_ROOT)` at the top of every consumer script.
+2. `pyproject.toml` + `pip install -e .` to make `_common` a real
+   installable package.
+3. **Run from repo root** so cwd is on `sys.path` automatically.
+
+(3) won because it costs zero infrastructure and matches the existing
+single-user workflow. (2) was deferred — no immediate need; can be
+adopted later without breaking (3). (1) was rejected because it
+spreads boilerplate across every consumer and pins the import strategy
+to a specific directory depth.
+
+Single source of truth for the rationale + invocation pattern lives in
+[`AGENTS.md`](../../../AGENTS.md#python-execution-convention-run-from-repo-root).
+This spec entry exists so the convention is also discoverable from the
+backend spec tree.
+
+**Don't**: introduce `sys.path.insert(...)` boilerplate in pipeline
+scripts. If a script needs to import from `_common/` and the import
+fails, the fix is to run from repo root, not to mutate `sys.path`.

@@ -588,6 +588,13 @@ PR-D execution notes (2026-05-16):
   `r2_calibration_summary.txt`. Spec gained a source-of-truth pointer
   to `_common/r2_classifier.py` module-level threshold constants
   (prevents silent drift when PR-E tunes thresholds).
+- **Post-check decision 2026-05-16 (PR-D.5)**: import strategy =
+  "run from repo root" convention (see `AGENTS.md` Python-execution
+  section + `spec/backend/pipeline-design-decisions.md` §11). Resolves
+  Major #1 from trellis-check review; no code change required. Docs
+  updated: `AGENTS.md`, `_common/README.md`,
+  `spec/backend/pipeline-design-decisions.md`,
+  `spec/backend/directory-structure.md`.
 
 **PR-E — Singlebeam pipeline build**
 - Step `02_standardize_singlebeam` (only real rewrite: NetCDF reader).

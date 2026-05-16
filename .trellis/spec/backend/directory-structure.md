@@ -24,6 +24,10 @@ ship/
 │                           #   ship/NCEI_singlebeam/ — renamed 2026-05-16
 │                           #   (PR-B). PR-C will populate tracklines_{nc,xyz}/
 │                           #   and archive/ subdirs.
+├── _common/                # Shared lib for jamstec + ncei pipelines (PR-D, 2026-05-16).
+│                           #   Houses R2 sb/mb classifier today; PR-E will migrate
+│                           #   Step 03/04a/04b/05/06a-d/07–11 algorithmic primitives
+│                           #   here. Importable from any script run with cwd = repo root.
 ├── archive/                # Top-level original downloaded zips (do not delete).
 ├── docs/                   # Cross-dataset documentation
 │   └── experiments/        # Finished investigations / experiment narratives
@@ -113,9 +117,17 @@ run from any working directory.
 | Sub-step of an existing stage | New `<NN><letter>_*.py` next to siblings |
 | New dataset | New top-level dir (`<NAME>/`) mirroring the layout above |
 | One-off analysis / plotting | Un-numbered script in `code/`, output to `figures/` |
-| Cross-dataset utility | (none yet) — discuss before introducing |
+| Cross-dataset utility shared across pipelines | `_common/` (see top-level layout above) |
 
-There is currently **no shared Python package** across datasets. Each
-dataset's `code/` is self-contained. Do not introduce a `lib/` or shared
-module without explicit agreement — code duplication is preferred to
-premature shared abstractions for a research pipeline.
+`_common/` is the single carved-out shared lib. PR-D (2026-05-16) seeded
+it with the R2 sb/mb classifier; PR-E will migrate the Step 03–11
+algorithmic primitives that `jamstec/multibeam/` and `ncei/` both reuse.
+Anything genuinely cross-dataset belongs there. Anything dataset-specific
+(Step 02 readers, Step 07 thresholds re-calibrated per sensor type)
+stays in `<dataset>/code/`.
+
+Imports from `_common/` work via the project-wide
+"run from repo root" execution convention — see
+[`pipeline-design-decisions.md`](./pipeline-design-decisions.md#11-python-execution-convention--run-from-repo-root)
+§11 and [`AGENTS.md`](../../../AGENTS.md#python-execution-convention-run-from-repo-root)
+for the full rationale.

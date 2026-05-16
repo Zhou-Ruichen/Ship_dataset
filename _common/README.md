@@ -49,30 +49,38 @@ those stay in the dataset-specific `code/` dirs.
 
 ## Usage
 
-Plain script run (works without installing the package):
+All commands assume **cwd = repo root** (`/mnt/data2/00-Data/ship/`). This is
+the project-wide execution convention — see
+[`AGENTS.md`](../AGENTS.md#python-execution-convention-run-from-repo-root)
+for the rationale. Running from repo root puts cwd on `sys.path`, so
+`from _common.r2_classifier import classify` works from any consumer
+without sys.path hacks or `PYTHONPATH` env vars.
+
+Calibration driver (either form works):
+
 ```bash
-python ship/_common/r2_calibration.py --limit 50
+python -m _common.r2_calibration --limit 50
+python _common/r2_calibration.py --limit 50
 ```
 
-Test run (either runner works; unittest is built-in):
+Tests (either runner; unittest is built-in):
+
 ```bash
 python -m unittest _common.tests.test_r2_classifier -v
-# or, if pytest is available
-pytest _common/tests/
+pytest _common/tests/                                               # if pytest is installed
 ```
 
-Consumer scripts (PR-E and beyond) can use either pattern:
+Consumer scripts (PR-E and beyond) simply import:
+
 ```python
-# Pattern A — explicit sys.path insert at top of the consumer script
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from _common.r2_classifier import classify
-
-# Pattern B — PYTHONPATH set externally
-# $ PYTHONPATH=/path/to/ship python jamstec/multibeam/code/02_*.py
-from _common.r2_classifier import classify
+from _common.r2_classifier import classify, R2Result
 ```
+
+No `sys.path.insert(...)` boilerplate, no `pyproject.toml` install — just
+make sure you launched the parent script from repo root.
+
+If you see `ModuleNotFoundError: No module named '_common'`, you are not
+at repo root — `cd /mnt/data2/00-Data/ship` and retry.
 
 No real package install — keep it lightweight per the existing
 "no shared lib" preference in `spec/backend/directory-structure.md`.
