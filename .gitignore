@@ -38,6 +38,10 @@ ncei/archive/zhoushuai_processed_M/*.txt
 # (canonical form is the gitignored .parquet beside them). The .md report
 # in ncei/docs/ is tracked.
 ncei/manifests/*.tsv
+# Per-script sample/test100 run reports are transient validation artifacts
+# (full-run report is the committable canonical form).
+ncei/docs/*_sample.md
+ncei/docs/*_test100.md
 
 # ---------------------------------------------------------------------------
 # Generic binary / data formats - never commit
