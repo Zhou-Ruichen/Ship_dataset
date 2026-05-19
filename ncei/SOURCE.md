@@ -55,6 +55,24 @@ The two key sharpenings relative to PR-C's initial framing:
 These supersede the earlier PR-C-time framing that named 孙明智 as
 the primary source-side counterparty for the `.nc` archive.
 
+## 168 nc-only tracks resolved (2026-05-19)
+
+The "168 nc tracks absent from the xyz bundle" known unknown (PRD Q7,
+Locked decision #8) was resolved 2026-05-19 from the full PR-E1
+trackline source manifest: all 168 are FAA / gravity-only tracks
+with **no usable depth values** (`has_depth=False`). NCEI's upstream
+`.xyz` export pipeline filter rule is "track has usable depth"; the
+168 were correctly excluded by that rule. Union strategy unchanged
+(they stay in the manifest with `source_completeness="nc_only"`);
+PR-E2 will skip them at the bathymetry-standardization step but
+the rows remain as audit trail and as candidates for gravity-side
+consumers.
+
+Full evidence (cross-tab + 5/5 sample verification) lives in PRD
+section "Finding 2026-05-19: 168 nc-only tracks have no usable
+depth"; `tracklines_nc/SOURCE.md` carries the historical-record
+annotation.
+
 ## Layout map
 
 ```

@@ -129,6 +129,25 @@ future gravity pipelines can reuse this same archive via
    - **Treatment**: ingest as normal singlebeam. Pipeline manifest
      gains `source_completeness ∈ {nc_only, nc_xyz_intersect, xyz_only}`
      for downstream auditability.
+   - **[2026-05-19 update — resolved]**: The full PR-E1 trackline
+     source manifest reveals all 168 nc-only tracks have `has_depth=False`
+     (33 `all_zero` + 135 `no_depth_values` rows in the
+     `depth_sign_raw × source_completeness` cross-tab). 5/5 new random
+     samples (`66010`, `70002`, `72036`, `88006311`, `89001611`) all
+     have `has_depth=False, has_faa=True` — they are **FAA / gravity-only
+     tracklines without usable bathymetry**. NCEI's upstream `.xyz`
+     export filter rule is "track has usable depth"; the 168 were
+     correctly excluded by that rule, not lost to a bug. Union
+     strategy unchanged (they stay in the manifest with
+     `source_completeness="nc_only"`); PR-E2 bathymetry standardization
+     will skip them, but they remain as audit trail and as candidates
+     for gravity-side consumers of the same archive (Locked decision
+     #10 dual-consumption). Full evidence: PRD section
+     "Finding 2026-05-19: 168 nc-only tracks have no usable depth".
+     The original 2026-05-15 spot-check finding above (5/5 clean
+     singlebeam-sized .nc files) is preserved as historical record —
+     "clean NetCDF" was correct; "singlebeam signature" was incidental
+     (they happen to have lat/lon/time, just no usable depth values).
 2. **Provenance of the 2 .txt sidecars** inside the upstream zip is
    unclear. They are kept on disk for audit (gitignored due to size).
 

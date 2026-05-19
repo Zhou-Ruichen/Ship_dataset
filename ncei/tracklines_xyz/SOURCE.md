@@ -79,11 +79,47 @@ records each track's source side(s).
    upstream pipeline filtering, bug, or deliberate exclusion. Recorded
    as known unknown; ingest proceeds via union (see
    `ncei/tracklines_nc/SOURCE.md`).
+   - **[2026-05-19 update — resolved]**: PR-E1 full manifest reveals
+     all 168 nc-only tracks have `has_depth=False` (FAA / gravity-only
+     tracklines). NCEI's upstream `.xyz` export filter rule is "track
+     has usable depth"; the 168 were correctly excluded. Full evidence
+     in `tracklines_nc/SOURCE.md` and PRD section "Finding 2026-05-19".
 2. **The 96 borderline files (100k–1M points)** are not pre-classified;
    the R2 classifier calibration scatter plot will determine each.
 3. **First-row sentinel in sample file**: `00373.xyz` row 1 is
    `-20,35,5441` with unusually round coordinates and a depth too
    shallow for that lon/lat. Worth flagging during Step 02 standardize.
+
+## Depth sign: documentation vs observation (2026-05-19)
+
+The PRD's Pre-PR-E gate 1 (line 605-611) cites NCEI's `.xyz`
+documentation as saying XYZ depths are **negative**
+(positive-up / elevation convention). The PR-E1 full-corpus manifest
+scan contradicts that:
+
+- All 5,382 `.xyz` files in this bundle are classified
+  `depth_sign_raw="mostly_positive"` (positive-down / depth-below-sea
+  convention).
+- Sample: `00373.xyz` → `depth_min_raw=69.0, depth_max_raw=5441.0`
+  (both finite, both positive).
+- No files in this corpus are tagged `mostly_negative`, `all_zero`,
+  or `no_depth_values`.
+
+### Decision
+
+**Trust observed raw sign per-track**, not the upstream documentation.
+PR-E2 / PR-E3 standardization uses the per-track `depth_sign_raw`
+diagnosis from the manifest as the source of truth; the standardizer
+must NOT silently assume any global sign convention from the docs.
+
+### Treatment
+
+- Recorded here as a known anomaly. No active investigation of the
+  NCEI documentation is planned — the empirical signal is unambiguous
+  and uniform across the full bundle.
+- PR-E2/E3 standardization will write the normalized
+  `depth_m_positive_down` column based on `depth_sign_raw` per-track,
+  not a global assumption.
 
 ## References
 

@@ -596,13 +596,122 @@ PR-D execution notes (2026-05-16):
   `spec/backend/pipeline-design-decisions.md`,
   `spec/backend/directory-structure.md`.
 
-**PR-E — Singlebeam pipeline build**
-- Step `02_standardize_singlebeam` (only real rewrite: NetCDF reader).
-- Step 03 / 04a / 04b / 05 / 06a-d / 08 / 09-11 reuse from JAMSTEC mb
-  via shared lib.
-- Step `07_quality_tiers` reuse but re-calibrate A/B/C thresholds for
-  singlebeam point density.
-- `source_completeness` manifest column populated in standardize step.
+**PR-E — Singlebeam pipeline build (split into E1–E4)**
+- **Do not full-run the complete singlebeam pipeline at PR-E start.** Begin with
+  read-only / small-sample checks and track-level manifests; keep `M.rar`,
+  singlebeam, and multibeam out of any combined final validation table until
+  later PRs.
+- **Pre-PR-E gate 1 — field + sign check**:
+  - Verify MGD77 / MGD77+ `depth` semantics before normalizing anything:
+    corrected bathymetry depth is normally **positive below sea level**
+    (GMT MGD77 docs: corrected bathymetry, metres, positive downward).
+  - Verify NCEI `.xyz` export semantics separately: NCEI XYZ depth is documented
+    as **negative**.
+  - Record raw sign diagnosis in the manifest (`depth_sign_raw`) and make any
+    sign normalization explicit in code / docs; do not silently assume JAMSTEC
+    sign conventions apply to NCEI.
+- **Pre-PR-E gate 2 — post-rename multibeam smoke check**:
+  before substantive singlebeam development, prove the existing multibeam path
+  survived the directory refactor. Minimum checks:
+  1. import / unit tests;
+  2. old multibeam pipeline small-sample run;
+  3. T1-footprint Step 08 smoke check;
+  4. compare to pre-rename baseline: hash / bit-identical when order is stable,
+     or sorted core-field comparison with tiny float tolerance if output order
+     may differ.
+  Full global Step 08 is **not** a PR-E blocker; defer it until PR-G / full
+  validation planning.
+
+**PR-E1 — NCEI trackline source manifest first (no large point-table output)**
+- First deliverable of PR-E. Build the total source inventory before writing a
+  large `02_standardize_singlebeam.py`.
+- Outputs:
+  - `ncei/manifests/trackline_source_manifest.parquet`
+  - `ncei/manifests/trackline_source_manifest.tsv`
+  - `ncei/docs/trackline_source_manifest_report.md`
+- Functionality:
+  - scan `ncei/tracklines_nc/`;
+  - scan `ncei/tracklines_xyz/`;
+  - read per-track point count, bbox, field availability, depth sign, and source
+    lineage;
+  - compute `source_completeness` (`nc_only` / `nc_xyz_intersect` / `xyz_only`)
+    at this earliest manifest stage, not as a post-standardization backfill;
+  - run the R2 classifier;
+  - output borderline / review-needed cases.
+- Minimum manifest fields:
+  - `track_id` — normalized track identifier.
+  - `source_type` — `ncei_nc` / `ncei_xyz`.
+  - `source_completeness` — `nc_only` / `nc_xyz_intersect` / `xyz_only`.
+  - `source_path` — raw file path.
+  - `source_archive` — source archive or contributor lineage.
+  - `n_points`.
+  - `bbox_lon_min`, `bbox_lon_max`, `bbox_lat_min`, `bbox_lat_max`.
+  - `has_time`, `has_depth`, `has_gobs`, `has_faa`.
+  - `depth_sign_raw`.
+  - `instrument_class_pred` — classifier prediction: `singlebeam` / `multibeam`.
+  - `classification_review` — whether manual review is required.
+
+**PR-E2 — standardize `.nc` singlebeam only**
+- Implement `ncei/code/02_standardize_singlebeam.py`, but first version only
+  supports `--source nc` plus `--run-label sample|full`.
+- Inputs are manifest-filtered `.nc` tracks classified as singlebeam; do not yet
+  merge with `.xyz`, multibeam, M.rar, or validation cells.
+- Outputs:
+  - `ncei/derived/singlebeam/points_raw/<track_id>.parquet`
+  - `ncei/manifests/singlebeam_points_raw_manifest.parquet`
+  - `ncei/docs/singlebeam_standardization_report.md`
+- Point schema:
+  - `source_type` = `ncei_nc`.
+  - `track_id`.
+  - `point_index_in_track`.
+  - `time` (nullable).
+  - `lon_raw`, `lat_raw`, `lon`, `lat`.
+  - `depth_raw`.
+  - `depth_m_positive_down`.
+  - `elev_m`.
+  - `gobs` (nullable).
+  - `faa` (nullable).
+  - `source_completeness`.
+  - `instrument_class_pred`.
+  - `standardization_version`.
+
+**PR-E3 — add `.xyz` as supplementary input after `.nc` schema stabilizes**
+- `.xyz` classified as singlebeam routes to
+  `ncei/derived/singlebeam/points_raw/`.
+- `.xyz` classified as multibeam routes to
+  `ncei/derived/multibeam/points_raw/`.
+- Missing `.xyz` fields stay null; do not invent fake time/gravity fields.
+  Manifest records `has_time=False`, `has_gobs=False`, `has_faa=False`.
+- Purpose is to supplement `.nc` coverage and split mixed-bundle multibeam, not
+  to replace `.nc`.
+
+**PR-E4 — classification review table**
+- Each run emits `ncei/manifests/trackline_classification_review.tsv` with at
+  least:
+  - `track_id`, `source_type`, `n_points`, `bbox_area_km2`,
+    `point_density_km2`, `instrument_class_pred`, `classification_rule`,
+    `review_reason`, `manual_override`.
+- Add a review branch without immediately changing the R2 prediction rule:
+  tracks with `<100,000` points but very small bbox / very high density remain
+  `pred=singlebeam` initially, but get `review_multibeam_candidate` so small
+  AUV / processed-multibeam cases are not silently missed.
+
+**Post-PR-E aggregation guidance**
+- Step 03 / 04a / 04b / 05 / 06a-d / 08 / 09-11 may reuse the JAMSTEC
+  multibeam algorithmic framework via shared lib, but **thresholds must not be
+  blindly copied**. Multibeam 1-arcmin quality tier rules such as
+  `n_points >= 100`, `n_file_cells >= 2`, `n_cruises >= 2`, and
+  `iqr_depth <= 50m` may be too strict for sparse singlebeam tracks.
+- Keep data layers separate until validation design is explicit:
+  - `ncei/derived/singlebeam/{points_raw,points_checked,file_cells_1min,cells_1min}/`
+  - `ncei/derived/multibeam/{points_raw,points_checked,file_cells_1min,cells_1min}/`
+  - `derived/validation/{primary_multibeam_cells_1min,supplementary_singlebeam_cells_1min,combined_ship_cells_1min}`
+- Validation roles:
+  - multibeam = primary validation baseline;
+  - singlebeam = supplementary spatial coverage / sensitivity analysis;
+  - processed `M.rar` = regional supplement or separate experiment;
+  - legacy flat dump = archive only.
+- `M.rar` remains PR-F only. Do not include it in PR-E.
 
 **PR-F — M.rar cleaning step**
 - Positive-depth → `ncei/archive/zhoushuai_processed_M/land_mask.parquet`.
@@ -829,6 +938,78 @@ finding chain.** Provenance refinement only.
   transfer-chain table row.
 - `docs/experiments/2026-05_dataset-source-attribution.md` — appended
   "Footer 2026-05-16 (李杨 finding chain)" with both Findings A + B.
+
+## Finding 2026-05-19: 168 nc-only tracks have no usable depth (Q7 resolved)
+
+Resolves the "known unknown" in PRD Q7 (lines 182-194 above) — the
+reason the 168 nc-only tracks are absent from the new `tracklines_xyz/`
+bundle.
+
+### Evidence
+
+The full PR-E1 trackline source manifest (`ncei/manifests/trackline_source_manifest.parquet`,
+7,400 rows) was cross-tabbed on `(depth_sign_raw, source_completeness)`
+2026-05-19:
+
+```
+                       nc_only  nc_xyz_intersect
+all_zero                    33                 0
+mostly_positive              0              1850
+no_depth_values            135                 0
+```
+
+→ All 168 nc-only tracks (33 `all_zero` + 135 `no_depth_values`) have
+**no usable depth values**. The 1,850 `nc_xyz_intersect` tracks are
+all `mostly_positive` (real bathymetry). 5/5 random nc-only samples
+spot-checked (`66010`, `70002`, `72036`, `88006311`, `89001611`): all
+have `has_depth=False, has_faa=True` — they are FAA / gravity-only
+tracklines.
+
+### Conclusion
+
+NCEI's upstream `.xyz` export pipeline filter rule is "track has
+usable depth"; the 168 nc-only tracks were **correctly excluded**
+from the xyz bundle by that rule, not lost to a bug or snapshot
+drift. The previous "snapshot drift / upstream-filter variance"
+framing (in the 2026-05-16 corpora-relationship finding, around the
+"168 nc-only basenames" row of the locked-decision audit table) was
+right in spirit — now we know the exact filter rule.
+
+This finding sharpens Locked decision #8 (union strategy for xyz +
+nc) but does not change it: the 168 tracks remain in the manifest
+with `source_completeness="nc_only"` for completeness; the union
+still holds.
+
+### Downstream implication for PR-E2
+
+PR-E2 (`02_standardize_singlebeam.py`) consumes the manifest and
+standardizes bathymetry. The 168 nc-only tracks have no depth to
+standardize and should be skipped at the standardization step —
+they're "no_bathymetry" tracks for bathymetry purposes.
+
+- Manifest values **not changed in PR-E1 dispatch** (out of scope):
+  `instrument_class_pred="singlebeam"` is technically misleading for
+  the 168 (they are neither sb nor mb sonar at all — they are
+  gravity-only), but the routing decision belongs to PR-E2 (and to
+  future gravity-side consumers of the same `.nc` archive — see
+  Locked decision #10 dual-consumption).
+- PR-E2 routing rule (recorded here for handoff): filter manifest on
+  `has_depth=True AND depth_sign_raw IN ('mostly_positive', 'mostly_negative')`
+  before generating bathymetry point tables. Tracks with
+  `has_depth=False` or `depth_sign_raw IN ('all_zero', 'no_depth_values')`
+  are skipped from bathymetry standardization but remain in the
+  manifest as audit trail (and as candidates for the parallel gravity
+  pipeline).
+
+### Where this finding is recorded
+
+- This PRD section (canonical).
+- `ncei/SOURCE.md` — short pointer back to this finding (no
+  duplication of evidence).
+- `ncei/tracklines_nc/SOURCE.md` — "168 nc-only" framing annotated
+  with `[2026-05-19 update]` resolution.
+- `ncei/tracklines_xyz/SOURCE.md` — known-unknown row updated with
+  `[2026-05-19 update — resolved]` annotation pointing back here.
 
 ## Research References
 
