@@ -1,45 +1,47 @@
 #!/usr/bin/env python3
 """
-02_standardize_singlebeam.py
+03_standardize_xyz.py
 
-PR-E2 — Standardize NCEI singlebeam `.nc` tracks into per-track parquet
+PR-E3 — Standardize NCEI tracklines `.xyz` tracks into per-track parquet
 point tables, sourced from the PR-E1 trackline source manifest.
+
+Routing (per-track, from manifest's `instrument_class_pred`):
+  - 'singlebeam' → ncei/derived/singlebeam/points_raw/<track_id>__xyz.parquet
+  - 'multibeam'  → ncei/derived/multibeam/points_raw/<track_id>__xyz.parquet
 
 Inputs:
   - ncei/manifests/trackline_source_manifest.parquet (read-only)
-  - ncei/tracklines_nc/<track_id>.nc
+  - ncei/tracklines_xyz/<track_id>.xyz
 
-Filter applied (per PRD `Finding 2026-05-19` + PR-E2 routing rule):
-  source_type == 'ncei_nc'
-  AND instrument_class_pred == 'singlebeam'
-  AND has_depth == True
-  AND depth_sign_raw IN ('mostly_positive', 'mostly_negative')
+Filter applied:
+  source_type == 'ncei_xyz'
 
-This MUST yield exactly 1,850 rows in full mode (the 33 nc_only
-`all_zero` tracks are gravity/FAA-only — see PRD Finding 2026-05-19).
+This MUST yield exactly 5,382 rows in full mode (5,365 sb + 17 mb),
+per PRD Finding 2026-05-19 (all xyz are `mostly_positive` with depth).
+
+Point schema mirrors `02_standardize_singlebeam.py` exactly (16 columns,
+same order, same dtypes) so the two sides can be unioned downstream.
+Per PRD line 683: "Missing .xyz fields stay null; do not invent fake
+time/gravity fields." → `time=NaT`, `gobs=NaN`, `faa=NaN`.
 
 Outputs (full mode):
-  - ncei/derived/singlebeam/points_raw/<track_id>__nc.parquet  (one per track)
-  - ncei/manifests/singlebeam_points_raw_manifest.parquet
-  - ncei/manifests/singlebeam_points_raw_manifest.tsv
-  - ncei/docs/singlebeam_standardization_report.md
-  - ncei/output/logs/02_standardize_singlebeam.log
-  - ncei/output/logs/02_standardize_singlebeam_errors.tsv
+  - ncei/derived/singlebeam/points_raw/<track_id>__xyz.parquet  (per sb track)
+  - ncei/derived/multibeam/points_raw/<track_id>__xyz.parquet   (per mb track)
+  - ncei/manifests/xyz_points_raw_manifest.parquet
+  - ncei/manifests/xyz_points_raw_manifest.tsv
+  - ncei/docs/xyz_standardization_report.md
+  - ncei/output/logs/03_standardize_xyz.log
+  - ncei/output/logs/03_standardize_xyz_errors.tsv
 
 Outputs (sample/test100 mode): suffix all of the above with `_<run-label>`
-except the per-track parquet outputs (which always live under
-`ncei/derived/singlebeam/points_raw/` and carry the `__nc` source suffix).
-
-The `__nc` suffix on per-track outputs is symmetric with the `__xyz`
-suffix written by `03_standardize_xyz.py`; together they let both source
-sides for an `nc_xyz_intersect` track coexist in one directory without
-filename collisions.
+except the per-track parquet outputs (which always carry the `__xyz`
+source suffix).
 
 Usage:
-    python -m ncei.code.02_standardize_singlebeam --estimate-only
-    python -m ncei.code.02_standardize_singlebeam --run-label sample --sample-n-files 5 --overwrite
-    python -m ncei.code.02_standardize_singlebeam --run-label test100 --limit-files 100 --overwrite
-    python -m ncei.code.02_standardize_singlebeam --run-label full --confirm-full --overwrite
+    python -m ncei.code.03_standardize_xyz --estimate-only
+    python -m ncei.code.03_standardize_xyz --run-label sample --sample-n-files 5 --overwrite
+    python -m ncei.code.03_standardize_xyz --run-label test100 --limit-files 100 --overwrite
+    python -m ncei.code.03_standardize_xyz --run-label full --confirm-full --overwrite
 """
 
 from __future__ import annotations
@@ -59,19 +61,24 @@ import pandas as pd
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent
 
-NC_DIR = ROOT_DIR / "tracklines_nc"
+XYZ_DIR = ROOT_DIR / "tracklines_xyz"
 MANIFEST_DIR = ROOT_DIR / "manifests"
 DOCS_DIR = ROOT_DIR / "docs"
 LOG_DIR = ROOT_DIR / "output" / "logs"
-DERIVED_DIR = ROOT_DIR / "derived" / "singlebeam" / "points_raw"
+DERIVED_SB_DIR = ROOT_DIR / "derived" / "singlebeam" / "points_raw"
+DERIVED_MB_DIR = ROOT_DIR / "derived" / "multibeam" / "points_raw"
 
 VALID_RUN_LABELS = ("sample", "test100", "full")
-STANDARDIZATION_VERSION = "ncei_sb_v0.1.0"
+STANDARDIZATION_VERSION = "ncei_xyz_v0.1.0"
+XYZ_CHUNK_SIZE = 500_000
 
 # Filter contract — see module docstring + PRD Finding 2026-05-19.
-ALLOWED_DEPTH_SIGN_RAW = ("mostly_positive", "mostly_negative")
+EXPECTED_FULL_ROWS = 5382
+EXPECTED_SB_ROWS = 5365
+EXPECTED_MB_ROWS = 17
 
-# Point schema column order — must match PRD lines 666-676 exactly.
+# Point schema column order — must exactly match the 02_*.py output so
+# the two sides can be unioned downstream (PRD line 681).
 POINT_COLUMNS = [
     "source_type",
     "track_id",
@@ -98,11 +105,11 @@ POINT_COLUMNS = [
 def get_output_paths(run_label: str) -> dict[str, Path]:
     suffix = "" if run_label == "full" else f"_{run_label}"
     return {
-        "manifest_pq": MANIFEST_DIR / f"singlebeam_points_raw_manifest{suffix}.parquet",
-        "manifest_tsv": MANIFEST_DIR / f"singlebeam_points_raw_manifest{suffix}.tsv",
-        "report_md": DOCS_DIR / f"singlebeam_standardization_report{suffix}.md",
-        "log": LOG_DIR / f"02_standardize_singlebeam{suffix}.log",
-        "errors_tsv": LOG_DIR / f"02_standardize_singlebeam_errors{suffix}.tsv",
+        "manifest_pq": MANIFEST_DIR / f"xyz_points_raw_manifest{suffix}.parquet",
+        "manifest_tsv": MANIFEST_DIR / f"xyz_points_raw_manifest{suffix}.tsv",
+        "report_md": DOCS_DIR / f"xyz_standardization_report{suffix}.md",
+        "log": LOG_DIR / f"03_standardize_xyz{suffix}.log",
+        "errors_tsv": LOG_DIR / f"03_standardize_xyz_errors{suffix}.tsv",
     }
 
 
@@ -129,7 +136,7 @@ def atomic_write_text(text: str, target: Path) -> None:
 
 def setup_logging(log_path: Path) -> logging.Logger:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("ncei_standardize_singlebeam")
+    logger = logging.getLogger("ncei_standardize_xyz")
     logger.handlers.clear()
     logger.setLevel(logging.DEBUG)
 
@@ -147,17 +154,8 @@ def setup_logging(log_path: Path) -> logging.Logger:
 
 
 # ---------------------------------------------------------------------------
-# NetCDF read + standardize helpers
+# XYZ read + standardize helpers
 # ---------------------------------------------------------------------------
-def masked_to_float_array(values) -> np.ndarray:
-    """Convert a netCDF masked array to a plain float64 array with NaN fills."""
-    arr = np.ma.asarray(values)
-    if arr.shape == ():
-        arr = arr.reshape(1)
-    arr = np.ma.filled(arr, np.nan)
-    return np.asarray(arr, dtype=np.float64).reshape(-1)
-
-
 def normalize_lon(lon: np.ndarray) -> np.ndarray:
     """Wrap any lon > 180 to (-180, 180]. Leaves NaNs alone."""
     out = lon.copy()
@@ -176,158 +174,87 @@ def sanitize_lat(lat: np.ndarray) -> np.ndarray:
     return out
 
 
-def decode_time(ds, n_points: int) -> tuple[Optional[np.ndarray], bool]:
-    """Return (timestamp ndarray of length n_points, has_time bool).
+def read_xyz_full(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Read a .xyz file into (lon, lat, depth) float64 arrays, finite-xy filtered.
 
-    Returns (None, False) when time is absent or all-masked or not decodable.
+    Mirrors `01_build_trackline_source_manifest.py:read_xyz_track`'s
+    headerless-detection + chunked-read pattern but builds full per-track
+    arrays (rather than just summary stats). NaN-rejection happens on
+    (lon, lat) only — `depth` retains NaNs at non-finite-xy-filtered rows
+    so the caller can detect missing-depth-in-otherwise-valid-xy rows.
     """
-    import netCDF4 as nc
+    first_line = path.open("r", encoding="utf-8", errors="replace").readline().strip().upper()
+    has_header = all(name in first_line for name in ("LON", "LAT"))
+    read_kwargs: dict = {
+        "chunksize": XYZ_CHUNK_SIZE,
+        "header": 0 if has_header else None,
+        "names": None if has_header else ["LON", "LAT", "CORR_DEPTH"],
+        "usecols": ["LON", "LAT", "CORR_DEPTH"],
+    }
 
-    if "time" not in ds.variables:
-        return None, False
-    var = ds.variables["time"]
-    if getattr(var, "size", 0) == 0:
-        return None, False
-    units = getattr(var, "units", None)
-    if not units:
-        return None, False
-    raw = var[:]
-    arr = np.ma.asarray(raw)
-    if arr.shape == ():
-        arr = arr.reshape(1)
-    if arr.size != n_points:
-        # Shape mismatch — defensive; downstream needs aligned arrays.
-        return None, False
-    mask = np.ma.getmaskarray(arr)
-    if mask.all():
-        return None, False
-    try:
-        decoded = nc.num2date(
-            np.ma.filled(arr, np.nan),
-            units=units,
-            only_use_cftime_datetimes=False,
-            only_use_python_datetimes=True,
-        )
-    except Exception:
-        return None, False
-    # Build pandas datetime64[ns] with NaT for masked entries.
-    out = pd.Series(decoded)
-    out = pd.to_datetime(out, errors="coerce")
-    out[mask] = pd.NaT
-    return out.to_numpy(), True
+    lon_parts: list[np.ndarray] = []
+    lat_parts: list[np.ndarray] = []
+    depth_parts: list[np.ndarray] = []
 
+    for chunk in pd.read_csv(path, **read_kwargs):
+        lon = pd.to_numeric(chunk["LON"], errors="coerce").to_numpy(dtype=np.float64)
+        lat = pd.to_numeric(chunk["LAT"], errors="coerce").to_numpy(dtype=np.float64)
+        depth = pd.to_numeric(chunk["CORR_DEPTH"], errors="coerce").to_numpy(dtype=np.float64)
+        finite_xy = np.isfinite(lon) & np.isfinite(lat)
+        lon_parts.append(lon[finite_xy])
+        lat_parts.append(lat[finite_xy])
+        depth_parts.append(depth[finite_xy])
 
-def read_per_point_or_nan(ds, varname: str, n_points: int) -> Optional[np.ndarray]:
-    """Read a variable as float64 length n_points, or return None if not present
-    / not per-point / all-NaN."""
-    if varname not in ds.variables:
-        return None
-    var = ds.variables[varname]
-    if getattr(var, "size", 0) == 0:
-        return None
-    raw = var[:]
-    arr = np.ma.asarray(raw)
-    if arr.shape == ():
-        # Scalar attribute, not per-point — treat as absent for the point table.
-        return None
-    arr = np.ma.filled(arr, np.nan)
-    arr = np.asarray(arr, dtype=np.float64).reshape(-1)
-    if arr.size != n_points:
-        return None
-    if not np.isfinite(arr).any():
-        return None
-    return arr
+    if lon_parts:
+        lon_arr = np.concatenate(lon_parts)
+        lat_arr = np.concatenate(lat_parts)
+        depth_arr = np.concatenate(depth_parts)
+    else:
+        lon_arr = np.array([], dtype=np.float64)
+        lat_arr = np.array([], dtype=np.float64)
+        depth_arr = np.array([], dtype=np.float64)
+    return lon_arr, lat_arr, depth_arr
 
 
 def standardize_one_track(
-    nc_path: Path,
+    xyz_path: Path,
     track_id: str,
     source_completeness: str,
+    instrument_class_pred: str,
     depth_sign_raw: str,
 ) -> tuple[pd.DataFrame, dict]:
-    """Read one .nc file and return (point DataFrame, per-track summary dict).
+    """Read one .xyz file and return (point DataFrame, per-track summary dict).
 
     Raises on unrecoverable errors; per-file isolation is handled by the
     caller in `main()`.
     """
-    import netCDF4 as nc
-
     warnings_count = 0
 
-    with nc.Dataset(nc_path) as ds:
-        if "lon" not in ds.variables or "lat" not in ds.variables:
-            raise ValueError(f"missing lon/lat in {nc_path}")
+    lon_raw, lat_raw, depth_raw = read_xyz_full(xyz_path)
 
-        lon_full = masked_to_float_array(ds.variables["lon"][:])
-        lat_full = masked_to_float_array(ds.variables["lat"][:])
-        if lon_full.size != lat_full.size:
-            raise ValueError(
-                f"lon/lat length mismatch in {nc_path}: {lon_full.size} vs {lat_full.size}"
-            )
-
-        finite_xy_full = np.isfinite(lon_full) & np.isfinite(lat_full)
-        # Read depth (required by filter contract; if missing, raise).
-        if "depth" not in ds.variables:
-            raise ValueError(f"missing depth in {nc_path} (manifest filter contract violated)")
-        depth_full = masked_to_float_array(ds.variables["depth"][:])
-        if depth_full.size != lon_full.size:
-            raise ValueError(
-                f"depth length mismatch in {nc_path}: {depth_full.size} vs {lon_full.size}"
-            )
-
-        # Time decoding (aligned to full track first; we slice with finite_xy
-        # after).
-        time_full, has_time = decode_time(ds, n_points=lon_full.size)
-
-        gobs_full = read_per_point_or_nan(ds, "gobs", n_points=lon_full.size)
-        faa_full = read_per_point_or_nan(ds, "faa", n_points=lon_full.size)
-
-    # Apply finite-xy filter -- canonical row set for the output table.
-    lon_raw = lon_full[finite_xy_full]
-    lat_raw = lat_full[finite_xy_full]
-    depth_raw = depth_full[finite_xy_full]
-
-    n_points_in = int(lon_full.size)
-    n_points_out = int(lon_raw.size)
+    n_points_in = int(lon_raw.size)  # finite-xy already applied by reader
+    n_points_out = n_points_in
     if n_points_out <= 0:
-        raise ValueError(f"empty track after finite-xy filter: {nc_path}")
+        raise ValueError(f"empty track after finite-xy filter: {xyz_path}")
 
     # Normalize lon and sanitize lat.
     lon = normalize_lon(lon_raw)
     lat = sanitize_lat(lat_raw)
 
-    # Time slice.
-    # NOTE: use np.full(..., np.datetime64('NaT'), ...) rather than
-    # `np.array([pd.NaT] * n, dtype='datetime64[ns]')` — the latter raises
-    # `TypeError: 'float' object cannot be interpreted as an integer` under
-    # numpy>=2 / pandas>=2 because pd.NaT is a float-like sentinel that the
-    # constructor cannot coerce. This bug did not fire in PR-E2 only because
-    # every standardized track had at least one valid timestamp after the
-    # finite-xy filter — but the code path is reachable on future data.
-    if has_time and time_full is not None:
-        time_arr = time_full[finite_xy_full]
-        # has_time stays True only if at least one valid timestamp remains.
-        if not pd.notna(pd.Series(time_arr)).any():
-            has_time = False
-            time_arr = np.full(n_points_out, np.datetime64("NaT"), dtype="datetime64[ns]")
-    else:
-        time_arr = np.full(n_points_out, np.datetime64("NaT"), dtype="datetime64[ns]")
-
-    # Depth sign normalization — per-track branch on depth_sign_raw.
+    # All xyz tracks are documented `mostly_positive` per PR-E1 full scan
+    # (see PRD Finding 2026-05-19). Use the same sign-normalization branch
+    # logic as 02_*.py for symmetric handling.
     depth_m_positive_down = np.full(n_points_out, np.nan, dtype=np.float64)
     finite_depth_mask = np.isfinite(depth_raw)
 
     if depth_sign_raw == "mostly_positive":
         depth_m_positive_down[finite_depth_mask] = depth_raw[finite_depth_mask]
-        # Any negative row inside a mostly-positive track: take abs() and warn.
         neg_mask = finite_depth_mask & (depth_raw < 0)
         if neg_mask.any():
             depth_m_positive_down[neg_mask] = np.abs(depth_raw[neg_mask])
             warnings_count += int(neg_mask.sum())
     elif depth_sign_raw == "mostly_negative":
-        # Flip sign: NCEI XYZ convention is negative-down, so abs gives positive-down.
         depth_m_positive_down[finite_depth_mask] = -depth_raw[finite_depth_mask]
-        # A positive row in a mostly-negative track is anomalous — abs and warn.
         pos_mask = finite_depth_mask & (depth_raw > 0)
         if pos_mask.any():
             depth_m_positive_down[pos_mask] = np.abs(depth_raw[pos_mask])
@@ -338,19 +265,15 @@ def standardize_one_track(
 
     elev_m = -depth_m_positive_down
 
-    # Optional fields: align with finite_xy filter; nullable.
-    gobs = gobs_full[finite_xy_full] if gobs_full is not None else None
-    faa = faa_full[finite_xy_full] if faa_full is not None else None
-
-    has_gobs = bool(gobs is not None and np.isfinite(gobs).any())
-    has_faa = bool(faa is not None and np.isfinite(faa).any())
-
+    # Build the point table — `time`, `gobs`, `faa` stay null per PRD line 683.
     point_index = np.arange(n_points_out, dtype=np.int64)
-    n_track = n_points_out
+    time_arr = np.full(n_points_out, np.datetime64("NaT"), dtype="datetime64[ns]")
+    gobs = np.full(n_points_out, np.nan, dtype=np.float64)
+    faa = np.full(n_points_out, np.nan, dtype=np.float64)
 
     data = {
-        "source_type": np.array(["ncei_nc"] * n_track, dtype=object),
-        "track_id": np.array([track_id] * n_track, dtype=object),
+        "source_type": np.array(["ncei_xyz"] * n_points_out, dtype=object),
+        "track_id": np.array([track_id] * n_points_out, dtype=object),
         "point_index_in_track": point_index,
         "time": time_arr,
         "lon_raw": lon_raw,
@@ -360,14 +283,15 @@ def standardize_one_track(
         "depth_raw": depth_raw,
         "depth_m_positive_down": depth_m_positive_down,
         "elev_m": elev_m,
-        "gobs": gobs if gobs is not None else np.full(n_track, np.nan, dtype=np.float64),
-        "faa": faa if faa is not None else np.full(n_track, np.nan, dtype=np.float64),
-        "source_completeness": np.array([source_completeness] * n_track, dtype=object),
-        "instrument_class_pred": np.array(["singlebeam"] * n_track, dtype=object),
-        "standardization_version": np.array([STANDARDIZATION_VERSION] * n_track, dtype=object),
+        "gobs": gobs,
+        "faa": faa,
+        "source_completeness": np.array([source_completeness] * n_points_out, dtype=object),
+        "instrument_class_pred": np.array([instrument_class_pred] * n_points_out, dtype=object),
+        "standardization_version": np.array(
+            [STANDARDIZATION_VERSION] * n_points_out, dtype=object
+        ),
     }
     df = pd.DataFrame(data, columns=POINT_COLUMNS)
-    # Force the time column to datetime64[ns] explicitly (in case all NaT).
     df["time"] = pd.to_datetime(df["time"], errors="coerce")
 
     # Summary row for the aggregate manifest.
@@ -375,14 +299,6 @@ def standardize_one_track(
     bbox_lon_max = float(np.nanmax(lon)) if n_points_out else math.nan
     bbox_lat_min = float(np.nanmin(lat)) if n_points_out else math.nan
     bbox_lat_max = float(np.nanmax(lat)) if n_points_out else math.nan
-
-    if has_time:
-        non_nat = df["time"].dropna()
-        time_min = non_nat.min() if len(non_nat) else pd.NaT
-        time_max = non_nat.max() if len(non_nat) else pd.NaT
-    else:
-        time_min = pd.NaT
-        time_max = pd.NaT
 
     if finite_depth_mask.any():
         depth_min = float(np.nanmin(depth_m_positive_down))
@@ -394,20 +310,21 @@ def standardize_one_track(
     summary = {
         "track_id": track_id,
         "source_completeness": source_completeness,
+        "instrument_class_pred": instrument_class_pred,
         "n_points_in": n_points_in,
         "n_points_out": n_points_out,
         "bbox_lon_min": bbox_lon_min,
         "bbox_lon_max": bbox_lon_max,
         "bbox_lat_min": bbox_lat_min,
         "bbox_lat_max": bbox_lat_max,
-        "time_min": time_min,
-        "time_max": time_max,
+        "time_min": pd.NaT,
+        "time_max": pd.NaT,
         "depth_min": depth_min,
         "depth_max": depth_max,
         "depth_sign_raw": depth_sign_raw,
-        "has_time": has_time,
-        "has_gobs": has_gobs,
-        "has_faa": has_faa,
+        "has_time": False,
+        "has_gobs": False,
+        "has_faa": False,
         "n_warnings": warnings_count,
         "standardization_version": STANDARDIZATION_VERSION,
         # output_path / output_size_bytes / error filled in by caller.
@@ -424,28 +341,36 @@ def process_one(
     track_id = str(row["track_id"])
     depth_sign_raw = str(row["depth_sign_raw"])
     source_completeness = str(row["source_completeness"])
+    instrument_class_pred = str(row["instrument_class_pred"])
 
-    nc_path = ROOT_DIR / str(row["source_path"])
-    if not nc_path.exists():
-        raise FileNotFoundError(f"source file missing: {nc_path}")
+    xyz_path = ROOT_DIR / str(row["source_path"])
+    if not xyz_path.exists():
+        raise FileNotFoundError(f"source file missing: {xyz_path}")
 
-    out_path = DERIVED_DIR / f"{track_id}__nc.parquet"
+    if instrument_class_pred == "singlebeam":
+        out_dir = DERIVED_SB_DIR
+    elif instrument_class_pred == "multibeam":
+        out_dir = DERIVED_MB_DIR
+    else:
+        raise ValueError(
+            f"unexpected instrument_class_pred for track {track_id}: {instrument_class_pred!r}"
+        )
+
+    out_path = out_dir / f"{track_id}__xyz.parquet"
     if out_path.exists() and not overwrite:
         raise FileExistsError(f"output exists; pass --overwrite to replace: {out_path}")
 
     df, summary = standardize_one_track(
-        nc_path=nc_path,
+        xyz_path=xyz_path,
         track_id=track_id,
         source_completeness=source_completeness,
+        instrument_class_pred=instrument_class_pred,
         depth_sign_raw=depth_sign_raw,
     )
 
     atomic_write_parquet(df, out_path)
     size_bytes = out_path.stat().st_size
 
-    # Path convention matches 01_*.py: dataset-root-relative (i.e. relative
-    # to ROOT_DIR = ncei/). Downstream consumers reconstruct full path via
-    # `ROOT_DIR / row["output_path"]`.
     summary["output_path"] = str(out_path.relative_to(ROOT_DIR))
     summary["output_size_bytes"] = int(size_bytes)
     summary["error"] = None
@@ -464,19 +389,32 @@ def load_filtered_manifest(manifest_path: Path, logger: logging.Logger) -> pd.Da
     df = pd.read_parquet(manifest_path)
     logger.info("Loaded manifest: %d rows from %s", len(df), manifest_path)
 
-    mask = (
-        (df["source_type"] == "ncei_nc")
-        & (df["instrument_class_pred"] == "singlebeam")
-        & (df["has_depth"].astype(bool))
-        & (df["depth_sign_raw"].isin(ALLOWED_DEPTH_SIGN_RAW))
-    )
+    mask = df["source_type"] == "ncei_xyz"
     filtered = df[mask].copy().reset_index(drop=True)
     logger.info(
-        "Filter applied (source_type=ncei_nc, pred=singlebeam, has_depth, depth_sign in %s): %d rows",
-        list(ALLOWED_DEPTH_SIGN_RAW),
+        "Filter applied (source_type=ncei_xyz): %d rows (%d sb + %d mb)",
         len(filtered),
+        int((filtered["instrument_class_pred"] == "singlebeam").sum()),
+        int((filtered["instrument_class_pred"] == "multibeam").sum()),
     )
     return filtered
+
+
+def stratified_sample(work: pd.DataFrame, n_per_class: int, seed: int = 42) -> pd.DataFrame:
+    """Stratified sample: take up to N from each instrument_class_pred bucket.
+
+    Ensures the small mb minority is exercised when --sample-n-files is small.
+    """
+    rng = np.random.default_rng(seed)
+    parts: list[pd.DataFrame] = []
+    for pred, sub in work.groupby("instrument_class_pred"):
+        if len(sub) <= n_per_class:
+            parts.append(sub)
+        else:
+            idx = sorted(rng.choice(len(sub), size=n_per_class, replace=False).tolist())
+            parts.append(sub.iloc[idx])
+    out = pd.concat(parts, ignore_index=True)
+    return out.sort_values("track_id").reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +449,7 @@ def make_report(
     tracks_in: int,
 ) -> str:
     lines: list[str] = []
-    lines.append("# NCEI Singlebeam Standardization Report (PR-E2)")
+    lines.append("# NCEI XYZ Standardization Report (PR-E3)")
     lines.append("")
     lines.append(f"Generated: {datetime.now(timezone.utc).isoformat()}")
     lines.append(f"Run label: `{run_label}`")
@@ -533,14 +471,25 @@ def make_report(
             lines.extend(markdown_table(pd.DataFrame(errors), max_rows=20))
         return "\n".join(lines)
 
+    lines.append("## Routing (per instrument_class_pred)")
+    lines.append("")
+    pred_counts = (
+        manifest_df.groupby("instrument_class_pred", dropna=False).size().reset_index(name="tracks")
+    )
+    lines.extend(markdown_table(pred_counts))
+
     lines.append("## Source completeness counts")
     lines.append("")
-    sc = manifest_df.groupby("source_completeness", dropna=False).size().reset_index(name="tracks")
+    sc = (
+        manifest_df.groupby("source_completeness", dropna=False).size().reset_index(name="tracks")
+    )
     lines.extend(markdown_table(sc))
 
     lines.append("## Depth-sign-raw counts")
     lines.append("")
-    ds_sign = manifest_df.groupby("depth_sign_raw", dropna=False).size().reset_index(name="tracks")
+    ds_sign = (
+        manifest_df.groupby("depth_sign_raw", dropna=False).size().reset_index(name="tracks")
+    )
     lines.extend(markdown_table(ds_sign))
 
     lines.append("## Field availability")
@@ -569,28 +518,58 @@ def make_report(
     }
     lines.extend(markdown_table(pd.DataFrame([stats])))
 
-    if manifest_df["has_time"].any():
-        with_time = manifest_df[manifest_df["has_time"]]
-        lines.append("## Time range (tracks with time only)")
-        lines.append("")
-        time_stats = {
-            "tracks_with_time": int(len(with_time)),
-            "time_min_overall": str(with_time["time_min"].min()),
-            "time_max_overall": str(with_time["time_max"].max()),
-        }
-        lines.extend(markdown_table(pd.DataFrame([time_stats])))
+    lines.append("## Top 5 largest multibeam tracks (by n_points_out)")
+    lines.append("")
+    mb_top = manifest_df[manifest_df["instrument_class_pred"] == "multibeam"].sort_values(
+        "n_points_out", ascending=False
+    )[["track_id", "source_completeness", "n_points_out", "bbox_lon_min", "bbox_lon_max", "bbox_lat_min", "bbox_lat_max"]]
+    lines.extend(markdown_table(mb_top, max_rows=5))
+
+    lines.append("## Top 5 largest singlebeam tracks (by n_points_out)")
+    lines.append("")
+    sb_top = manifest_df[manifest_df["instrument_class_pred"] == "singlebeam"].sort_values(
+        "n_points_out", ascending=False
+    )[["track_id", "source_completeness", "n_points_out", "bbox_lon_min", "bbox_lon_max", "bbox_lat_min", "bbox_lat_max"]]
+    lines.extend(markdown_table(sb_top, max_rows=5))
 
     lines.append("## Warnings rollup")
     lines.append("")
     n_with_warn = int((manifest_df["n_warnings"] > 0).sum())
     lines.append(f"Tracks with one or more sign-anomaly points: {n_with_warn:,}")
-    lines.append(f"Total sign-anomaly points across all tracks: {int(manifest_df['n_warnings'].sum()):,}")
+    lines.append(
+        f"Total sign-anomaly points across all tracks: {int(manifest_df['n_warnings'].sum()):,}"
+    )
     lines.append("")
     if n_with_warn:
         warn_top = manifest_df[manifest_df["n_warnings"] > 0].sort_values(
             "n_warnings", ascending=False
-        )[["track_id", "depth_sign_raw", "n_points_out", "n_warnings"]].head(20)
+        )[["track_id", "instrument_class_pred", "depth_sign_raw", "n_points_out", "n_warnings"]].head(20)
         lines.extend(markdown_table(warn_top))
+
+    # Depth-anomaly flag: surface tracks whose per-track depth_max exceeds the
+    # Challenger Deep + headroom cutoff (PRD Q3 picked −11,500 m for M.rar
+    # cleaning; we re-use that absolute magnitude here as a soft anomaly flag).
+    # Cleaning / clipping itself is out of PR-E3 scope — only surface for review.
+    DEPTH_ANOMALY_CUTOFF_M = 11500.0
+    anomalous = manifest_df[manifest_df["depth_max"] > DEPTH_ANOMALY_CUTOFF_M].sort_values(
+        "depth_max", ascending=False
+    )
+    lines.append("## Depth-anomaly review (depth_max > 11,500 m)")
+    lines.append("")
+    lines.append(
+        "Tracks whose per-track `depth_max` exceeds the Challenger Deep + "
+        "headroom cutoff. These are surfaced as known anomalies (likely "
+        "unit/sentinel issues in the upstream `.xyz` export); no clipping "
+        "is applied at PR-E3 — cleaning belongs to a later QC step."
+    )
+    lines.append("")
+    lines.append(f"Tracks with depth_max > {DEPTH_ANOMALY_CUTOFF_M:.0f} m: {len(anomalous):,}")
+    lines.append("")
+    if len(anomalous):
+        lines.extend(markdown_table(
+            anomalous[["track_id", "instrument_class_pred", "n_points_out", "depth_min", "depth_max"]],
+            max_rows=20,
+        ))
 
     if errors:
         lines.append("## Errors (top 20)")
@@ -600,9 +579,16 @@ def make_report(
 
     lines.append("## Output paths")
     lines.append("")
-    lines.append(f"- Per-track parquet dir: `ncei/derived/singlebeam/points_raw/`")
-    lines.append(f"- Aggregate manifest (parquet): `ncei/manifests/singlebeam_points_raw_manifest{'_' + run_label if run_label != 'full' else ''}.parquet`")
-    lines.append(f"- Aggregate manifest (tsv): `ncei/manifests/singlebeam_points_raw_manifest{'_' + run_label if run_label != 'full' else ''}.tsv`")
+    suffix = "" if run_label == "full" else f"_{run_label}"
+    lines.append("- Per-track parquet dirs:")
+    lines.append("  - singlebeam: `ncei/derived/singlebeam/points_raw/<track_id>__xyz.parquet`")
+    lines.append("  - multibeam:  `ncei/derived/multibeam/points_raw/<track_id>__xyz.parquet`")
+    lines.append(
+        f"- Aggregate manifest (parquet): `ncei/manifests/xyz_points_raw_manifest{suffix}.parquet`"
+    )
+    lines.append(
+        f"- Aggregate manifest (tsv): `ncei/manifests/xyz_points_raw_manifest{suffix}.tsv`"
+    )
     lines.append("")
 
     return "\n".join(lines)
@@ -612,19 +598,22 @@ def make_report(
 # Main
 # ---------------------------------------------------------------------------
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Standardize NCEI singlebeam .nc tracks (PR-E2)")
+    parser = argparse.ArgumentParser(description="Standardize NCEI tracklines .xyz tracks (PR-E3)")
     parser.add_argument("--run-label", choices=VALID_RUN_LABELS, default="sample")
     parser.add_argument(
         "--sample-n-files",
         type=int,
         default=None,
-        help="Randomly sample N files (required for sample mode unless --estimate-only)",
+        help=(
+            "Sample mode: take up to N tracks from each instrument_class_pred bucket "
+            "(stratified sb/mb). Required for sample mode unless --estimate-only."
+        ),
     )
     parser.add_argument(
         "--limit-files",
         type=int,
         default=None,
-        help="Limit to first N files after sort (required for test100 mode)",
+        help="Limit to first N tracks after sort (required for test100 mode)",
     )
     parser.add_argument("--confirm-full", action="store_true", help="Required when --run-label=full")
     parser.add_argument(
@@ -650,7 +639,7 @@ def main() -> int:
     t0 = datetime.now()
 
     logger.info("=" * 60)
-    logger.info("02_standardize_singlebeam.py START")
+    logger.info("03_standardize_xyz.py START")
     logger.info("Args: %s", vars(args))
 
     if args.estimate_only:
@@ -658,6 +647,9 @@ def main() -> int:
         print("Estimate only:")
         print(f"  manifest path:       {args.manifest}")
         print(f"  filter rows:         {len(filtered):,}")
+        print(f"  instrument_class_pred breakdown:")
+        for pred, n in filtered["instrument_class_pred"].value_counts().items():
+            print(f"    {pred}: {n:,}")
         print(f"  source_completeness breakdown:")
         for sc, n in filtered["source_completeness"].value_counts().items():
             print(f"    {sc}: {n:,}")
@@ -686,9 +678,12 @@ def main() -> int:
             return 2
 
     filtered = load_filtered_manifest(args.manifest, logger)
-    if args.run_label == "full" and len(filtered) != 1850:
+    if args.run_label == "full" and len(filtered) != EXPECTED_FULL_ROWS:
         logger.error(
-            "ABORTED: full-mode filter expected 1,850 rows per PRD Finding 2026-05-19; got %d",
+            "ABORTED: full-mode filter expected %d rows (%d sb + %d mb); got %d",
+            EXPECTED_FULL_ROWS,
+            EXPECTED_SB_ROWS,
+            EXPECTED_MB_ROWS,
             len(filtered),
         )
         return 3
@@ -696,15 +691,24 @@ def main() -> int:
     work = filtered.sort_values("track_id").reset_index(drop=True)
 
     # Apply sample / limit selection.
-    if args.sample_n_files is not None and len(work) > args.sample_n_files:
+    if args.sample_n_files is not None and len(work) > 2 * args.sample_n_files:
+        # Stratified sample so the small mb minority is exercised.
+        work = stratified_sample(work, n_per_class=args.sample_n_files, seed=42)
+    elif args.sample_n_files is not None and len(work) > args.sample_n_files:
         rng = np.random.default_rng(42)
         idx = sorted(rng.choice(len(work), size=args.sample_n_files, replace=False).tolist())
         work = work.iloc[idx].reset_index(drop=True)
     if args.limit_files is not None:
         work = work.head(args.limit_files).reset_index(drop=True)
 
-    logger.info("Will standardize %d tracks", len(work))
-    DERIVED_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info(
+        "Will standardize %d tracks (%d sb + %d mb)",
+        len(work),
+        int((work["instrument_class_pred"] == "singlebeam").sum()),
+        int((work["instrument_class_pred"] == "multibeam").sum()),
+    )
+    DERIVED_SB_DIR.mkdir(parents=True, exist_ok=True)
+    DERIVED_MB_DIR.mkdir(parents=True, exist_ok=True)
 
     summaries: list[dict] = []
     errors: list[dict] = []
@@ -730,7 +734,6 @@ def main() -> int:
     elapsed_s = (datetime.now() - t0).total_seconds()
 
     atomic_write_parquet(manifest_df, paths["manifest_pq"])
-    # Cap TSV for non-full runs to keep diffs small.
     if args.run_label == "full":
         tsv_df = manifest_df
     else:
@@ -746,9 +749,14 @@ def main() -> int:
     logger.info("Wrote %s", paths["report_md"])
     logger.info("Errors: %d", len(errors))
     logger.info("Elapsed: %.1fs", elapsed_s)
-    logger.info("02_standardize_singlebeam.py DONE")
+    logger.info("03_standardize_xyz.py DONE")
 
     print(f"Tracks standardized: {len(manifest_df):,}")
+    if len(manifest_df):
+        sb_n = int((manifest_df["instrument_class_pred"] == "singlebeam").sum())
+        mb_n = int((manifest_df["instrument_class_pred"] == "multibeam").sum())
+        print(f"  singlebeam: {sb_n:,}")
+        print(f"  multibeam:  {mb_n:,}")
     print(f"Errors: {len(errors):,}")
     if "n_warnings" in manifest_df.columns and len(manifest_df):
         print(f"Per-point warnings (total): {int(manifest_df['n_warnings'].sum()):,}")

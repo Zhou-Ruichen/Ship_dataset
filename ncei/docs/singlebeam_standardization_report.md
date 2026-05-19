@@ -1,9 +1,9 @@
 # NCEI Singlebeam Standardization Report (PR-E2)
 
-Generated: 2026-05-19T19:50:27.436156+00:00
+Generated: 2026-05-19T20:12:32.868787+00:00
 Run label: `full`
 Standardization version: `ncei_sb_v0.1.0`
-Elapsed: 157.0s
+Elapsed: 156.2s
 Tracks in (after manifest filter): 1,850
 Tracks standardized: 1,850
 Errors: 0
