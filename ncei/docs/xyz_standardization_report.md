@@ -1,9 +1,9 @@
 # NCEI XYZ Standardization Report (PR-E3)
 
-Generated: 2026-05-19T20:44:05.427276+00:00
+Generated: 2026-05-19T21:30:26.377504+00:00
 Run label: `full`
-Standardization version: `ncei_xyz_v0.1.0`
-Elapsed: 253.0s
+Standardization version: `ncei_xyz_v0.2.0`
+Elapsed: 259.3s
 Tracks in (after manifest filter): 5,382
 Tracks standardized: 5,382
 Errors: 0
@@ -39,7 +39,7 @@ Total per-point warnings: 5
 
 | n_points_in_total | n_points_out_total | n_points_in_per_track_min | n_points_in_per_track_max | lon_min | lon_max | lat_min | lat_max | depth_min_overall | depth_max_overall |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 115256003.000 | 115256003.000 | 3.000 | 4791752.000 | -180.000 | 180.000 | -83.082 | 90.000 | 0.000 | 87178.400 |
+| 115256003.000 | 115256003.000 | 3.000 | 4791752.000 | -180.000 | 180.000 | -83.082 | 90.000 | 0.000 | 11484.180 |
 
 ## Top 5 largest multibeam tracks (by n_points_out)
 
@@ -71,27 +71,26 @@ Total sign-anomaly points across all tracks: 5
 | jr353 | singlebeam | mostly_positive | 50913 | 4 |
 | nbp0505 | singlebeam | mostly_positive | 20261 | 1 |
 
-## Depth-anomaly review (depth_max > 11,500 m)
+## Depth clip rollup (PR-F: depth > 11,500m → NaN)
 
-Tracks whose per-track `depth_max` exceeds the Challenger Deep + headroom cutoff. These are surfaced as known anomalies (likely unit/sentinel issues in the upstream `.xyz` export); no clipping is applied at PR-E3 — cleaning belongs to a later QC step.
+Tracks with one or more clipped points: 13
+Total clipped points across all tracks: 43
 
-Tracks with depth_max > 11500 m: 13
-
-| track_id | instrument_class_pred | n_points_out | depth_min | depth_max |
+| track_id | instrument_class_pred | depth_sign_raw | n_points_out | n_clipped |
 | --- | --- | --- | --- | --- |
-| ant4 | singlebeam | 101410 | 7.700 | 87178.400 |
-| wi343802 | singlebeam | 3142 | 66.970 | 74999.930 |
-| ant8 | singlebeam | 47919 | 0.000 | 52002.000 |
-| so36 | singlebeam | 106533 | 0.000 | 44215.000 |
-| so16 | singlebeam | 57108 | 40.000 | 27760.000 |
-| 91039 | singlebeam | 37521 | 1.000 | 23233.000 |
-| so49 | singlebeam | 46085 | 60.000 | 12386.000 |
-| rr1108 | singlebeam | 91191 | 263.330 | 11966.290 |
-| rr1112 | singlebeam | 62149 | 730.580 | 11960.120 |
-| rr1106 | singlebeam | 66738 | 890.230 | 11927.620 |
-| rr1110 | singlebeam | 256931 | 251.420 | 11922.930 |
-| mv0902 | singlebeam | 779771 | 12.230 | 11752.350 |
-| rr1109 | singlebeam | 101409 | 340.750 | 11706.650 |
+| 91039 | singlebeam | mostly_positive | 37521 | 8 |
+| rr1112 | singlebeam | mostly_positive | 62149 | 7 |
+| rr1106 | singlebeam | mostly_positive | 66738 | 6 |
+| wi343802 | singlebeam | mostly_positive | 3142 | 5 |
+| rr1108 | singlebeam | mostly_positive | 91191 | 4 |
+| rr1110 | singlebeam | mostly_positive | 256931 | 3 |
+| rr1109 | singlebeam | mostly_positive | 101409 | 3 |
+| so16 | singlebeam | mostly_positive | 57108 | 2 |
+| ant4 | singlebeam | mostly_positive | 101410 | 1 |
+| mv0902 | singlebeam | mostly_positive | 779771 | 1 |
+| ant8 | singlebeam | mostly_positive | 47919 | 1 |
+| so36 | singlebeam | mostly_positive | 106533 | 1 |
+| so49 | singlebeam | mostly_positive | 46085 | 1 |
 
 ## Output paths
 

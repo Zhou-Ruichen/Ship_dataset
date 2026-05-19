@@ -121,6 +121,46 @@ must NOT silently assume any global sign convention from the docs.
   `depth_m_positive_down` column based on `depth_sign_raw` per-track,
   not a global assumption.
 
+## Depth sentinel (PR-F clip, 2026-05-19b)
+
+PR-F audit pass identified 13 xyz tracks (all `instrument_class_pred=
+singlebeam`) whose raw `depth_max` exceeds the Mariana Trench
+(~10,994 m). These are sentinel / unit-error pollution from upstream,
+not real bathymetry. Sorted worst-first (per `xyz_points_raw_manifest.parquet`
+before clip):
+
+| track_id | depth_max raw (m) | n_clipped (after clip) |
+|---|---:|---:|
+| `ant4`     | 87,178 | 1  |
+| `wi343802` | 75,000 | 5  |
+| `ant8`     | 52,002 | 1  |
+| `so36`     | 44,215 | 1  |
+| `so16`     | 27,760 | 2  |
+| `91039`    | 23,233 | 8  |
+| `so49`     | 12,386 | 1  |
+| `rr1108`   | 11,966 | 4  |
+| `rr1112`   | 11,960 | 7  |
+| `rr1106`   | 11,928 | 6  |
+| `rr1110`   | 11,923 | 3  |
+| `mv0902`   | 11,752 | 1  |
+| `rr1109`   | 11,707 | 3  |
+
+The `91039`, `so16`, `so49` tracks appear in **both** nc and xyz
+with the same sentinels (cross-bundle correlation → genuine upstream
+pollution, not a format-specific artifact). The `rr11xx` + `mv0902`
+cluster sits just over the 11,500 m cutoff (11,707–11,966 m).
+
+**Policy** — `03_standardize_xyz.py` applies a universal upper clip:
+`depth_m_positive_down > 11,500 m → NaN`. `depth_raw` is preserved
+verbatim in the per-track parquet for audit; only
+`depth_m_positive_down` and `elev_m` are NaN'd for over-clip rows.
+Per-track clip counts land in the `n_clipped` column of the aggregate
+manifest. Symmetric with the M.rar lower-bound clip
+(`depth < -11,500 m → nodata`, PRD Q3) and the nc-side clip applied
+by `02_standardize_singlebeam.py`. Full per-track table and spec
+ratification (decision #12) in PRD section "Finding 2026-05-19b" +
+`.trellis/spec/backend/pipeline-design-decisions.md` §12.
+
 ## References
 
 - PRD: `.trellis/tasks/05-11-singlebeam-integration/prd.md` (Q2, Q6, Q7,

@@ -69,13 +69,19 @@ DERIVED_SB_DIR = ROOT_DIR / "derived" / "singlebeam" / "points_raw"
 DERIVED_MB_DIR = ROOT_DIR / "derived" / "multibeam" / "points_raw"
 
 VALID_RUN_LABELS = ("sample", "test100", "full")
-STANDARDIZATION_VERSION = "ncei_xyz_v0.1.0"
+STANDARDIZATION_VERSION = "ncei_xyz_v0.2.0"
 XYZ_CHUNK_SIZE = 500_000
 
 # Filter contract — see module docstring + PRD Finding 2026-05-19.
 EXPECTED_FULL_ROWS = 5382
 EXPECTED_SB_ROWS = 5365
 EXPECTED_MB_ROWS = 17
+
+# PR-F (PRD Finding 2026-05-19b): depth-sentinel upper clip. Anything past
+# Mariana Trench (~10,994 m) is sentinel / unit-error pollution, not real
+# bathymetry. Symmetric with PRD Q3 M.rar lower-bound (depth < -11,500m)
+# and identical to 02_standardize_singlebeam.py's DEPTH_CLIP_UPPER_M.
+DEPTH_CLIP_UPPER_M = 11500.0
 
 # Point schema column order — must exactly match the 02_*.py output so
 # the two sides can be unioned downstream (PRD line 681).
@@ -263,6 +269,17 @@ def standardize_one_track(
         # Filter contract should keep us out of here; defensive — log via warning.
         warnings_count += n_points_out
 
+    # PR-F universal depth clip (PRD Finding 2026-05-19b): NaN out any
+    # positive-down depth > DEPTH_CLIP_UPPER_M. depth_raw preserved
+    # unchanged for audit; only depth_m_positive_down + elev_m are NaN'd.
+    over_clip = (
+        np.isfinite(depth_m_positive_down)
+        & (depth_m_positive_down > DEPTH_CLIP_UPPER_M)
+    )
+    n_clipped = int(over_clip.sum())
+    if n_clipped:
+        depth_m_positive_down[over_clip] = np.nan
+
     elev_m = -depth_m_positive_down
 
     # Build the point table — `time`, `gobs`, `faa` stay null per PRD line 683.
@@ -326,6 +343,7 @@ def standardize_one_track(
         "has_gobs": False,
         "has_faa": False,
         "n_warnings": warnings_count,
+        "n_clipped": n_clipped,
         "standardization_version": STANDARDIZATION_VERSION,
         # output_path / output_size_bytes / error filled in by caller.
     }
@@ -546,30 +564,31 @@ def make_report(
         )[["track_id", "instrument_class_pred", "depth_sign_raw", "n_points_out", "n_warnings"]].head(20)
         lines.extend(markdown_table(warn_top))
 
-    # Depth-anomaly flag: surface tracks whose per-track depth_max exceeds the
-    # Challenger Deep + headroom cutoff (PRD Q3 picked −11,500 m for M.rar
-    # cleaning; we re-use that absolute magnitude here as a soft anomaly flag).
-    # Cleaning / clipping itself is out of PR-E3 scope — only surface for review.
-    DEPTH_ANOMALY_CUTOFF_M = 11500.0
-    anomalous = manifest_df[manifest_df["depth_max"] > DEPTH_ANOMALY_CUTOFF_M].sort_values(
-        "depth_max", ascending=False
-    )
-    lines.append("## Depth-anomaly review (depth_max > 11,500 m)")
+    # PR-F depth clip rollup (PRD Finding 2026-05-19b): tracks where the
+    # universal upper clip (depth > 11,500m → NaN) fired. depth_raw is
+    # preserved in the per-track parquet; depth_m_positive_down + elev_m
+    # are NaN'd for over-clip rows. Symmetric with 02_standardize_singlebeam.
+    lines.append("## Depth clip rollup (PR-F: depth > 11,500m → NaN)")
     lines.append("")
+    n_with_clip = int((manifest_df["n_clipped"] > 0).sum())
+    lines.append(f"Tracks with one or more clipped points: {n_with_clip:,}")
     lines.append(
-        "Tracks whose per-track `depth_max` exceeds the Challenger Deep + "
-        "headroom cutoff. These are surfaced as known anomalies (likely "
-        "unit/sentinel issues in the upstream `.xyz` export); no clipping "
-        "is applied at PR-E3 — cleaning belongs to a later QC step."
+        f"Total clipped points across all tracks: {int(manifest_df['n_clipped'].sum()):,}"
     )
     lines.append("")
-    lines.append(f"Tracks with depth_max > {DEPTH_ANOMALY_CUTOFF_M:.0f} m: {len(anomalous):,}")
-    lines.append("")
-    if len(anomalous):
-        lines.extend(markdown_table(
-            anomalous[["track_id", "instrument_class_pred", "n_points_out", "depth_min", "depth_max"]],
-            max_rows=20,
-        ))
+    if n_with_clip:
+        clip_top = manifest_df[manifest_df["n_clipped"] > 0].sort_values(
+            "n_clipped", ascending=False
+        )[
+            [
+                "track_id",
+                "instrument_class_pred",
+                "depth_sign_raw",
+                "n_points_out",
+                "n_clipped",
+            ]
+        ].head(20)
+        lines.extend(markdown_table(clip_top))
 
     if errors:
         lines.append("## Errors (top 20)")
@@ -760,6 +779,11 @@ def main() -> int:
     print(f"Errors: {len(errors):,}")
     if "n_warnings" in manifest_df.columns and len(manifest_df):
         print(f"Per-point warnings (total): {int(manifest_df['n_warnings'].sum()):,}")
+    if "n_clipped" in manifest_df.columns and len(manifest_df):
+        print(
+            f"Per-point depth clips (total, > {DEPTH_CLIP_UPPER_M:.0f}m): "
+            f"{int(manifest_df['n_clipped'].sum()):,}"
+        )
     print(f"Report: {paths['report_md']}")
     return 0 if not errors else 1
 

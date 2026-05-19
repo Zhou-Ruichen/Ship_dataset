@@ -263,3 +263,71 @@ backend spec tree.
 **Don't**: introduce `sys.path.insert(...)` boilerplate in pipeline
 scripts. If a script needs to import from `_common/` and the import
 fails, the fix is to run from repo root, not to mutate `sys.path`.
+
+---
+
+## 12. Universal depth clip at ±11,500 m
+
+**Choice**: Across all NCEI bathymetry inputs (nc + xyz + M.rar),
+depths with absolute magnitude > 11,500 m are treated as sentinel /
+unit-error pollution and removed from `depth_m_positive_down`:
+
+- `02_standardize_singlebeam.py` (nc) and `03_standardize_xyz.py`
+  (xyz) apply the **upper-bound** clip:
+  `depth_m_positive_down > 11,500 m → NaN`.
+- `04_clean_mrar.py` (M.rar) applies the **lower-bound** clip on the
+  negative-down raw input: `depth_raw < -11,500 m` rows are dropped
+  entirely (nodata).
+
+In both cases, the per-row `depth_raw` column is preserved verbatim
+in the per-track / per-quadrant output so the original sentinel
+value remains auditable; only the standardized `depth_m_positive_down`
+column reflects the clip. Per-track / per-quadrant clip counts land
+in the aggregate manifests as `n_clipped` (nc / xyz) or in
+`cleaning_audit.parquet` as `rows_nodata` (M.rar).
+
+**Why**:
+- Mariana Trench ≈ 10,994 m; anything past 11,500 m (~5% headroom
+  past Challenger Deep) is not a real bathymetric observation. The
+  evidence: 16 distinct tracks across nc + xyz carry values from
+  12,386 m to 87,178 m, with the 87,000 / 75,000 / 52,000 / 44,000 m
+  values obvious unit / sentinel errors regardless of threshold
+  choice. M.rar carries `-30,990 m` sentinels in the third
+  quadrant — clearly nodata.
+- A symmetric threshold (`|depth| > 11,500 m → invalid`) keeps the
+  rule trivially memorable and operationally identical across the
+  three depth-sign conventions (nc/xyz positive-down vs M.rar
+  negative-down).
+- Clipping in the standardize / cleaning step (not in downstream QC)
+  means consumers of the standardized parquet schema never see the
+  pollution. The schema-level invariant
+  `depth_m_positive_down ∈ [0, 11500] ∪ {NaN}` is contract-grade.
+
+**Don't**: bake additional clips at downstream stages (Step 03+ QC
+will still flag other anomalies — extreme positive values not caught
+by the sign-sensitive normalize, missing-coord rows, etc. — but the
+±11,500 m clip is settled here, not redebated downstream). And don't
+loosen the threshold to 12,000 m without re-walking the borderline
+`rr11xx` cluster (which sits 11,700–11,966 m) — those tracks were
+deliberately included in the clipped set after eyeballing the
+distribution.
+
+**Source of truth for the threshold value**:
+- `DEPTH_CLIP_UPPER_M = 11500.0` — module-level constant defined
+  identically in `ncei/code/02_standardize_singlebeam.py` and
+  `ncei/code/03_standardize_xyz.py`. Changing it here without
+  updating both scripts (and `04_clean_mrar.py`'s
+  `DEPTH_CLIP_LOWER_M = -11500.0`) silently breaks the symmetric-
+  threshold invariant.
+- `DEPTH_CLIP_LOWER_M = -11500.0` and `LAND_DEPTH_CUTOFF_M = 0.0` —
+  module-level constants in `ncei/code/04_clean_mrar.py`.
+
+**References**:
+- PRD `.trellis/tasks/05-11-singlebeam-integration/prd.md` Q3
+  (M.rar lower bound) + "Finding 2026-05-19b: depth sentinel
+  pollution" (per-track table for the 16 nc+xyz cases).
+- M.rar cleaning audit lives at
+  `ncei/archive/zhoushuai_processed_M/cleaning_audit.parquet`.
+- nc / xyz per-track clip counts in `n_clipped` column of
+  `ncei/manifests/singlebeam_points_raw_manifest.parquet` and
+  `ncei/manifests/xyz_points_raw_manifest.parquet`.

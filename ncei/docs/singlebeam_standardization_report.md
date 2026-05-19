@@ -1,9 +1,9 @@
 # NCEI Singlebeam Standardization Report (PR-E2)
 
-Generated: 2026-05-19T20:12:32.868787+00:00
+Generated: 2026-05-19T21:21:03.135658+00:00
 Run label: `full`
-Standardization version: `ncei_sb_v0.1.0`
-Elapsed: 156.2s
+Standardization version: `ncei_sb_v0.2.0`
+Elapsed: 156.1s
 Tracks in (after manifest filter): 1,850
 Tracks standardized: 1,850
 Errors: 0
@@ -31,7 +31,7 @@ Total per-point warnings: 1
 
 | n_points_in_total | n_points_out_total | n_points_in_per_track_min | n_points_in_per_track_max | lon_min | lon_max | lat_min | lat_max | depth_min_overall | depth_max_overall |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 35841758.000 | 35841758.000 | 35.000 | 609668.000 | -180.000 | 180.000 | -78.592 | 88.277 | 0.000 | 18640.000 |
+| 35841758.000 | 35841758.000 | 35.000 | 609668.000 | -180.000 | 180.000 | -78.592 | 88.277 | 0.000 | 10986.800 |
 
 ## Time range (tracks with time only)
 
@@ -47,6 +47,17 @@ Total sign-anomaly points across all tracks: 1
 | track_id | depth_sign_raw | n_points_out | n_warnings |
 | --- | --- | --- | --- |
 | nbp0505 | mostly_positive | 21685 | 1 |
+
+## Depth clip rollup (PR-F: depth > 11,500m → NaN)
+
+Tracks with one or more clipped points: 3
+Total clipped points across all tracks: 9
+
+| track_id | depth_sign_raw | n_points_out | n_clipped |
+| --- | --- | --- | --- |
+| 91039 | mostly_positive | 50402 | 7 |
+| so16 | mostly_positive | 59903 | 1 |
+| so49 | mostly_positive | 47970 | 1 |
 
 ## Output paths
 

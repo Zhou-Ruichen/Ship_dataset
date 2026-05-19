@@ -73,6 +73,35 @@ section "Finding 2026-05-19: 168 nc-only tracks have no usable
 depth"; `tracklines_nc/SOURCE.md` carries the historical-record
 annotation.
 
+## Depth sentinel pollution (2026-05-19b, PR-F clip)
+
+16 distinct tracks across nc + xyz carry `depth_max` values past
+Mariana Trench (~10,994 m) — sentinel / unit-error pollution from
+upstream, not real bathymetry. 3 nc-sb tracks (`91039`, `so16`,
+`so49`); 13 xyz tracks led by `ant4` (87,178 m), `wi343802`
+(75,000 m), `ant8` (52,002 m), `so36` (44,215 m). PR-F adds a
+universal upper clip in `02_standardize_singlebeam.py` and
+`03_standardize_xyz.py`: `depth_m_positive_down > 11,500 m → NaN`
+(symmetric with PRD Q3 M.rar lower-bound). `depth_raw` preserved
+verbatim in per-track parquet for audit. Full per-track table and
+policy rationale in PRD section "Finding 2026-05-19b" +
+`tracklines_xyz/SOURCE.md` "Depth sentinel" subsection.
+
+## nc/xyz intersect asymmetry (2026-05-19c, refines 2026-05-16)
+
+For the 1,850 `nc_xyz_intersect` tracks, the nc side carries more
+points than the xyz side (median ratio 1.37×; 39 tracks with nc
+≥10× xyz; 3 tracks with nc ≥100× xyz — peak 189× at `kea09-69`).
+The "14k pts/track" parity claim from the 2026-05-16 corpora-
+relationship finding holds at the **aggregate** level (xyz adds mb
+swaths + 3,532 nc-absent tracks that net out the per-track loss on
+the intersect set) but xyz is **decimated / filtered** at the
+intersect-track level. Downstream policy: prefer nc as primary
+bathymetry source for `nc_xyz_intersect` tracks; xyz on the
+intersect set kept as supplementary audit / sensitivity layer.
+Knowledge update only — no PR-F code change. Full evidence in PRD
+section "Finding 2026-05-19c".
+
 ## Layout map
 
 ```

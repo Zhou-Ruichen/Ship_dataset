@@ -77,6 +77,41 @@ unprocessed extract. PR-F implements the cleaning step per PRD Q3:
   per-quadrant counts. This SOURCE.md will be amended with the
   summary numbers when PR-F lands.
 
+## Cleaning result (PR-F, 2026-05-19)
+
+PR-F executed by `ncei/code/04_clean_mrar.py` (cleaning version
+`mrar_v0.1.0`); audit table written to
+`ncei/archive/zhoushuai_processed_M/cleaning_audit.parquet`. Per-quadrant
++ TOTALS counts:
+
+| Quadrant | rows_in | rows_land | rows_nodata | rows_bathymetry | depth_min (raw, bathy) | depth_max (raw, bathy) |
+|---|---:|---:|---:|---:|---:|---:|
+| `0-180E-0-85N.txt`  | 38,635,741 | 6,218 | 38,672 | 38,590,851 | −11,500 m | 0 m |
+| `0-90W-0-85S.txt`   | 25,295,079 | 49    | 8,414  | 25,286,616 | −11,500 m | −10 m |
+| `90-180W-0-85S.txt` | 49,480,083 | 0     | 968    | 49,479,115 | −11,499 m | −5 m |
+| **TOTALS**          | **113,410,903** | **6,267** | **48,054** | **113,356,582** | **−11,500 m** | **0 m** |
+
+Row conservation: `113,410,903 = 6,267 + 48,054 + 113,356,582` (no
+rows lost or duplicated). Land rows concentrate in the first quadrant
+(consistent with the original ranges showing `+2,669 m` and `+5,451 m`
+elevation values in quadrants 1+2; the third quadrant's raw range
+already topped out at `−5 m`, so it contributes 0 land rows). Nodata
+sentinels are most numerous in the first quadrant (38,672 dropped
+rows; sentinel value visible in the raw `−15,752 m` of that file's
+range). Bathymetry yield is 99.95% of input rows.
+
+Outputs (all under this dir):
+- `bathymetry_points.parquet` — 113,356,582 rows, 16-column schema
+  union-compatible with `02_standardize_singlebeam.py` /
+  `03_standardize_xyz.py`. Bathy depth flipped to positive-down
+  convention; `track_id = mrar_<quadrant>`, `instrument_class_pred =
+  multibeam`, `source_completeness = mrar_regional`.
+- `land_mask.parquet` — 6,267 rows, 8-column schema with
+  `elevation_m > 0` (range `[1, 5,451]` m). Preserved as labeled
+  artifact even with no current downstream consumer.
+- `cleaning_audit.parquet` — per-quadrant + TOTALS row.
+- Report: `ncei/docs/mrar_cleaning_report.md`.
+
 ## Scale comparison
 
 | Dataset | Points |

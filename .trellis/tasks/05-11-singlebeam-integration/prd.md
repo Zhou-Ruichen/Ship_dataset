@@ -1011,6 +1011,183 @@ they're "no_bathymetry" tracks for bathymetry purposes.
 - `ncei/tracklines_xyz/SOURCE.md` — known-unknown row updated with
   `[2026-05-19 update — resolved]` annotation pointing back here.
 
+## Finding 2026-05-19b: depth sentinel pollution in nc + xyz (PR-F clip)
+
+Identified as part of PR-F audit pass: 16 distinct tracks across the
+nc + xyz corpora carry `depth_max` values past the Mariana Trench
+(~10,994 m). These are not real bathymetry — they are sentinel /
+unit-error pollution from upstream.
+
+### Evidence
+
+Cross-check on the PR-E2 (`singlebeam_points_raw_manifest.parquet`)
++ PR-E3 (`xyz_points_raw_manifest.parquet`) manifests, depth_max
+filter > 11,500 m (= ~5% past Challenger Deep, symmetric with PRD Q3
+M.rar lower-bound clip):
+
+**3 nc-sb tracks**:
+
+| track_id | depth_max (m) |
+|---|---:|
+| `91039` | 18,640 |
+| `so16`  | 14,450 |
+| `so49`  | 12,386 |
+
+**13 xyz tracks** (all `instrument_class_pred=singlebeam`; worst
+first):
+
+| track_id | depth_max (m) |
+|---|---:|
+| `ant4`     | 87,178 |
+| `wi343802` | 75,000 |
+| `ant8`     | 52,002 |
+| `so36`     | 44,215 |
+| `so16`     | 27,760 |
+| `91039`    | 23,233 |
+| `so49`     | 12,386 |
+| `rr1108`   | 11,966 |
+| `rr1112`   | 11,960 |
+| `rr1106`   | 11,928 |
+| `rr1110`   | 11,923 |
+| `mv0902`   | 11,752 |
+| `rr1109`   | 11,707 |
+
+The `91039`, `so16`, `so49` tracks appear in **both** nc and xyz with
+the same sentinels — genuine upstream pollution, not a format-specific
+artifact. The `rr11xx` + `mv0902` cluster sits just over the cutoff
+(11,700–11,966 m); they may be the borderline cases where the cutoff
+choice (11,500 vs 12,000) matters most. Worst offenders (ant4 at
+87,000 m, wi343802 at 75,000 m, ant8 at 52,000 m, so36 at 44,000 m)
+are obvious sentinels / unit errors regardless of cutoff choice.
+
+### Policy — universal depth clip (PR-F)
+
+`02_standardize_singlebeam.py` and `03_standardize_xyz.py` apply the
+same upper-bound clip: `depth_m_positive_down > 11,500 m → NaN`. The
+raw `depth_raw` column is preserved verbatim in the per-track parquet
+for audit; only `depth_m_positive_down` + `elev_m` are NaN'd for
+over-clip rows.
+
+Threshold symmetry with PRD Q3 M.rar cleaning lower-bound
+(`depth < -11,500 m → nodata`): both ends of the depth axis treat
+"5% past Challenger Deep" as the boundary between observation and
+sentinel. Promoted to spec via
+`pipeline-design-decisions.md` decision #12.
+
+Per-track clip counts are added to the aggregate manifests via a new
+`n_clipped` column (int) in both `singlebeam_points_raw_manifest.parquet`
+and `xyz_points_raw_manifest.parquet`.
+
+### Where this finding is recorded
+
+- This PRD section (canonical).
+- `ncei/SOURCE.md` — pointer to this finding.
+- `ncei/tracklines_xyz/SOURCE.md` — "Depth sentinel" subsection
+  enumerating the 13 xyz anomalous tracks + the PR-F clip policy.
+- `.trellis/spec/backend/pipeline-design-decisions.md` — new
+  decision #12 (universal depth clip ±11,500 m).
+
+## Finding 2026-05-19c: nc/xyz intersect asymmetry (xyz is decimated, not equivalent)
+
+Refines the 2026-05-16 "ncei/ corpora relationship clarification"
+finding above. The "14k pts/track" parity claim is correct at the
+**global aggregate** level (28.9M nc / 2,018 ≈ 14,319; 75M sb-portion
+xyz / 5,370 ≈ 14,000 after stripping the 12 confirmed-mb files) but
+**not** at the **intersect-track** level — for the 1,850
+`nc_xyz_intersect` tracks, the nc side carries more points than the
+xyz side, often by an order of magnitude.
+
+### Evidence
+
+PR-E2 / PR-E3 manifests joined on `track_id`, restricted to the 1,850
+intersect basenames (`source_completeness == 'nc_xyz_intersect'`):
+
+| Metric | Value |
+|---|---:|
+| Intersect tracks | 1,850 |
+| nc total points (intersect rows) | 35,841,758 |
+| xyz total points (intersect rows) | 24,304,908 |
+| Median `n_nc / n_xyz` ratio | 1.37 |
+| Tracks with `n_nc ≥ 10 × n_xyz` | 39 |
+| Tracks with `n_nc ≥ 100 × n_xyz` | 3 |
+
+**Top 10 by nc/xyz ratio (nc much bigger)**:
+
+| track_id | n_nc | n_xyz | ratio |
+|---|---:|---:|---:|
+| `kea09-69`   | 4,915  | 26    | 189.0 |
+| `lprs05rr`   | 35,797 | 261   | 137.2 |
+| `64018`      | 11,639 | 113   | 103.0 |
+| `cook13mv`   | 11,114 | 113   | 98.4  |
+| `jare32l7`   | 22,811 | 251   | 90.9  |
+| `64027`      | 7,926  | 137   | 57.9  |
+| `ba73014`    | 34,022 | 629   | 54.1  |
+| `gh7801`     | 12,381 | 285   | 43.4  |
+| `kea01-69`   | 10,965 | 268   | 40.9  |
+| `f-10-89-cp` | 53,637 | 1,413 | 38.0  |
+
+**Bottom 10 by nc/xyz ratio (xyz ≥ nc)** — note the off-by-one
+pattern `n_xyz = n_nc + 1` is consistent across all bottom-10
+cases, suggesting an extra header row in xyz that the chunked reader
+treats as data:
+
+| track_id | n_nc | n_xyz | ratio |
+|---|---:|---:|---:|
+| `ht93t331` | 86   | 87   | 0.989 |
+| `ht890713` | 130  | 131  | 0.992 |
+| `cmappi6e` | 148  | 149  | 0.993 |
+| `cmappi7w` | 222  | 223  | 0.996 |
+| `egrbgs1`  | 317  | 318  | 0.997 |
+| `avo64may` | 436  | 437  | 0.998 |
+| `ht8510`   | 534  | 535  | 0.998 |
+| `ht97t374` | 677  | 678  | 0.999 |
+| `aku23`    | 940  | 941  | 0.999 |
+| `kh7003`   | 1,176| 1,177| 0.999 |
+
+### Implication
+
+The previous "different packaging of same point cloud" framing
+(2026-05-16 corpora-relationship finding) is correct in spirit but
+incomplete in detail:
+
+- At the **global aggregate** level: both corpora average ~14k
+  pts/track for clean singlebeam → same underlying physical corpus.
+- At the **intersect-track** level: xyz is generally a
+  **decimated / filtered** version of nc. The 100×-ratio outliers
+  show xyz can be dramatically lossier; the median 1.37× ratio
+  shows even typical tracks lose ~25% of their points in xyz form.
+
+The xyz bundle is therefore best understood as a downstream / decimated
+re-export of an upstream NCEI snapshot, **not** as a parallel
+independent snapshot. The 14k/track aggregate parity holds because xyz
+adds the previously-unfiltered multibeam swaths (the 12 confirmed mb
+files) and ~3,532 nc-absent tracks that net out the per-track
+shrinkage on the 1,850 intersect set.
+
+### Downstream policy
+
+For `nc_xyz_intersect` tracks, **prefer the nc side** as the primary
+bathymetry source in downstream aggregation:
+
+1. nc has more points (median 1.37×; up to 189× in the long tail).
+2. nc has standardized MGD77+ columns (`time`, `gobs`, `faa`) that
+   bare xyz lacks.
+3. nc is mb-filtered upstream → cleaner input that doesn't depend
+   on the R2 classifier being perfect.
+
+xyz on the intersect set remains supplementary (not deleted) — kept
+in `ncei/derived/singlebeam/points_raw/<track_id>__xyz.parquet` for
+audit / sensitivity analysis. This is a knowledge update; **no PR-F
+code change** is needed to enforce the rule. Downstream Step 03+
+aggregation (a future PR — out of PR-F scope) will operationalize the
+preference via a `source_priority` or `bathymetry_eligible` column
+on the manifest side, or a per-cell join policy.
+
+### Where this finding is recorded
+
+- This PRD section (canonical).
+- `ncei/SOURCE.md` — pointer to this finding.
+
 ## Research References
 
 (Both linked from the broader 2026-05_tmp-data-classification.md
