@@ -331,3 +331,146 @@ distribution.
 - nc / xyz per-track clip counts in `n_clipped` column of
   `ncei/manifests/singlebeam_points_raw_manifest.parquet` and
   `ncei/manifests/xyz_points_raw_manifest.parquet`.
+
+---
+
+## 13. NCEI Step 04A — per-file 1-arcmin cell aggregation
+
+Locks in the production conventions for `ncei/code/07_aggregate_file_cells_1min.py`
+so Step 04B / 06b / future re-runs all stay coherent.
+
+### 13.1 AGGREGATION_VERSION
+
+`AGGREGATION_VERSION = "ncei_cells_v0.1.0"` — module constant in
+`ncei/code/07_aggregate_file_cells_1min.py`, written into every row of
+`ncei/manifests/file_cells_1min_manifest.parquet`. Bump on any schema
+or semantics change.
+
+### 13.2 cell_id convention (cross-pipeline, exact)
+
+The 1-arcmin cell-id formula is fixed and shared across pipelines (see
+also §4):
+
+```
+cell_deg   = 1.0 / 60.0
+lon_bin    = floor((lon + 180.0) / cell_deg)      # int64, ∈ [0, 21600]
+lat_bin    = floor((lat +  90.0) / cell_deg)      # int64, ∈ [0, 10800]
+lon_center = -180.0 + (lon_bin + 0.5) * cell_deg
+lat_center =  -90.0 + (lat_bin + 0.5) * cell_deg
+cell_id    = f"1min_{lat_bin}_{lon_bin}"          # string, join key
+```
+
+Already enforced by `jamstec/multibeam/code/04a_make_multibeam_file_cells.py`
+and `ncei/code/07_aggregate_file_cells_1min.py`. **All future 1-arcmin cell
+consumers MUST use this exact string format** — Step 04B and the Step 06b
+validation joins key on `cell_id`.
+
+### 13.3 Duplicate convention — exact float (production)
+
+Production duplicate detection uses **exact-float equality** on
+`(lon, lat, depth_m_positive_down)`:
+
+```python
+triples = pd.DataFrame({"lon": lon, "lat": lat, "depth": depth})
+dup_mask = triples.duplicated(keep="first")
+n_unique_triples = (~dup_mask).sum()
+```
+
+Implemented in `ncei/code/06_supplementary_quality_check.py` (Step 03B
+Check B) and reused per-cell-scoped in `ncei/code/07_aggregate_file_cells_1min.py`
+(the per-cell `cell_key` column scopes dedup within a cell).
+
+**REJECTED for production**: the Step 04A0 audit
+(`ncei/docs/step04_aggregation_design_audit.md` §2) used a coarser
+`(round(lon, 4), round(lat, 4), round(depth, 1))` triple. That was an
+audit-time approximation and produced misleading dup-ratio predictions
+(audit said mb branch dup ≈ 0.695; actual exact-float is 0.123). Audit-
+rounded triples MUST NOT enter production code or downstream weighting.
+
+### 13.4 duplicate_ratio definition
+
+```
+duplicate_ratio = 1.0 - n_unique_triples / n_points_pass
+```
+
+Undefined when `n_points_pass == 0`; rows with zero pass-points are
+excluded from cell output before this column is computed.
+
+### 13.5 Step 04A vs Step 04B scope
+
+- **Step 04A** (`07_aggregate_file_cells_1min.py`): per-track / per-file
+  1-arcmin cells, one parquet per input file under
+  `ncei/derived/{singlebeam,multibeam,regional_mrar}/file_cells_1min/`.
+  **No** cross-track merge inside a branch. **No** cross-branch merge.
+- **Step 04B** (not yet implemented): source-specific global merge within
+  ONE branch (all singlebeam tracks → one singlebeam cells parquet, etc.).
+  Still **no** cross-branch merge.
+- **A/B/C quality tiers**: deferred. Calibrated against real per-cell
+  distributions after Step 04B lands; bringing them forward to Step 04A
+  is out of scope.
+- **Cross-source validation cells** (sb + mb + JAMSTEC + M.rar combined):
+  deferred. Single-source merges (Step 04B) must precede any combined
+  product.
+
+### 13.6 Branch semantics — three disjoint branches
+
+| branch | source | populated by | row count |
+|---|---|---|---:|
+| `singlebeam` | NCEI nc + xyz (singlebeam only) | nc-primary for intersect tracks; xyz-only otherwise | 5,365 |
+| `multibeam_ncei` | NCEI xyz (multibeam only) | 11 AUV Sentry + 6 misc | 17 |
+| `regional_mrar` | 周帅-provided M.rar processed multibeam | 3 quadrant partitions | 3 |
+
+M.rar's `regional_mrar` branch stays **distinct from** `multibeam_ncei`
+even though both are multibeam-class. They come from different processing
+pipelines, different sign conventions (pre-PR-F: nc/xyz positive-down,
+M.rar raw negative-down), and different provenance opacity.
+
+**Don't** collapse `regional_mrar` into `multibeam_ncei` for Step 04B
+merging — keep three branch-specific outputs. Cross-source combining
+(if it happens at all) is a later step with explicit conflict rules.
+
+### 13.7 Branch derivation rule
+
+The supplementary manifest
+(`ncei/manifests/bathymetry_entry_manifest_supplementary.parquet`) has no
+`branch` column; derive it deterministically from `source_priority` +
+`instrument_class_pred`:
+
+```python
+if source_priority == "regional":           branch = "regional_mrar"
+elif source_priority == "primary":
+    if instrument_class_pred == "multibeam":  branch = "multibeam_ncei"
+    elif instrument_class_pred == "singlebeam": branch = "singlebeam"
+# source_priority ∈ {"supplementary", "skip"} → excluded from Step 04A workload
+```
+
+Assert per-branch row counts at runtime (5,365 / 17 / 3) and fail loudly
+on mismatch — silent drift here would scramble downstream weighting.
+
+### 13.8 manual_review_flag composition
+
+The Step 04A `manual_review_flag` column is the union of three sources
+(informational only — does NOT gate inclusion):
+
+1. `depth_anomaly_flag = True` from the Step 03B supplementary manifest
+   (primary tracks only, ≤10 such rows in current run).
+2. 96 bbox-only divergent intersect track_ids from
+   `ncei/manifests/intersect_divergence_audit.parquet`, filtered by
+   `bbox_overlap_jaccard < 0.5 AND valid_count_ratio ∈ [0.5, 2.0] AND
+   depth_med_ratio ∈ [0.5, 2.0]`.
+3. Explicit override: `{"f-10-89-cp"}` (already covered by #2 in the
+   current run; kept defensive for future threshold tightening).
+
+Total in current full run: 106 (10 + 96 + 0 extra). Downstream consumers
+choose whether to drop, downweight, or quarantine these tracks; Step 04A
+emits the flag and lets later stages decide.
+
+### 13.9 References
+
+- Implementation: `ncei/code/07_aggregate_file_cells_1min.py`
+  (`AGGREGATION_VERSION = "ncei_cells_v0.1.0"`).
+- Run report: `ncei/docs/step04a_file_cells_1min_report.md`.
+- Design audit (history, supersedes audit-rounded dup convention):
+  `ncei/docs/step04_aggregation_design_audit.md`.
+- Cell-id contract (cross-pipeline): see also §4 and
+  `.trellis/spec/backend/data-contracts.md` §file-cell schema.
