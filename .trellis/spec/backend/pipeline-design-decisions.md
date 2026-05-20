@@ -474,3 +474,133 @@ emits the flag and lets later stages decide.
   `ncei/docs/step04_aggregation_design_audit.md`.
 - Cell-id contract (cross-pipeline): see also §4 and
   `.trellis/spec/backend/data-contracts.md` §file-cell schema.
+
+---
+
+## 14. NCEI Step 04B — source-specific global 1-arcmin cell merge
+
+Locks in the production conventions for
+`ncei/code/08_merge_branch_cells_1min.py` so future merges across the
+three NCEI branches stay reproducible and consumer-readable.
+
+### 14.1 MERGE_VERSION
+
+`MERGE_VERSION = "ncei_cells_merge_v0.1.0"` — module constant in
+`ncei/code/08_merge_branch_cells_1min.py`, written into every row of
+`ncei/manifests/cells_1min_manifest.parquet`. Bump on any schema or
+semantics change.
+
+### 14.2 Final representative depth — median of medians (contractual)
+
+For each (branch, cell_id):
+
+```
+median_depth_m = median([row.median_depth_m for row in per_file_cells_in_cell])
+```
+
+The final cell depth is the **median of per-file-cell medians**, NOT a
+median over pooled pass-points and NOT weighted by `n_points_pass`. This
+is the contract — downstream weighting / calibration adjusts via the
+sidecar fields (n_unique_triples_total, manual_review_*), never by
+recomputing depth from pooled points.
+
+### 14.3 Per-cell sidecar fields
+
+- `n_track_cells` = number of contributing per-file-cell rows.
+- `n_tracks` = number of distinct `track_id` contributing.
+- `n_points_pass_total` = sum of per-file-cell `n_points_pass`.
+- `n_unique_triples_total` = sum of per-file-cell `n_unique_triples`.
+  **Note**: this is a sum across files, NOT a re-dedup across files —
+  the per-file exact-float dedup (§13.3) remains the authoritative
+  dedup boundary. Inter-file duplicates within a cell are documented
+  in the run report; addressing them is deferred to a later stage if
+  needed.
+- `duplicate_ratio_cell = 1 - n_unique_triples_total / n_points_pass_total`.
+- Spread statistics over per-file-cell medians:
+  `mean_of_track_medians`, `std_of_track_medians` (ddof=1; NaN if
+  n_track_cells==1), `iqr_of_track_medians` (p75−p25),
+  `min_track_median`, `max_track_median`, `range_track_median`.
+
+### 14.4 Provenance count columns
+
+Integer counts of per-file-cell rows by category (allow downstream
+filters / inspections without re-reading Step 04A outputs):
+
+- `n_source_ncei_nc`, `n_source_ncei_xyz`, `n_source_mrar_zhoushuai`
+- `n_completeness_nc_xyz_intersect`, `n_completeness_xyz_only`,
+  `n_completeness_nc_only`
+- `n_instrument_singlebeam`, `n_instrument_multibeam`
+
+The `n_source_mrar_zhoushuai` counter must defensively accept the union
+`{"mrar_zhoushuai", "mrar_processed", "ncei_mrar"}` since pre-Step-03A
+script generations used different literals. Current data emits
+`mrar_zhoushuai` (canonical going forward); the multi-literal acceptance
+is kept for re-run / archive interop.
+
+### 14.5 manual_review_* aggregation (informational, not exclusion)
+
+- `manual_review_any` = **OR** over contributors' `manual_review_flag`
+  (not AND, not majority).
+- `manual_review_track_cell_count` = number of contributing rows with
+  flag=True.
+- `manual_review_unique_triples` = sum of `n_unique_triples` over
+  flagged contributors.
+- `manual_review_unique_triples_share` =
+  `manual_review_unique_triples / n_unique_triples_total` (NaN when
+  `n_unique_triples_total == 0`).
+- `manual_review_reasons` = semicolon-joined sorted distinct reason
+  codes. Step 04A per-file-cell parquets do NOT carry a per-row reason
+  column; consumers fall back to the constant `"step03b_flag"` when
+  reading the source (Step 04B handles this transparently).
+
+**Do NOT use `manual_review_any` as a hard exclusion.** All flagged
+cells are retained in the output; downstream consumers choose whether
+to drop, downweight, or quarantine.
+
+### 14.6 Output partitioning — hive-flavored (cross-tool readability)
+
+Per-branch datasets live under
+`ncei/derived/{singlebeam,multibeam,regional_mrar}/cells_1min/`,
+written via `pyarrow.dataset.write_dataset(..., partitioning=["branch",
+"lat_band_10deg"], partitioning_flavor="hive")`. Paths look like:
+
+```
+ncei/derived/multibeam/cells_1min/branch=multibeam_ncei/lat_band_10deg=30/part-0.parquet
+```
+
+The `partitioning_flavor="hive"` is **required** (default directory
+flavor strips the partition keys on standard hive-reader reads, which
+silently loses `branch` and `lat_band_10deg`). Sample / test100 modes
+write to suffixed roots (`cells_1min_sample/`, `cells_1min_test100/`)
+so they never collide with canonical full-run output.
+
+### 14.7 `lat_band_10deg` derivation
+
+```
+lat_band_10deg = floor(lat_center / 10) * 10    # int64, ∈ {-90, -80, ..., 80}
+```
+
+18 bands. Used only for partitioning; not part of the per-row
+user-facing schema directly (but reappears on hive read via the
+partition key path).
+
+### 14.8 Step 04A vs Step 04B vs future cross-branch step
+
+Reaffirms §13.5:
+
+- **Step 04A** (`07_*.py`): per-track / per-file cells, one parquet
+  per input file. No merge.
+- **Step 04B** (`08_*.py`): single-branch merge — sb tracks → sb
+  cells, mb tracks → mb cells, M.rar quadrants → mrar cells. No
+  cross-branch merge.
+- **Cross-source product** (sb + mb + JAMSTEC + M.rar): deferred. Must
+  follow a later spec section with explicit conflict / priority rules.
+
+### 14.9 References
+
+- Implementation: `ncei/code/08_merge_branch_cells_1min.py`
+  (`MERGE_VERSION = "ncei_cells_merge_v0.1.0"`).
+- Run report: `ncei/docs/step04b_cells_1min_merge_report.md`.
+- Top-level manifest: `ncei/manifests/cells_1min_manifest.parquet`
+  (3 rows, one per branch).
+- Predecessor: §13 (Step 04A) — all §13 conventions remain in force.
