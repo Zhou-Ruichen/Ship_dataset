@@ -73,6 +73,22 @@ Basename set comparison (2026-05-15):
 → Union strategy required; `source_completeness` manifest column
 records each track's source side(s).
 
+### nc/xyz intersect row-count asymmetry — corrected interpretation (2026-05-20)
+
+On the 1,850 intersect pairs, nc raw-row counts often exceed xyz
+row counts (median 1.37×, up to ~189× in the long tail). The earlier
+framing in PRD Finding 19c — "xyz is a decimated re-export of nc" —
+is **wrong**. Real cause: nc preserves *all* MGD77+ rows, **including
+rows with NaN-masked depth** (FAA / gravity-only samples along
+no-bathymetry segments), while xyz dropped no-depth rows at upstream
+export. On **valid-depth points specifically, nc and xyz agree to
+~0.0001** (20-pair sample mean ratio 0.9999; 20/20 pairs in
+[0.95, 1.05]). The "prefer nc on intersect" downstream rule still
+holds, but its real justification is **richer per-point metadata
+(`time`, `gobs`, `faa`)** — NOT more valid-depth points. See PRD
+Finding 19c `[2026-05-20 correction]` block and
+`ncei/docs/step03_point_quality_check_report.md` §3b.
+
 ## Known unknowns
 
 1. **Why are 168 nc tracks missing from this xyz bundle?** Could be

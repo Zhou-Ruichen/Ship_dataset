@@ -102,6 +102,23 @@ intersect set kept as supplementary audit / sensitivity layer.
 Knowledge update only — no PR-F code change. Full evidence in PRD
 section "Finding 2026-05-19c".
 
+### [2026-05-20 correction] — "xyz is decimated" framing was wrong
+
+The "xyz is decimated" framing above is **incorrect** and is
+preserved here only because it appears in the original PRD Finding
+19c text. Real cause (identified by Step 03A point-check, commit
+`edc9c40`; confirmed in this session by 20-pair sample + 1,850-pair
+aggregate): nc preserves *all* MGD77+ rows including NaN-depth ones
+(FAA / gravity-only samples on no-bathymetry segments), while xyz
+already dropped no-depth rows at upstream export. On **valid-depth
+points specifically, nc and xyz agree to ~0.0001** (20-pair sample
+mean ratio 0.9999; 20/20 pairs in [0.95, 1.05]). The
+"prefer nc on intersect" rule still holds, but its real
+justification is **richer per-point metadata (`time`, `gobs`, `faa`)**,
+NOT more valid-depth points. Full corrected interpretation in PRD
+Finding 19c `[2026-05-20 correction]` block; root-cause writeup in
+`ncei/docs/step03_point_quality_check_report.md` §3b.
+
 ## Layout map
 
 ```

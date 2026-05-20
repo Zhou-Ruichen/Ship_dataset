@@ -1089,6 +1089,123 @@ and `xyz_points_raw_manifest.parquet`.
 
 ## Finding 2026-05-19c: nc/xyz intersect asymmetry (xyz is decimated, not equivalent)
 
+### [2026-05-20 correction] — "xyz is decimated" framing was wrong
+
+The original framing in this Finding (text preserved verbatim below
+as historical record) blamed the nc-vs-xyz row-count asymmetry on
+**xyz being a decimated / lossy re-export of nc**. That framing is
+**incorrect**. The real cause was identified by Step 03A point-quality
+work (commit `edc9c40`) and confirmed by a 20-pair sample +
+1,850-pair population check in this session (2026-05-20):
+
+- **nc** preserves *all* MGD77+ rows from the source NetCDF, **including
+  rows where `depth` is NaN-masked** (the row exists, but the depth
+  value is missing). These NaN-depth rows are what Step 03A
+  point-check then drops as `invalid_depth_pos` / `missing_core`.
+- **xyz** is an upstream export that **dropped no-depth rows at export
+  time** — every xyz row corresponds to a finite-depth observation.
+
+So when Finding 19c's table said "kea09-69: nc=4,915, xyz=26,
+ratio=189×", that's **4,915 raw rows in nc of which only 26 have
+valid depth** vs **26 finite-depth rows in xyz**. The two corpora
+agree on valid-depth points; the apparent asymmetry is the
+NaN-masked-but-row-present rows on the nc side that xyz never emitted.
+
+**Sample evidence (20-pair random sample, seed=42, on the
+1,850 intersect pairs)**:
+
+| track_id | nc_raw | nc_valid | xyz_rows | xyz_finite_depth | nc_valid / xyz_finite |
+|---|---:|---:|---:|---:|---:|
+| 85005111 | 28,738 | 21,322 | 21,322 | 21,322 | 1.0000 |
+| 86000711 |  7,334 |  5,865 |  5,865 |  5,865 | 1.0000 |
+| 87000311 | 21,299 | 20,613 | 20,613 | 20,613 | 1.0000 |
+| a2093l20 |  4,635 |  3,540 |  3,540 |  3,540 | 1.0000 |
+| ch8901   | 18,206 |  2,634 |  2,634 |  2,634 | 1.0000 |
+| ht8402   |  1,515 |  1,515 |  1,516 |  1,516 | 0.9993 |
+| ht861102 |  2,028 |  1,930 |  1,931 |  1,931 | 0.9995 |
+| ht91t232 |  1,524 |  1,471 |  1,472 |  1,472 | 0.9993 |
+| jare27l1 |  9,733 |  7,738 |  7,738 |  7,738 | 1.0000 |
+| jare32l5 | 20,834 |  3,528 |  3,529 |  3,529 | 0.9997 |
+| ocpanafz |  9,098 |  8,924 |  8,924 |  8,924 | 1.0000 |
+| rc1005   | 10,739 |  9,014 |  9,014 |  9,014 | 1.0000 |
+| rc1311   |  9,217 |  6,541 |  6,541 |  6,541 | 1.0000 |
+| rc1612   | 13,733 |  6,820 |  6,820 |  6,820 | 1.0000 |
+| rc2115   |  8,597 |  6,254 |  6,254 |  6,254 | 1.0000 |
+| rc2405   | 16,302 |  2,706 |  2,706 |  2,706 | 1.0000 |
+| rc2911   | 38,487 |  7,422 |  7,422 |  7,422 | 1.0000 |
+| v1805    |  1,401 |  1,118 |  1,118 |  1,118 | 1.0000 |
+| v1913    |  3,798 |  3,035 |  3,035 |  3,035 | 1.0000 |
+| west06mv | 44,013 | 38,219 | 38,219 | 38,219 | 1.0000 |
+
+→ **Mean ratio nc_valid / xyz_finite = 0.9999; median = 1.0000;
+20/20 pairs land in [0.95, 1.05].** Population aggregate on all
+1,850 intersect pairs: nc total **valid** points (sum of
+`n_points_pass` over intersect) = 24,297,773; xyz total
+`n_points_in` = 24,304,908 — they match to ~3 parts per 1,000.
+(The single-track off-by-one on some pairs is the same upstream
+"extra header row in xyz" artifact already noted in the original
+Finding 19c bottom-10 table, e.g. `ht8402`: nc_valid=1,515 vs
+xyz=1,516.)
+
+Spot-check anchor: **`64018.nc` has 11,639 raw rows but only 112
+valid-depth rows; `64018.xyz` has 113 rows, all valid** — exactly
+matches the corrected framing.
+
+**Reference**: see Step 03A report
+`ncei/docs/step03_point_quality_check_report.md` §3b for the
+NaN-source root-cause writeup and commit `edc9c40` for the
+point-check implementation that surfaced it.
+
+### Corrected interpretation: MGD77+ NaN masks
+
+- nc row count includes MGD77+ entries with masked / NaN depth
+  (gravity-only fixes, sensor gaps, FAA observations along
+  no-bathymetry segments).
+- xyz row count was already filtered to finite-depth observations
+  by the upstream NCEI export pipeline.
+- For valid-depth counting, **nc and xyz are equivalent on the
+  1,850-pair intersect** (ratio ≈ 1.000, modulo ±1-row header
+  artifacts).
+- The original Finding 19c's "median ratio 1.37" and
+  "39 tracks ≥10×" reflect **raw rows including NaN-depth entries on
+  the nc side** — not a real decimation gap.
+- The Finding 19c claim that the 1,850-pair intersect's per-track
+  shrinkage in xyz "nets out" the 14k/track aggregate parity is
+  therefore inverted: there is no per-track shrinkage on the
+  valid-depth axis; the corpora agree.
+
+### Reaffirmed downstream policy: nc-primary, different reason
+
+The Step 03A / aggregation rule "**prefer nc on intersect tracks**"
+**still holds**, but for a different reason than the original
+Finding 19c claimed:
+
+| Original reason (wrong) | Corrected reason |
+|---|---|
+| nc has more bathymetry points than xyz | (false — they match on valid-depth) |
+| 100× outliers in long tail | (false — those reflect NaN-masked nc rows) |
+| nc has standardized MGD77+ columns (time, gobs, faa) that xyz lacks | **still true and now the primary reason** |
+| nc is mb-filtered upstream → cleaner | still true (orthogonal to the row-count question) |
+
+→ Use nc on intersect tracks because of **richer per-point metadata
+(time/gobs/faa) + mb-pre-filtering**, NOT because of more
+valid-bathymetry points. Future downstream readers must not
+mis-justify the rule as "nc has more depth points".
+
+### Where this correction is recorded
+
+- This PRD `[2026-05-20 correction]` block (canonical).
+- `ncei/SOURCE.md` — pointer to this corrected interpretation.
+- `ncei/tracklines_xyz/SOURCE.md` — note appended near nc/xyz
+  asymmetry discussion.
+- Cross-reference: `ncei/docs/step03_point_quality_check_report.md`
+  §3b (the upstream NaN-source writeup that triggered the
+  correction).
+
+---
+
+### [Original wording preserved as historical record below — superseded by the 2026-05-20 correction block above.]
+
 Refines the 2026-05-16 "ncei/ corpora relationship clarification"
 finding above. The "14k pts/track" parity claim is correct at the
 **global aggregate** level (28.9M nc / 2,018 ≈ 14,319; 75M sb-portion
