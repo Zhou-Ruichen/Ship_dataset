@@ -604,3 +604,123 @@ Reaffirms §13.5:
 - Top-level manifest: `ncei/manifests/cells_1min_manifest.parquet`
   (3 rows, one per branch).
 - Predecessor: §13 (Step 04A) — all §13 conventions remain in force.
+
+---
+
+## 15. NCEI Step 05A — source-specific overlap residual analysis
+
+Locks in the production conventions for
+`ncei/code/09_source_specific_overlap_residuals.py`. Descriptive
+analysis only; **no filtering, no exclusion, no quality tiers**.
+
+### 15.1 OVERLAP_VERSION
+
+`OVERLAP_VERSION = "ncei_overlap_v0.1.0"` — module constant, written
+into every output parquet as an `analysis_version` column. Bump on any
+schema or semantics change.
+
+### 15.2 Residual formula (contractual)
+
+For each branch and each cell with `n_track_cells >= 2`, and each
+contributing per-file-cell row:
+
+```
+residual_m     = per_file_cell.median_depth_m - branch_cell.median_depth_m
+abs_residual_m = abs(residual_m)
+```
+
+The reference depth is the §14.2 median-of-per-file-cell-medians, NOT
+a pooled-point median and NOT a re-weighted central tendency. Cells
+with `n_track_cells == 1` have residual ≡ 0 by construction and are
+EXCLUDED from the per-track-cell residuals output — they carry no
+information about cross-track consistency.
+
+### 15.3 Input source compliance (closed boundary)
+
+Step 05A consumes Step 04A + Step 04B outputs ONLY:
+
+- Step 04A per-file-cell parquets under
+  `ncei/derived/{singlebeam,multibeam,regional_mrar}/file_cells_1min/`,
+  driven by `ncei/manifests/file_cells_1min_manifest.parquet`.
+- Step 04B hive-partitioned datasets under
+  `ncei/derived/{singlebeam,multibeam,regional_mrar}/cells_1min/`,
+  driven by `ncei/manifests/cells_1min_manifest.parquet`.
+
+It MUST NOT read `points_checked/`, `points_raw/`, the PR-F raw M.rar
+extract, or any external reference grid (GEBCO / ETOPO / SRTM15 /
+SWOT). External-grid validation is the job of a later step (Step 11 /
+PR-G).
+
+### 15.4 Branch-disjoint join contract
+
+The (branch, cell_id, lon_bin, lat_bin) join key is fully scoped by
+`branch` — left and right sides of every join must agree on `branch`.
+Same `cell_id` appearing in two branches refers to two physically
+distinct rows from two disjoint data sources; cross-branch residuals
+are NOT meaningful at this stage and are explicitly forbidden until a
+later cross-source spec section justifies them.
+
+### 15.5 Output artifacts (5 files + report)
+
+All under `ncei/derived/overlap_bias_1min/` (canonical) or suffixed
+roots `overlap_bias_1min_sample/` / `overlap_bias_1min_test100/`:
+
+1. `source_specific_overlap_residuals.parquet` — per-row residuals
+   (one row per contributing per-file-cell where the branch cell has
+   `n_track_cells >= 2`). 21+ columns. Carry both per-file-cell and
+   branch-cell sidecar fields for downstream filtering without re-join.
+2. `track_bias_summary.parquet` — one row per track with median /
+   mean / MAD / IQR / RMSE / p95-abs / max-abs residual,
+   duplicate_ratio_summary, manual_review_cell_share.
+3. `branch_overlap_summary.parquet` — 3 rows (one per branch) with
+   n_branch_cells_total, n_overlap_cells, overlap_share, residual
+   percentiles, abs-residual percentiles, branch RMSE.
+4. `branch_overlap_breakdowns.tsv` — residual stats sliced by
+   source_type, manual_review_flag, and `duplicate_ratio_cell` bin
+   `[0, 0.01) | [0.01, 0.1) | [0.1, 0.5) | [0.5, 1.0]`.
+5. `manual_review_overlap_summary.tsv` — 6 rows (3 branches × 2
+   flag values).
+
+Plus markdown: `ncei/docs/step05a_source_specific_overlap_bias_report.md`.
+
+Logs: `ncei/output/logs/09_source_specific_overlap_residuals.log`
+with run-label suffix.
+
+### 15.6 Descriptive-only mandate
+
+Step 05A produces ZERO filter / exclude / drop / quality-tier columns.
+Even tracks with very high `p95_abs_residual_m` are kept verbatim in
+all outputs; downstream consumers decide what to drop or downweight.
+
+This is a deliberate decoupling: the analysis stage publishes evidence
+(residual distributions, top-N problem tracks, source-type and dup-
+ratio breakdowns), the policy stage (later steps) chooses thresholds
+based on that evidence.
+
+### 15.7 Step 05A vs Step 05B vs cross-source step
+
+- **Step 05A** (`09_*.py`): single-branch overlap residuals
+  (per-branch within-source consistency).
+- **Step 05B** (not yet implemented): cross-branch overlap audit
+  (e.g. cell appears in both singlebeam and multibeam_ncei → compute
+  the cross-source residual on the same cell_id). Branches stay
+  disjoint at the residual-row level; the audit is a per-cell join
+  across branches, not a merge.
+- **Cross-source product** (sb + mb + JAMSTEC + M.rar combined
+  authoritative depth): still deferred. Requires explicit priority
+  rules and a separate spec section.
+
+### 15.8 Performance notes (informational)
+
+Full sb branch is the runtime bottleneck (~57 min wall on current
+hardware for 5,365 file-cell parquets joined against 14.6M branch
+cells). The materialized-pd.Index pattern in the implementation cuts
+the per-file isin-filter cost by ~6×; do not regress it.
+
+### 15.9 References
+
+- Implementation: `ncei/code/09_source_specific_overlap_residuals.py`
+  (`OVERLAP_VERSION = "ncei_overlap_v0.1.0"`).
+- Run report: `ncei/docs/step05a_source_specific_overlap_bias_report.md`.
+- Predecessors: §13 (Step 04A) + §14 (Step 04B) — all conventions
+  remain in force.
