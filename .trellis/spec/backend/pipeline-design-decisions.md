@@ -1142,3 +1142,142 @@ suffix.
 - Run report: `ncei/docs/step06b_cell_quality_flags_report.md`.
 - Predecessors: §13 + §14 + §15 + §16 + §17 — all conventions remain
   in force.
+
+---
+
+## 19. NCEI Step 07B — build validation-cell products (Path B)
+
+Locks in conventions for `ncei/code/13_build_validation_cells.py`.
+This stage produces the **5 final validation-cell products** that
+downstream model-validation steps (Step 11 etc.) consume. It joins
+NCEI Step 04B+06B output with JAMSTEC multibeam validation cells
+under a fixed source-precedence rule.
+
+### 19.1 VALIDATION_PRODUCT_VERSION
+
+`VALIDATION_PRODUCT_VERSION = "ncei_validation_cells_v0.1.0"` —
+module constant in `ncei/code/13_build_validation_cells.py`, written
+as `validation_product_version` on every output row of every product.
+Bump on any schema or precedence-rule change.
+
+### 19.2 Source precedence (fixed; do not invert)
+
+```
+JAMSTEC mb  >  NCEI mb (strict primary)  >  NCEI sb high-confidence (expanded primary fill)
+regional_mrar → always regional_experiment (NEVER primary, NEVER expanded primary)
+```
+
+This is implemented via:
+- Strict primary = JAMSTEC ⊕ NCEI mb (provably disjoint at present —
+  see §19.5).
+- Expanded primary = strict primary ⊕ sb-fill (sb rows with
+  `cell_id NOT IN strict_primary` AND `quality_tier='high_confidence'`
+  AND `use_for_primary_validation=True`).
+- mrar appears ONLY in regional_mrar_experiment and as `regional` rows
+  in the catalog; assertion enforces 0 mrar rows in strict / expanded
+  primary products.
+
+### 19.3 5 output products (canonical layout)
+
+Under `ncei/derived/validation_cells_1min/` (full) or suffixed
+`_sample/` / `_test100/`:
+
+1. `strict_primary_multibeam_cells.parquet` — JAMSTEC mb + NCEI mb
+   primary (`source_provider` ∈ {`jamstec`, `ncei_multibeam`}).
+   Full count: **2,398,774**.
+2. `expanded_primary_ship_cells.parquet` — strict primary + sb
+   high-confidence gap-fill (`expanded_fill` bool, True for sb fill,
+   False for baseline; `precedence_resolution` string tags
+   `jamstec_over_sb` / `ncei_mb_over_sb` / etc.). cell_id is unique
+   (max-count assertion). Full count: **2,732,689**.
+3. `supplementary_singlebeam_cells.parquet` — sb with
+   `use_for_supplementary_validation=True`; `branch_role=
+   'supplementary_coverage'`. Hive-partitioned by `lat_band_10deg`.
+   Full count: **12,277,633**.
+4. `regional_mrar_experiment_cells.parquet` — all mrar with
+   `branch_role='regional_experiment'` and `sensitivity_only_flag`
+   carried from Step 06B. Hive-partitioned by `lat_band_10deg`.
+   Full count: **9,019,383**.
+5. `validation_cell_catalog.parquet` — long-format UNION (Product 1 +
+   Product 3 + Product 4), one row per (cell_id, product_label).
+   Hive-partitioned by `product_label`. Full count: **24,029,705**.
+   `final_primary_source` column documents Product 2's chosen source
+   for the corresponding cell when one exists.
+
+Plus markdown: `ncei/docs/step07b_validation_cells_report.md`.
+
+Logs: `ncei/output/logs/13_build_validation_cells.log` (run-label
+suffixed).
+
+### 19.4 Weight scale preservation (must NOT rescale)
+
+| source_provider | weight range |
+|---|---|
+| `jamstec` | {0.4, 0.7, 1.0} (legacy A/B/C tier) |
+| `ncei_multibeam` | [0.1, 0.95] (Step 06B rule evaluation) |
+| `ncei_singlebeam` | [0.1, 0.95] (Step 06B; only the high-confidence subset enters Product 2) |
+
+Step 07B MUST NOT rescale or normalize either weight scale.
+Downstream consumers (Step 11) choose how to combine the two scales.
+Runtime assertion: `max(jamstec weights) ≤ 1.0` AND
+`max(ncei weights) ≤ 0.95`.
+
+### 19.5 JAMSTEC × NCEI mb disjointness (current state, must verify each run)
+
+At the current upstream R2 classifier state, JAMSTEC mb and NCEI mb
+have **0 cell_id overlap** (JAMSTEC is Pacific-dominated; NCEI mb is
+Atlantic + Southern-Ocean AUV Sentry). Step 07B asserts this at
+runtime; non-zero overlap means upstream R2 classification has
+shifted and the precedence rule must be re-confirmed before
+production.
+
+### 19.6 AUV Sentry policy in validation products
+
+Cells matching the Step 06B rule `mb_v0_highdup_sentry_downweight`
+(rule 9, weight 0.55) are **retained** in strict_primary and
+expanded_primary with `auv_sentry_flag=True` AND
+`source_risk_class='auv_sentry_highdup'`. They are NOT excluded.
+Downstream consumers may downweight further or quarantine, but the
+"downweight, never zero" §17.5 / §18 principle is preserved at this
+stage. Full count of AUV Sentry cells in strict_primary: 8.
+
+### 19.7 JAMSTEC A/B/C → quality_tier mapping (fixed)
+
+| JAMSTEC tier | quality_tier |
+|---|---|
+| A | high_confidence |
+| B | medium_confidence |
+| C | low_confidence |
+
+`evidence_class` for JAMSTEC rows is the literal `jamstec_legacy`
+(distinct from §15's `{within, cross, both, none}`); this flag tells
+downstream consumers the row came from a different evidence pipeline
+that pre-dates §15.
+
+### 19.8 Mandatory runtime assertions (must all PASS)
+
+1. **JAMSTEC × NCEI mb disjointness == 0**.
+2. **regional_mrar never primary or expanded primary** (0 rows in
+   Products 1 or 2).
+3. **Per-product full-mode count within ±0.5% of §19.3 numbers**.
+4. **AUV Sentry preserved in strict primary** (≥ 5 cells).
+5. **Weights not rescaled** (JAMSTEC ≤ 1.0, NCEI ≤ 0.95).
+6. **expanded_primary cell_id uniqueness** (max count per cell_id = 1).
+
+Implementation MUST exit non-zero on any failure.
+
+### 19.9 Step 04B / 06B / JAMSTEC immutability
+
+Step 07B is a **read-only consumer** of upstream Step 04B cells,
+Step 06B quality flags, and JAMSTEC primary validation cells. It
+MUST NOT modify any of these inputs.
+
+### 19.10 References
+
+- Implementation: `ncei/code/13_build_validation_cells.py`
+  (`VALIDATION_PRODUCT_VERSION = "ncei_validation_cells_v0.1.0"`).
+- Step 07A preflight: `ncei/docs/step07a_validation_cell_preflight_report.md`
+  + `.trellis/tasks/05-11-singlebeam-integration/research/step07a_validation_cell_preflight.md`.
+- Run report: `ncei/docs/step07b_validation_cells_report.md`.
+- Predecessors: §13 + §14 + §15 + §16 + §17 + §18 — all conventions
+  remain in force.
