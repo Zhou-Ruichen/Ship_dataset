@@ -724,3 +724,118 @@ the per-file isin-filter cost by ~6×; do not regress it.
 - Run report: `ncei/docs/step05a_source_specific_overlap_bias_report.md`.
 - Predecessors: §13 (Step 04A) + §14 (Step 04B) — all conventions
   remain in force.
+
+---
+
+## 16. NCEI Step 05B — cross-branch overlap audit
+
+Locks in conventions for
+`ncei/code/10_cross_branch_overlap_audit.py`. Like Step 05A, this stage
+is **descriptive only** — it joins Step 04B branch cells across branches,
+emits residuals + sidecar fields, and lets policy steps decide what to
+do with them.
+
+### 16.1 CROSS_OVERLAP_VERSION
+
+`CROSS_OVERLAP_VERSION = "ncei_cross_overlap_v0.1.0"` — module constant,
+written into every output parquet row as a `cross_analysis_version`
+column. Bump on any schema or semantics change.
+
+### 16.2 Pair ordering (canonical, fixed)
+
+The 3 unordered branch pairs are normalized to alphabetical
+`left < right` order, with stable labels:
+
+| pair_label | left_branch | right_branch |
+|---|---|---|
+| `mb_vs_mrar` | multibeam_ncei | regional_mrar |
+| `mb_vs_sb` | multibeam_ncei | singlebeam |
+| `mrar_vs_sb` | regional_mrar | singlebeam |
+
+`residual_m = left.median_depth_m - right.median_depth_m`. Sign matters
+and is fixed by this table — do NOT flip residual direction in
+downstream consumers.
+
+### 16.3 Geometry consistency (hard contract)
+
+Step 04B cell_id is a deterministic function of `lon_bin`/`lat_bin`
+(§13.2). Two cells with the same cell_id from different branches MUST
+have identical `lon_bin`, `lat_bin`, `lon_center`, `lat_center`.
+Step 05B asserts this and **raises** on any mismatch (silently
+warning here would hide a corrupted upstream Step 04B output).
+`lat_band_10deg` mismatch is informational only since it's a partition
+key derivative, not part of the join key.
+
+### 16.4 Input source compliance (closed boundary)
+
+Step 05B consumes Step 04B hive-partitioned datasets ONLY, driven by
+`ncei/manifests/cells_1min_manifest.parquet`. It MUST NOT read:
+
+- Step 04A per-file-cells (use Step 05A for that level of detail).
+- `points_checked/`, `points_raw/`, or the PR-F raw M.rar extract.
+- `jamstec/` data (cross-source merge is a separate spec section).
+- External reference grids (GEBCO / ETOPO / SRTM15 / SWOT).
+
+### 16.5 Audit-only mandate — no cross-branch MERGED depth
+
+Step 05B emits **both** branches' representative depths plus the
+residual; it does NOT compute a single "cross-source authoritative"
+depth (e.g. arithmetic mean of left/right). Cross-branch fusion is a
+later step with explicit priority rules — Step 05B's role is to
+quantify the disagreement, not resolve it.
+
+### 16.6 Output artifacts (3 files + report)
+
+All under `ncei/derived/cross_branch_overlap_1min/` (canonical) or
+suffixed roots `cross_branch_overlap_1min_sample/` /
+`cross_branch_overlap_1min_test100/`:
+
+1. `cross_overlap_cells.parquet` — 25 cols, one row per (pair_label,
+   cell_id) where both branches are populated. Carries left+right
+   median_depth_m, residual_m, abs_residual_m, plus left/right sidecar
+   fields (n_track_cells, n_tracks, n_unique_triples_total,
+   duplicate_ratio_cell, manual_review_any, iqr_of_track_medians) and
+   `cross_analysis_version`.
+2. `cross_overlap_pair_summary.parquet` — 3 rows (one per pair) with
+   n_left_cells_total, n_right_cells_total, n_overlap_cells,
+   overlap_share_of_left, overlap_share_of_right, residual
+   percentiles (p01/p05/p25/p50/p75/p95/p99), abs-residual percentiles
+   (p50/p95/p99), `rmse_pair_m`, manual_review-either counts,
+   cross_analysis_version, runtime_seconds.
+3. `cross_overlap_breakdowns.tsv` — residual stats sliced by
+   `manual_review_either`, `dup_ratio_either_bin`
+   (`[0, 0.01) | [0.01, 0.1) | [0.1, 0.5) | [0.5, 1.0]`), and
+   `lat_band_10deg` (left branch's band).
+
+Plus markdown: `ncei/docs/step05b_cross_branch_overlap_audit_report.md`.
+
+Logs: `ncei/output/logs/10_cross_branch_overlap_audit.log` with
+run-label suffix.
+
+### 16.7 Sample / test100 capping behavior
+
+In sample / test100 modes, `--limit-rows-per-pair` caps the per-pair
+retained rows after sorting by `cell_id` (defaults: sample=50,000,
+test100=200,000). The cap affects only what lands in
+`cross_overlap_cells.parquet`; the **pre-cap overlap count** is still
+reported in the pair summary and the report §6 cross-check table.
+This dual-reporting must remain — consumers reading the per-cell
+parquet need to know whether they have the full overlap or a sample.
+
+### 16.8 Step 05A vs 05B vs cross-source product
+
+- **Step 05A** (`09_*.py`): single-branch overlap residuals (within-source
+  consistency).
+- **Step 05B** (`10_*.py`): cross-branch overlap residuals (this section)
+  — same cell, different branches. Audit only, no merge.
+- **Cross-source authoritative product** (sb + mb + JAMSTEC + M.rar
+  merged depth): still deferred. Step 05B is its evidence base; the
+  fusion stage must consume Step 05B output as input.
+
+### 16.9 References
+
+- Implementation: `ncei/code/10_cross_branch_overlap_audit.py`
+  (`CROSS_OVERLAP_VERSION = "ncei_cross_overlap_v0.1.0"`).
+- Run report: `ncei/docs/step05b_cross_branch_overlap_audit_report.md`.
+- Predecessors: §13 (Step 04A) + §14 (Step 04B) + §15 (Step 05A) —
+  all conventions remain in force.
