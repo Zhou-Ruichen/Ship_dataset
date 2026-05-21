@@ -20,10 +20,18 @@ ship/
 │   └── archive/            # Frozen source archives (don't process directly).
 │       ├── source_zips/    # 国外水深第一/第二部分.zip etc. (~27 GB)
 │       └── bathymetry_data/# 776 cruise-named zips (~25 GB; same source as multibeam/raw/subzips)
-├── ncei/                   # NCEI singlebeam track corpus. Formerly
-│                           #   ship/NCEI_singlebeam/ — renamed 2026-05-16
-│                           #   (PR-B). PR-C will populate tracklines_{nc,xyz}/
-│                           #   and archive/ subdirs.
+├── ncei/                   # NCEI trackline corpus (singlebeam + multibeam
+│                           #   + regional M.rar). Formerly ship/NCEI_singlebeam/
+│                           #   — renamed 2026-05-16 (PR-B). 13-script pipeline
+│                           #   (01..13) covering R2 classification, point
+│                           #   standardization, cell aggregation (Step 04A/B),
+│                           #   overlap residuals (Step 05A/B), quality policy
+│                           #   calibration + enforcement (Step 06A/B), and
+│                           #   validation-cell products (Step 07A/B). Spec
+│                           #   §13–§19. Populated subdirs: tracklines_nc/,
+│                           #   tracklines_xyz/, archive/{zhoushuai_processed_M,
+│                           #   sunmingzhi_singlebeam_xyz}/, code/, docs/,
+│                           #   derived/, manifests/.
 ├── _common/                # Shared lib for jamstec + ncei pipelines (PR-D, 2026-05-16).
 │                           #   Houses R2 sb/mb classifier today; PR-E will migrate
 │                           #   Step 03/04a/04b/05/06a-d/07–11 algorithmic primitives

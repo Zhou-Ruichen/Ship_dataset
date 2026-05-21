@@ -185,6 +185,126 @@ and reference the dataset by `(cell_id, split)`.
 
 ---
 
+## NCEI cell-level quality flags (`ncei/derived/quality_flags_1min/cell_quality_flags_1min.parquet`)
+
+Output of NCEI Step 06B (`ncei/code/12_apply_quality_policy.py`). One
+row per Step 04B cell (23,636,397 total across 3 branches). Sidecar to
+Step 04B cells; do not mutate upstream.
+
+Authoritative source: spec §18.7 in
+`.trellis/spec/backend/pipeline-design-decisions.md`.
+
+31 columns in this exact order:
+
+```
+branch, cell_id, lon_bin, lat_bin,
+quality_tier, evidence_class, validation_weight, branch_role,
+use_for_primary_validation, use_for_supplementary_validation,
+use_for_regional_experiment, sensitivity_only_flag,
+exclude_from_primary, exclusion_or_review_reason,
+matched_rule_id, matched_rule_priority, applied_rule_description,
+rule_version,
+n_unique_triples_total, n_points_pass_total, duplicate_ratio_cell,
+n_track_cells, manual_review_any, manual_review_unique_triples_share,
+low_evidence_flag, overlap_evidence_class, n_cross_branch_overlap,
+lat_band_10deg, depth_bin,
+auv_sentry_flag, source_risk_class
+```
+
+Enums:
+- `branch` ∈ {`singlebeam`, `multibeam_ncei`, `regional_mrar`}
+- `branch_role` ∈ {`supplementary_coverage`, `multibeam_supplement`,
+  `regional_experiment`}
+- `quality_tier` ∈ {`high_confidence`, `medium_confidence`,
+  `low_confidence`, `review_or_sensitivity_only`}
+- `evidence_class` ∈ {`within`, `cross`, `both`, `none`}
+- `source_risk_class` includes `auv_sentry_highdup` (mb rule-9 cells),
+  `high_dup_unsupported`, `low_evidence`, or empty.
+
+Contract:
+- `manual_review_any` NEVER excludes or upgrades a cell on its own
+  (invariant; enforced by runtime assertion).
+- `validation_weight` never 0; AUV-Sentry cells downweight to 0.55,
+  not zero.
+- `regional_mrar` cells have `exclude_from_primary=True` on ≥99.96% of
+  rows; the 89 mrar cells with `exclude_from_primary=False` (rule 4
+  cross-validated) still have `use_for_primary_validation=False`.
+
+NCEI rule set lives in `.trellis/tasks/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv`
+(18 cols × 16 rows: 15 first_match + 1 invariant). Step 06B is the
+only consumer.
+
+---
+
+## NCEI validation-cell products (`ncei/derived/validation_cells_1min/*.parquet`)
+
+Output of NCEI Step 07B (`ncei/code/13_build_validation_cells.py`).
+5 products under fixed source precedence
+(`JAMSTEC mb > NCEI mb > NCEI sb high-confidence`; regional_mrar
+never primary). Authoritative source: spec §19.
+
+### `strict_primary_multibeam_cells.parquet` (2,398,774 rows)
+
+JAMSTEC mb primary ⊕ NCEI mb primary. Verified `cell_id` disjoint
+between the two sources (0 overlap; runtime-asserted). AUV Sentry
+retained (n=8 cells, `validation_weight=0.55`, `auv_sentry_flag=True`,
+`source_risk_class='auv_sentry_highdup'`).
+
+Core columns (shared with all 5 products): `cell_id, lon_bin, lat_bin,
+lon_center, lat_center, lat_band_10deg, source_provider, branch_role,
+representative_depth_m, validation_weight, quality_tier,
+evidence_class, auv_sentry_flag, source_risk_class,
+n_unique_triples_total, n_points_pass_total, n_track_cells,
+duplicate_ratio_cell, validation_product_version`.
+
+- `source_provider` ∈ {`jamstec`, `ncei_multibeam`}.
+- `evidence_class = 'jamstec_legacy'` for JAMSTEC rows (distinct from
+  the §15 within/cross/both/none classes).
+
+### `expanded_primary_ship_cells.parquet` (2,732,689 rows)
+
+Strict primary ⊕ NCEI sb high-confidence gap-fill. Adds:
+- `expanded_fill` (bool) — `True` for sb fill rows, `False` for the
+  strict baseline.
+- `precedence_resolution` (string) — empty for non-conflict rows,
+  `jamstec_over_sb` / `ncei_mb_over_sb` etc. when a conflict was
+  resolved. cell_id uniqueness asserted.
+
+### `supplementary_singlebeam_cells.parquet` (12,277,633 rows; hive lat_band_10deg)
+
+NCEI sb with `use_for_supplementary_validation=True`. All cells have
+`branch_role='supplementary_coverage'`.
+
+### `regional_mrar_experiment_cells.parquet` (9,019,383 rows; hive lat_band_10deg)
+
+All M.rar cells. `branch_role='regional_experiment'`;
+`sensitivity_only_flag` carried from Step 06B. Never enters primary
+under any condition.
+
+### `validation_cell_catalog.parquet` (24,029,705 rows; hive product_label)
+
+Long-format UNION of strict + supplementary_sb + regional_mrar. One
+row per (cell_id, product_label). Adds `product_label` ∈
+{`strict_primary_multibeam`, `supplementary_singlebeam`,
+`regional_mrar_experiment`} and `final_primary_source` (the chosen
+source for cells appearing in `expanded_primary_ship_cells`).
+
+### Weight scale (do NOT rescale)
+
+| source_provider | weight range |
+|---|---|
+| `jamstec` | {0.4, 0.7, 1.0} (legacy A/B/C) |
+| `ncei_multibeam` | [0.1, 0.95] (Step 06B rule eval) |
+| `ncei_singlebeam` | [0.1, 0.95] (Step 06B) |
+
+Downstream consumers (Step 11+) choose how to combine the two scales;
+Step 07B does not normalize them.
+
+Tier mapping for JAMSTEC: `A → high_confidence`, `B → medium_confidence`,
+`C → low_confidence`.
+
+---
+
 ## Adding new contracts
 
 1. Update this file *and* the per-stage `docs/<stage>_report.md`.
