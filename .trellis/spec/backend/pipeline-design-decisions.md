@@ -839,3 +839,123 @@ parquet need to know whether they have the full overlap or a sample.
 - Run report: `ncei/docs/step05b_cross_branch_overlap_audit_report.md`.
 - Predecessors: §13 (Step 04A) + §14 (Step 04B) + §15 (Step 05A) —
   all conventions remain in force.
+
+---
+
+## 17. NCEI Step 06A — quality policy calibration audit
+
+Locks in conventions for
+`ncei/code/11_quality_policy_calibration_audit.py`. **Audit only** —
+emits stratified evidence + candidate rules; does NOT enforce
+policies, does NOT define final tiers, does NOT exclude cells.
+
+### 17.1 POLICY_CALIBRATION_VERSION
+
+`POLICY_CALIBRATION_VERSION = "ncei_policy_calib_v0.1.0"` — module
+constant, written into every output parquet row as
+`policy_calibration_version`. Bump on any schema or rule-list change.
+
+### 17.2 Audit-only contract (hard)
+
+Step 06A MUST NOT:
+
+- write a `quality_tier` / `validation_weight` / `exclude_from_primary`
+  column to any parquet (a runtime assertion validates this before
+  every parquet write — see `validate_no_final_tiers_in_parquets` in
+  the implementation).
+- drop / filter / "soft-exclude" cells.
+- bind any final tier definition outside `quality_policy_candidate_rules.tsv`.
+
+The TSV is the **only** place candidate tier labels are persisted.
+Step 06B (future) is responsible for converting candidates → enforced
+rules after human review.
+
+### 17.3 Stratification bin definitions (fixed; do not change without bumping version)
+
+```python
+LAT_BANDS              = [-90,-80,...,80,90]                      # 18 bands of 10°
+DEPTH_BINS             = [0, 200, 500, 2000, 4000, 6000, 11500]   # 6 right-open bins, last closes
+DUP_RATIO_BINS         = [0.0, 0.01, 0.1, 0.5, 1.0]               # 4 bins (mirrors §16.6/§14)
+N_UNIQUE_TRIPLES_BINS  = [1, 10, 100, 1000, 10000, inf]           # 5 bins
+N_TRACK_CELLS_BINS     = [1, 2, 5, 20, inf]                       # 4 bins (1 = single, no overlap)
+MANUAL_REVIEW_SHARE_BINS = [0.0, 0.001, 0.01, 0.1, 1.0]           # 4 bins (currently reserved)
+```
+
+Use `pd.cut(right=False)` for right-open intervals; the last bin
+closes on the right.
+
+### 17.4 Candidate-rules TSV schema (fixed)
+
+`quality_policy_candidate_rules.tsv` columns:
+
+| col | type | notes |
+|---|---|---|
+| `rule_id` | string | unique, e.g. `mb_v0_high_xvalid_lowdup` |
+| `candidate_tier` | enum | {high_confidence, medium_confidence, low_confidence, review_or_sensitivity_only} |
+| `applies_to_branch` | string | one of {singlebeam, multibeam_ncei, regional_mrar, "*"} |
+| `applies_to_lat_band_filter` | string | e.g. "\*", "-90..0", "-60..-50" |
+| `applies_to_depth_bin_filter` | string | e.g. "\*", "0..200", "2000..6000" |
+| `condition` | string | plain-English logical expression over Step 04B cell columns |
+| `recommended_weight` | float | ∈ [0, 1]; never negative, never >1 |
+| `requires_step05_overlap` | bool | rule requires within-branch or cross-branch overlap evidence |
+| `exclude_from_primary` | bool | true ⇒ keep out of primary validation (mrar default) |
+| `evidence_basis` | string | which Step 05A/05B observations support this rule |
+| `notes` | string | free-form caveats, open questions |
+
+Step 06B MUST consume this schema verbatim; do not rename columns.
+
+### 17.5 Locked policy principles (encoded in current 16 rules)
+
+All future rule revisions MUST keep these principles:
+
+1. **multibeam_ncei** is the highest-precision branch; high_confidence
+   rules require cross-validation against mrar OR low dup_ratio_cell.
+2. **singlebeam** thresholds MUST stratify by `lat_band_10deg` and
+   `depth_bin`; Southern Ocean (lat ≤ -50) is review-only.
+3. **regional_mrar** defaults to `review_or_sensitivity_only` with
+   `exclude_from_primary=True`; only graduates to medium with
+   cross-validation against multibeam_ncei in same area.
+4. **`manual_review_flag` alone NEVER excludes** — must be paired
+   with residual evidence to gate behavior.
+5. **`duplicate_ratio_cell > 0.5`** (AUV-Sentry-like) → reduce
+   `recommended_weight`, never zero.
+6. **`n_unique_triples_total`** is the preferred weighting variable,
+   not `n_points_pass_total`.
+7. **No overlap evidence** (n_track_cells=1 AND not in cross-branch)
+   → `low_confidence` with `low_evidence` note; not automatically bad.
+
+### 17.6 Output artifacts (4 files + report)
+
+Under `ncei/derived/quality_policy_calibration_1min/` (canonical) or
+suffixed roots `_sample/` / `_test100/`:
+
+1. `quality_calibration_by_branch.parquet` — 3 rows.
+2. `quality_calibration_by_lat_depth.parquet` — per (branch, lat_band,
+   depth_bin).
+3. `quality_calibration_by_source_pair.parquet` — per (pair, dup_bin,
+   n_unique_bin).
+4. `quality_policy_candidate_rules.tsv` — candidate rules (current:
+   16 rows; schema fixed in §17.4).
+
+Plus markdown: `ncei/docs/step06a_quality_policy_calibration_report.md`.
+
+Logs: `ncei/output/logs/11_quality_policy_calibration_audit.log` with
+run-label suffix.
+
+### 17.7 Step 06A vs Step 06B
+
+- **Step 06A** (`11_*.py`): publish stratified evidence + candidate
+  rules. THIS section.
+- **Step 06B** (not yet implemented): consume `quality_policy_candidate_rules.tsv`
+  + (revised) human-approved rules to write enforced quality flags
+  onto Step 04B cells. Will introduce the `quality_tier` /
+  `validation_weight` / `evidence_class` columns that §17.2 forbids
+  here.
+
+### 17.8 References
+
+- Implementation: `ncei/code/11_quality_policy_calibration_audit.py`
+  (`POLICY_CALIBRATION_VERSION = "ncei_policy_calib_v0.1.0"`).
+- Run report: `ncei/docs/step06a_quality_policy_calibration_report.md`.
+- Predecessors: §13 + §14 + §15 + §16 — all conventions remain in
+  force.
