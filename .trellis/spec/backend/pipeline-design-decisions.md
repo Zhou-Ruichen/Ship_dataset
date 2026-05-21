@@ -959,3 +959,186 @@ run-label suffix.
 - Run report: `ncei/docs/step06a_quality_policy_calibration_report.md`.
 - Predecessors: §13 + §14 + §15 + §16 — all conventions remain in
   force.
+
+---
+
+## 18. NCEI Step 06B — enforce quality policy + cell quality manifest
+
+Locks in conventions for `ncei/code/12_apply_quality_policy.py`. This
+is the **first stage in this pipeline that emits final per-cell tier
+labels and validation weights**. It MUST consume the policy decisions
+made in §17 plus the Step 06B semantic lock report; it MUST NOT
+revisit or extend policy.
+
+### 18.1 POLICY_ENFORCE_VERSION
+
+`POLICY_ENFORCE_VERSION = "ncei_policy_enforce_v0.1.0"` — module
+constant in `ncei/code/12_apply_quality_policy.py`, written as
+`rule_version` on every output cell row. Bump on any rule-grammar /
+schema / contract change.
+
+### 18.2 Single authoritative rule source
+
+Step 06B MUST read rules **only** from
+`.trellis/tasks/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv`
+(18 cols × 16 rows; locked by `ncei/docs/step06b_semantic_lock_report.md`).
+It MUST NOT read the Step 06A candidate TSV.
+
+### 18.3 Rule partitioning and application order
+
+- Rules with `applies_as == "first_match"` (15 rules, priorities 1–15)
+  are sorted by `priority` ascending and applied **first-match-wins**
+  per cell.
+- Rules with `applies_as == "invariant"` (1 rule: `manual_review_not_exclusion`)
+  are **NEVER** used for tier assignment. They are evaluated as
+  post-tier assertions (§18.6 below).
+- Cells unmatched by all 15 first-match rules are assigned the
+  documented `default_unmatched` safeguard:
+  `matched_rule_id="default_unmatched"`, `matched_rule_priority=99`,
+  `quality_tier="low_confidence"`, `validation_weight=0.25`,
+  `applied_rule_description="No enforced rule matched; default
+  low_confidence safeguard."`
+
+### 18.4 Filter parser semantics (asymmetric closed vs half-open)
+
+The filter grammar (per §17 lock §1.2) uses TWO distinct semantics
+depending on the field:
+
+- `applies_to_lat_band_filter`: **closed interval on discrete band
+  members**.
+  `"-70..-50"` → `lat_band_10deg IN {-70, -60, -50}` (3 bands, both
+  endpoints included).
+  `"-80..-70,-30..-20"` → `lat_band_10deg IN {-80, -70, -30, -20}`
+  (4 bands).
+  `"60..90"` → `lat_band_10deg IN {60, 70, 80}` (90 not a valid band
+  on Earth's lat_band grid; ranges including 90 clip).
+- `applies_to_depth_bin_filter`: **half-open interval on bin-left-
+  edges** (the §17.3 DEPTH_BINS are `[0, 200, 500, 2000, 4000, 6000,
+  11500]`; the upper edge of the filter range is NOT included as a
+  bin).
+  `"0..200"` → `depth_bin_lo IN {0}` (only the `[0, 200)` bin).
+  `"500..6000"` → `depth_bin_lo IN {500, 2000, 4000}` (3 bins).
+  `"2000..6000"` → `depth_bin_lo IN {2000, 4000}` (2 bins).
+
+The asymmetry is intentional: lat bands are discrete labels with both
+endpoints meaningful; depth filters describe a contiguous depth range
+and the upper edge defines a NEXT bin, not the current bin's content.
+
+The Step 06B implementation MUST parse these two filters with the
+right convention. A reference implementation lives in
+`ncei/code/12_apply_quality_policy.py::parse_exact_membership_filter`
+with an `upper_inclusive` kwarg.
+
+### 18.5 Slice lookup contract
+
+For rules with `slice_lookup_table != "none"`:
+
+- `by_lat_depth`: join cells to
+  `ncei/derived/quality_policy_calibration_1min/quality_calibration_by_lat_depth.parquet`
+  on `(branch, lat_band_10deg, depth_bin_lo)`. Slice fields
+  available include `within_branch_residual_p95`,
+  `cross_branch_residual_max_p95`, etc. — see Step 06A schema.
+- `by_source_pair`: join cells to
+  `quality_calibration_by_source_pair.parquet` on
+  `(pair_label, dup_bin_lo, n_unique_lo)`. The `pair_label` is
+  determined by the rule's `condition_canonical` (e.g.
+  `slice.mb_vs_mrar.*` joins on `pair_label='mb_vs_mrar'`); the cell's
+  `(dup_bin_lo, n_unique_lo)` are derived from `duplicate_ratio_cell`
+  and `n_unique_triples_total` using the §17.3 bin definitions.
+
+**NaN-as-fail contract**: when a slice lookup returns NaN (the cell
+has no matching slice row), the rule's condition MUST evaluate to
+`False`. Silent NaN propagation that would silently match a rule is
+forbidden.
+
+### 18.6 Mandatory post-check invariants (must all PASS at runtime)
+
+The implementation MUST run and report PASS/FAIL on all 5 of:
+
+1. **No flag-only exclusion**: no first-match rule whose condition
+   tests ONLY `manual_review_any` can be the matched_rule_id for any
+   cell. (Guaranteed by §18.3 partitioning — verify by inspection.)
+2. **No flag-only upgrade**: same as above; the invariant rule's
+   tier is NEVER assigned via first-match.
+3. **No zero weights**: no cell has `validation_weight == 0`. (The
+   default safeguard sets 0.25; the lowest rule weight is 0.1.)
+4. **regional_mrar exclude_from_primary share ≥ 0.99**: at least 99%
+   of mrar cells have `exclude_from_primary=True` (a small carve-out
+   for rule 4 cross-validated cells is allowed).
+5. **AUV Sentry sidecars correct**: every cell matching
+   `mb_v0_highdup_sentry_downweight` (rule 9) has both
+   `auv_sentry_flag=True` AND `source_risk_class='auv_sentry_highdup'`.
+
+Implementation MUST exit non-zero if any assertion fails.
+
+### 18.7 Output schema (31 cols in exact order; do not reorder)
+
+`cell_quality_flags_1min.parquet` columns (full list pinned by the
+Step 06B brief; the implementation already emits this exact order):
+
+```
+branch, cell_id, lon_bin, lat_bin,
+quality_tier, evidence_class, validation_weight, branch_role,
+use_for_primary_validation, use_for_supplementary_validation,
+use_for_regional_experiment, sensitivity_only_flag,
+exclude_from_primary, exclusion_or_review_reason,
+matched_rule_id, matched_rule_priority, applied_rule_description,
+rule_version,
+n_unique_triples_total, n_points_pass_total, duplicate_ratio_cell,
+n_track_cells, manual_review_any, manual_review_unique_triples_share,
+low_evidence_flag, overlap_evidence_class, n_cross_branch_overlap,
+lat_band_10deg, depth_bin,
+auv_sentry_flag, source_risk_class
+```
+
+### 18.8 branch_role table (fixed)
+
+Each branch maps to one and only one `branch_role`:
+
+| branch | branch_role |
+|---|---|
+| singlebeam | `supplementary_coverage` |
+| multibeam_ncei | `multibeam_supplement` |
+| regional_mrar | `regional_experiment` |
+
+AUV Sentry cells do NOT get a new `branch_role`; they keep
+`multibeam_supplement` and are surfaced via `auv_sentry_flag` +
+`source_risk_class='auv_sentry_highdup'` (per §17 lock §1.4).
+
+### 18.9 Step 04B cell preservation (immutable upstream)
+
+Step 06B MUST be a **sidecar producer** keyed by `(branch, cell_id,
+lon_bin, lat_bin)`. It MUST NOT rewrite, overwrite, or otherwise
+modify Step 04B `cells_1min/` parquet datasets. Downstream consumers
+join on the key.
+
+### 18.10 Output artifacts (6 + report)
+
+Under `ncei/derived/quality_flags_1min/` (canonical) or suffixed
+roots:
+
+1. `cell_quality_flags_1min.parquet` — 31 cols, one row per Step 04B
+   cell (≈ 23.6M rows full).
+2. `cell_quality_flags_1min.tsv` — stratified subset for human
+   inspection (full-mode TSV is capped; sample/test100 TSV = full
+   sample rows).
+3. `quality_summary_by_branch.parquet`.
+4. `quality_summary_by_lat_depth.parquet`.
+5. `quality_summary_by_rule.parquet`.
+6. `quality_summary_by_evidence_class.parquet`.
+
+Plus markdown: `ncei/docs/step06b_cell_quality_flags_report.md`.
+
+Logs: `ncei/output/logs/12_apply_quality_policy.log` with run-label
+suffix.
+
+### 18.11 References
+
+- Implementation: `ncei/code/12_apply_quality_policy.py`
+  (`POLICY_ENFORCE_VERSION = "ncei_policy_enforce_v0.1.0"`).
+- Enforced rules: `.trellis/tasks/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv`.
+- Preflight + lock: `ncei/docs/step06b_quality_policy_rule_review.md`,
+  `ncei/docs/step06b_semantic_lock_report.md`.
+- Run report: `ncei/docs/step06b_cell_quality_flags_report.md`.
+- Predecessors: §13 + §14 + §15 + §16 + §17 — all conventions remain
+  in force.
