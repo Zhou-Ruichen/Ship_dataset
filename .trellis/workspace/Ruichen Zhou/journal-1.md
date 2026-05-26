@@ -103,3 +103,38 @@ Spec captured: role-aware Step 08 safety-check pattern and the "no model residua
 - Optional Stage 5 (supplementary_singlebeam_cells coverage diagnostics).
 - Optional Stage 6 (final cross-stage report tying strict + expanded together with policy decisions).
 - Pi-adapter MCP / skill improvements queued: `_modelMapCache` invalidation on config.toml mtime change; prompt-size guard + `embed_context=false` opt-out; richer error surfacing when `output.log` is empty (full prompts in earlier exchange).
+
+
+## Session 2: Step 08 Stage 3 + Stage 4 — strict-primary full run + expanded-primary sensitivity
+
+**Date**: 2026-05-27
+**Task**: Step 08 Stage 3 + Stage 4 — strict-primary full run + expanded-primary sensitivity
+**Branch**: `main`
+
+### Summary
+
+Step 08 strict-primary full validation (Stage 3) + Stage 4 expanded-primary sensitivity validation. Stage 3: 5 products x 2,398,774 cells PASS, audit GO. Stage 4 (new child task): refactored 14_validate_gridded_products_step08.py for role-aware --validation-product; added 15_strict_vs_expanded_compare_step08.py (Pi worktree dispatch); 11/11 safety checks PASS; retained_multibeam RMSE byte-equivalent to strict; singlebeam_gapfill RMSE 140-145m (+50% vs retained); global RMSE +6-8m, bias -2m uniformly; Drake Passage outlier window documented. Audit recommendation: expanded_primary stays secondary/sensitivity-only. Specs captured for role-aware safety checks and no-residual-filtering invariant.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `45667cc` | (see git log) |
+| `1d327e6` | (see git log) |
+| `cbf60ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
