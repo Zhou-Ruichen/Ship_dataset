@@ -1117,23 +1117,31 @@ def markdown_table(df: pd.DataFrame) -> str:
 
 def make_full_report(metrics: dict[str, pd.DataFrame], diagnostics: pd.DataFrame, product_status: pd.DataFrame,
                      preflight_status: str, safety_checks: pd.DataFrame, elapsed: float,
-                     status: str, out_dir: Path) -> str:
+                     status: str, out_dir: Path, product_key: str = FULL_STRICT_PRODUCT_KEY) -> str:
+    product_info = EXPECTED_PRODUCTS[product_key]
+    product_role = product_info["product_role"]
+    if product_role == "strict_primary_multibeam":
+        title_label = "Strict-Primary"
+        status_label = "Full strict-primary status"
+    else:
+        title_label = "Expanded-Primary"
+        status_label = "Full expanded-primary status"
     lines = []
-    lines.append("# Step 08 Strict-Primary Full Global Validation Report")
+    lines.append(f"# Step 08 {title_label} Full Global Validation Report")
     lines.append("")
     lines.append(f"Generated: {datetime.now(timezone.utc).isoformat()}")
     lines.append(f"Elapsed: {elapsed:.1f}s")
     lines.append(f"Preflight status: **{preflight_status}**")
-    lines.append(f"Full strict-primary status: **{status}**")
+    lines.append(f"{status_label}: **{status}**")
     lines.append(f"Output directory: `{out_dir}`")
     lines.append("")
     lines.append("## 1. Input baseline")
     lines.append("")
     lines.append(markdown_table(pd.DataFrame([{
-        "product": FULL_STRICT_PRODUCT_KEY,
-        "product_role": EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["product_role"],
-        "rows": row_count(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["path"]),
-        "path": str(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["path"]),
+        "product": product_key,
+        "product_role": product_info["product_role"],
+        "rows": row_count(product_info["path"]),
+        "path": str(product_info["path"]),
     }])))
     lines.append("")
     lines.append("## 2. Safety checks")
@@ -1163,17 +1171,27 @@ def make_full_report(metrics: dict[str, pd.DataFrame], diagnostics: pd.DataFrame
     lines.append("")
     lines.append("## 6. Recommendation")
     lines.append("")
-    if status == "PASS":
-        lines.append("Proceed to expanded_primary sensitivity validation if the objective is to quantify high-confidence singlebeam gap-fill coverage and metric sensitivity. Keep strict_primary as the main global baseline.")
+    if product_role == "strict_primary_multibeam":
+        if status == "PASS":
+            lines.append("Proceed to expanded_primary sensitivity validation if the objective is to quantify high-confidence singlebeam gap-fill coverage and metric sensitivity. Keep strict_primary as the main global baseline.")
+        else:
+            lines.append("Do not proceed to expanded_primary sensitivity validation until the failed strict-primary checks/products are reviewed.")
     else:
-        lines.append("Do not proceed to expanded_primary sensitivity validation until the failed strict-primary checks/products are reviewed.")
+        if status == "PASS":
+            lines.append("Expanded-primary sensitivity outputs are available. Run `ncei/code/15_strict_vs_expanded_compare_step08.py` to compute strict-vs-expanded deltas and coverage gain; expanded_primary remains a sensitivity product and does not replace strict_primary as the main global baseline.")
+        else:
+            lines.append("Do not interpret expanded_primary as a sensitivity comparison until the failed expanded-primary checks are resolved.")
     lines.append("")
     return "\n".join(lines)
 
 
-def full_safety_checks(cells: pd.DataFrame, diagnostics: pd.DataFrame, product_status: pd.DataFrame) -> pd.DataFrame:
+def full_safety_checks(cells: pd.DataFrame, diagnostics: pd.DataFrame, product_status: pd.DataFrame,
+                       product_key: str = FULL_STRICT_PRODUCT_KEY) -> pd.DataFrame:
     checks: list[dict[str, Any]] = []
-    expected_rows = int(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["expected_rows"])
+    product_info = EXPECTED_PRODUCTS[product_key]
+    product_role = product_info["product_role"]
+    expected_rows = int(product_info["expected_rows"])
+    role_slug = "strict_primary" if product_role == "strict_primary_multibeam" else "expanded_primary"
     checks.append({
         "check": "input_row_count",
         "status": "PASS" if len(cells) == expected_rows else "FAIL",
@@ -1181,8 +1199,25 @@ def full_safety_checks(cells: pd.DataFrame, diagnostics: pd.DataFrame, product_s
     })
     singlebeam = int((cells["source_provider"].astype(str) == "ncei_singlebeam").sum())
     regional = int((cells["branch"].astype(str) == "regional_mrar").sum())
-    checks.append({"check": "no_singlebeam_in_strict_primary", "status": "PASS" if singlebeam == 0 else "FAIL", "details": f"ncei_singlebeam rows={singlebeam:,}"})
-    checks.append({"check": "no_regional_mrar_in_strict_primary", "status": "PASS" if regional == 0 else "FAIL", "details": f"regional_mrar rows={regional:,}"})
+    if product_role == "strict_primary_multibeam":
+        checks.append({"check": "no_singlebeam_in_strict_primary", "status": "PASS" if singlebeam == 0 else "FAIL", "details": f"ncei_singlebeam rows={singlebeam:,}"})
+        checks.append({"check": "no_regional_mrar_in_strict_primary", "status": "PASS" if regional == 0 else "FAIL", "details": f"regional_mrar rows={regional:,}"})
+    else:
+        # expanded_primary_ship: singlebeam IS expected as gap-fill, but only marked via expanded_fill; regional MRAR still forbidden.
+        if "expanded_fill" in cells.columns:
+            expanded_fill_rows = int(cells["expanded_fill"].fillna(False).astype(bool).sum())
+        else:
+            expanded_fill_rows = -1
+        expected_expanded_fill = 333_915
+        checks.append({"check": "no_regional_mrar_in_expanded_primary",
+                       "status": "PASS" if regional == 0 else "FAIL",
+                       "details": f"regional_mrar rows={regional:,}"})
+        checks.append({"check": "expanded_fill_count_matches_preflight",
+                       "status": "PASS" if expanded_fill_rows == expected_expanded_fill else "FAIL",
+                       "details": f"expanded_fill rows={expanded_fill_rows:,}; expected={expected_expanded_fill:,}"})
+        checks.append({"check": "singlebeam_only_marked_as_expanded_fill",
+                       "status": "PASS" if (expanded_fill_rows >= 0 and singlebeam == expanded_fill_rows) else "FAIL",
+                       "details": f"ncei_singlebeam rows={singlebeam:,}; expanded_fill rows={expanded_fill_rows:,}"})
     weights_ok = bool(cells["validation_weight"].notna().all())
     checks.append({"check": "validation_weight_preserved", "status": "PASS" if weights_ok else "FAIL", "details": f"null weights={int(cells['validation_weight'].isna().sum()):,}"})
     for col in ["quality_tier", "evidence_class", "matched_rule_id"]:
@@ -1196,14 +1231,21 @@ def full_safety_checks(cells: pd.DataFrame, diagnostics: pd.DataFrame, product_s
         checks.append({"check": "sign_error_suspected_false", "status": "FAIL", "details": "no diagnostics"})
     errors = product_status[product_status["status"].eq("error")] if len(product_status) else product_status
     checks.append({"check": "model_errors_do_not_corrupt_other_outputs", "status": "PASS" if len(errors) == 0 else "WARN", "details": f"error products={len(errors)}"})
-    checks.append({"check": "no_model_residual_filtering", "status": "PASS", "details": "all strict-primary rows are retained before model nodata masking in metrics"})
+    checks.append({"check": "no_model_residual_filtering", "status": "PASS", "details": f"all {role_slug} rows are retained before model nodata masking in metrics"})
     return pd.DataFrame(checks)
 
 
 def run_full(args, logger: logging.Logger) -> tuple[str, Path]:
-    logger.info("Running Stage 3 full strict-primary global validation")
+    product_key = getattr(args, "validation_product", FULL_STRICT_PRODUCT_KEY)
+    product_info = EXPECTED_PRODUCTS[product_key]
+    product_role = product_info["product_role"]
+    role_slug = "strict_primary" if product_role == "strict_primary_multibeam" else "expanded_primary"
+    role_label = "strict-primary" if role_slug == "strict_primary" else "expanded-primary"
+    run_stage_label = f"full_{role_slug}"
+
+    logger.info("Running Stage %s full %s global validation", "3" if role_slug == "strict_primary" else "4", role_label)
     if not args.confirm_full:
-        raise RuntimeError("Full strict-primary validation requires --confirm-full")
+        raise RuntimeError(f"Full {role_label} validation requires --confirm-full")
     if args.run_label == "smoke":
         raise RuntimeError("Refusing to write full outputs to smoke run-label")
 
@@ -1223,15 +1265,19 @@ def run_full(args, logger: logging.Logger) -> tuple[str, Path]:
         raise RuntimeError(f"Output dir has files (use --overwrite only if intentionally replacing this production run): {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cells = prepare_validation_cells(FULL_STRICT_PRODUCT_KEY, attach_rule_ids=True)
-    logger.info("Loaded strict-primary cells: %s", len(cells))
-    expected_rows = int(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["expected_rows"])
+    cells = prepare_validation_cells(product_key, attach_rule_ids=True)
+    logger.info("Loaded %s cells: %s", role_label, len(cells))
+    expected_rows = int(product_info["expected_rows"])
     if len(cells) != expected_rows:
-        raise RuntimeError(f"Strict-primary row count {len(cells):,} != expected {expected_rows:,}")
-    if int((cells["source_provider"].astype(str) == "ncei_singlebeam").sum()) != 0:
-        raise RuntimeError("Strict-primary input contains ncei_singlebeam rows")
-    if int((cells["branch"].astype(str) == "regional_mrar").sum()) != 0:
-        raise RuntimeError("Strict-primary input contains regional_mrar rows")
+        raise RuntimeError(f"{role_label.capitalize()} row count {len(cells):,} != expected {expected_rows:,}")
+    if product_role == "strict_primary_multibeam":
+        if int((cells["source_provider"].astype(str) == "ncei_singlebeam").sum()) != 0:
+            raise RuntimeError("Strict-primary input contains ncei_singlebeam rows")
+        if int((cells["branch"].astype(str) == "regional_mrar").sum()) != 0:
+            raise RuntimeError("Strict-primary input contains regional_mrar rows")
+    else:
+        if int((cells["branch"].astype(str) == "regional_mrar").sum()) != 0:
+            raise RuntimeError("Expanded-primary input contains regional_mrar rows")
 
     logger.info("Configured full-run products and sampling methods:")
     for prod in ordered_products:
@@ -1261,18 +1307,18 @@ def run_full(args, logger: logging.Logger) -> tuple[str, Path]:
             product_status.append({"product_name": pname, "status": "skipped", "reason": reason, "rows": 0, "elapsed_s": 0.0})
             continue
 
-        logger.info("Full strict-primary sampling product %s", pname)
+        logger.info("Full %s sampling product %s", role_label, pname)
         try:
             raw_values, effective_method, sample_meta = sample_product_full(prod, cells, logger)
             model_elev_m, model_depth_m = apply_z_convention(raw_values, prod)
-            result = build_cell_result(cells, prod, raw_values, model_elev_m, model_depth_m, effective_method, run_stage="full_strict_primary")
+            result = build_cell_result(cells, prod, raw_values, model_elev_m, model_depth_m, effective_method, run_stage=run_stage_label)
             diag = convention_diagnostic(prod, cells, raw_values, model_elev_m, model_depth_m, effective_method, sample_meta.get("fill_value", np.nan))
             diagnostics.append(diag)
             product_metrics = build_metrics(result)
             for key, df in product_metrics.items():
                 if len(df):
                     metric_frames.setdefault(key, []).append(df)
-            out_path = out_dir / f"full_validation_by_cell_strict_primary_{pname}.parquet"
+            out_path = out_dir / f"full_validation_by_cell_{role_slug}_{pname}.parquet"
             atomic_write_parquet(result, out_path)
             product_status.append({
                 "product_name": pname,
@@ -1303,17 +1349,17 @@ def run_full(args, logger: logging.Logger) -> tuple[str, Path]:
     diagnostics_df = pd.DataFrame(diagnostics)
     product_status_df = pd.DataFrame(product_status)
     skipped_df = product_status_df[product_status_df["status"].isin(["skipped", "error"])] if len(product_status_df) else pd.DataFrame()
-    safety_df = full_safety_checks(cells, diagnostics_df, product_status_df)
+    safety_df = full_safety_checks(cells, diagnostics_df, product_status_df, product_key=product_key)
 
     metric_stems = {
-        "summary": "full_validation_metrics_summary_strict_primary",
-        "by_quality_tier": "full_validation_metrics_by_quality_tier_strict_primary",
-        "by_evidence_class": "full_validation_metrics_by_evidence_class_strict_primary",
-        "by_source_role": "full_validation_metrics_by_source_role_strict_primary",
-        "by_branch": "full_validation_metrics_by_branch_strict_primary",
-        "by_depth_bin": "full_validation_metrics_by_depth_bin_strict_primary",
-        "by_lat_band": "full_validation_metrics_by_lat_band_10deg_strict_primary",
-        "by_region_10deg": "full_validation_metrics_by_region_10deg_strict_primary",
+        "summary": f"full_validation_metrics_summary_{role_slug}",
+        "by_quality_tier": f"full_validation_metrics_by_quality_tier_{role_slug}",
+        "by_evidence_class": f"full_validation_metrics_by_evidence_class_{role_slug}",
+        "by_source_role": f"full_validation_metrics_by_source_role_{role_slug}",
+        "by_branch": f"full_validation_metrics_by_branch_{role_slug}",
+        "by_depth_bin": f"full_validation_metrics_by_depth_bin_{role_slug}",
+        "by_lat_band": f"full_validation_metrics_by_lat_band_10deg_{role_slug}",
+        "by_region_10deg": f"full_validation_metrics_by_region_10deg_{role_slug}",
     }
     for key, stem in metric_stems.items():
         df = metrics.get(key, pd.DataFrame())
@@ -1322,25 +1368,25 @@ def run_full(args, logger: logging.Logger) -> tuple[str, Path]:
         atomic_write_parquet(df, out_dir / f"{stem}.parquet")
         atomic_write_tsv(df, out_dir / f"{stem}.tsv")
 
-    atomic_write_parquet(diagnostics_df, out_dir / "full_validation_sample_diagnostics_strict_primary.parquet")
-    atomic_write_tsv(diagnostics_df, out_dir / "full_validation_sample_diagnostics_strict_primary.tsv")
-    atomic_write_parquet(product_status_df, out_dir / "full_validation_product_status_strict_primary.parquet")
-    atomic_write_tsv(product_status_df, out_dir / "full_validation_product_status_strict_primary.tsv")
+    atomic_write_parquet(diagnostics_df, out_dir / f"full_validation_sample_diagnostics_{role_slug}.parquet")
+    atomic_write_tsv(diagnostics_df, out_dir / f"full_validation_sample_diagnostics_{role_slug}.tsv")
+    atomic_write_parquet(product_status_df, out_dir / f"full_validation_product_status_{role_slug}.parquet")
+    atomic_write_tsv(product_status_df, out_dir / f"full_validation_product_status_{role_slug}.tsv")
     atomic_write_tsv(skipped_df, out_dir / "skipped_products.tsv")
-    atomic_write_tsv(safety_df, out_dir / "full_validation_safety_checks_strict_primary.tsv")
+    atomic_write_tsv(safety_df, out_dir / f"full_validation_safety_checks_{role_slug}.tsv")
 
     failed_safety = bool((safety_df["status"] == "FAIL").any())
     sign_fail = bool(len(diagnostics_df) and diagnostics_df["sign_error_suspected"].fillna(False).astype(bool).any())
     no_success = bool((product_status_df["status"] == "ok").sum() == 0) if len(product_status_df) else True
     status = "FAIL" if failed_safety or sign_fail or no_success else "PASS"
     elapsed = time.time() - t0
-    report = make_full_report(metrics, diagnostics_df, product_status_df, preflight_status, safety_df, elapsed, status, out_dir)
-    report_path = DOCS_DIR / "strict_primary_global_validation_report.md"
+    report = make_full_report(metrics, diagnostics_df, product_status_df, preflight_status, safety_df, elapsed, status, out_dir, product_key=product_key)
+    report_path = DOCS_DIR / f"{role_slug}_global_validation_report.md"
     atomic_write_text(report, report_path)
-    run_label_report_path = DOCS_DIR / f"strict_primary_global_validation_report_{args.run_label}.md"
+    run_label_report_path = DOCS_DIR / f"{role_slug}_global_validation_report_{args.run_label}.md"
     if run_label_report_path != report_path:
         atomic_write_text(report, run_label_report_path)
-    logger.info("Full strict-primary status: %s", status)
+    logger.info("Full %s status: %s", role_label, status)
     logger.info("Wrote %s", report_path)
     return status, report_path
 
@@ -1537,6 +1583,12 @@ def parse_args(argv: Iterable[str] | None = None):
     parser.add_argument("--sample-n-cells", type=int, default=2000, help="Deterministic smoke rows per validation product")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite smoke/preflight outputs")
     parser.add_argument("--confirm-full", action="store_true", help="Required for stage=full or run-label=full")
+    parser.add_argument(
+        "--validation-product",
+        choices=["strict_primary_multibeam_cells", "expanded_primary_ship_cells"],
+        default="strict_primary_multibeam_cells",
+        help="Validation cell product for stage=full. Default is strict_primary_multibeam_cells (backward-compatible Stage 3 behavior).",
+    )
     return parser.parse_args(argv)
 
 
@@ -1545,8 +1597,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     logger = setup_logging(args.run_label)
 
     logger.info("14_validate_gridded_products_step08.py START")
-    logger.info("stage=%s run_label=%s config=%s product_name=%s sample_n_cells=%s overwrite=%s",
-                args.stage, args.run_label, args.config, args.product_name, args.sample_n_cells, args.overwrite)
+    logger.info("stage=%s run_label=%s config=%s product_name=%s sample_n_cells=%s overwrite=%s validation_product=%s",
+                args.stage, args.run_label, args.config, args.product_name, args.sample_n_cells, args.overwrite,
+                getattr(args, "validation_product", FULL_STRICT_PRODUCT_KEY))
 
     if (args.stage == "full" or args.run_label == "full") and not args.confirm_full:
         logger.error("Full production validation requires --confirm-full")
@@ -1563,7 +1616,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             return 0 if status == "PASS" else 1
         if args.stage == "full":
             status, report = run_full(args, logger)
-            print(f"Full strict-primary status: {status}\nReport: {report}")
+            role_label = "strict-primary" if EXPECTED_PRODUCTS[getattr(args, "validation_product", FULL_STRICT_PRODUCT_KEY)]["product_role"] == "strict_primary_multibeam" else "expanded-primary"
+            print(f"Full {role_label} status: {status}\nReport: {report}")
             return 0 if status == "PASS" else 1
     except Exception as exc:
         logger.exception("Stage failed: %s", exc)

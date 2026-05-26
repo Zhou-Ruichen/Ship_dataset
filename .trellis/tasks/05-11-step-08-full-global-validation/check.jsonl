@@ -2,3 +2,8 @@
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check smoke/full gating and report artifacts."}
 {"file":".trellis/spec/backend/pipeline-design-decisions.md","reason":"Check no primary promotion of supplementary singlebeam or regional MRAR, and sign/residual conventions."}
 {"file": "ncei/docs/strict_primary_global_validation_report.md", "reason": "Stage 3 verification source: full strict-primary status PASS, all safety checks PASS, sign_error_suspected false for completed products, and SWOT_T1 skip reason recorded."}
+{"file": "ncei/docs/strict_primary_full_validation_audit_report.md", "reason": "Stage 3 audit: GO recommendation, independent re-check of safety checks via PyArrow, by-cell row counts and finite-residual verification, regional/depth anomaly attribution."}
+{"file": "ncei/docs/expanded_primary_global_validation_report.md", "reason": "Stage 4 verification source: expanded-primary full run status PASS, strict-vs-expanded delta table, coverage-gain by 7 strata, sensitivity diagnosis with retained vs gap-fill RMSE split."}
+{"file": "ncei/docs/stage4_expanded_primary_validation_audit_report.md", "reason": "Stage 4 audit: GO for sensitivity / coverage reference use, NO-GO for replacing strict baseline; Drake Passage gap-fill anomaly documented; strict mtime non-mutation verified."}
+{"file": ".trellis/spec/backend/step08_role_aware_safety_checks.md", "reason": "Cross-stage spec: Step 08 strict vs expanded role-aware safety check pattern (extracted from Stages 3 and 4)."}
+{"file": ".trellis/spec/backend/step08_no_residual_filtering.md", "reason": "Cross-stage invariant: model residuals must never be used to filter or relabel validation cells in Step 08."}

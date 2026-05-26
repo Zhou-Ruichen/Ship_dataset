@@ -1,0 +1,6 @@
+product_name	count	unweighted_MAE	unweighted_RMSE	weighted_MAE	weighted_RMSE	delta_RMSE_m	pct_RMSE_change	high_confidence_count	high_confidence_RMSE	medium_confidence_count	medium_confidence_RMSE	low_confidence_count	low_confidence_RMSE	weighted_RMSE_lower_than_unweighted	primary_driver_of_reduction
+GEBCO_2024	2398774	21.260	90.426	17.614	68.582	-21.844	-24.16%	697282	23.47	1366544	28.52	334948	232.58	YES	low_confidence tier (RMSE 232.58 vs 23.47 high / 28.52 medium); 14% of cells dominate unweighted RMSE
+ETOPO_2022	2398774	22.568	91.610	18.831	70.065	-21.545	-23.52%	697282	25.69	1366544	33.08	334948	232.95	YES	low_confidence tier (RMSE 232.95); same mechanism
+SRTM15_V2.7	2398774	22.153	93.734	18.231	72.550	-21.184	-22.60%	697282	31.06	1366544	37.50	334948	234.90	YES	low_confidence tier (RMSE 234.90); same mechanism
+SDUST_2023	2398774	33.091	99.941	29.122	79.967	-19.974	-19.99%	697282	43.02	1366544	51.21	334948	238.70	YES	low_confidence tier (RMSE 238.70); same mechanism; smaller relative drop because SDUST also has elevated error in high/medium tiers
+TOPO_25.1	2398774	25.243	97.313	21.213	76.719	-20.593	-21.16%	697282	37.69	1366544	45.33	334948	237.65	YES	low_confidence tier (RMSE 237.65); same mechanism

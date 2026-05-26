@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify the modified script follows atomic-write, run-label gating, forbidden-pattern rules."}
+{"file": ".trellis/spec/backend/data-contracts.md", "reason": "Confirm by-cell parquet column set matches the contract; confirm metric output schema."}
+{"file": ".trellis/tasks/05-27-stage4-expanded-primary-sensitivity/prd.md", "reason": "Required outputs (§5) and acceptance criteria (§9) are the checklist source; verify every listed artifact exists and meets the contract."}
+{"file": ".trellis/tasks/05-27-stage4-expanded-primary-sensitivity/implement.md", "reason": "Step 6 (Validation/check) and Definition of Done (§6) enumerate the programmatic re-checks; run them and confirm PASS."}
+{"file": "ncei/docs/strict_primary_full_validation_audit_report.md", "reason": "Stage 3 baseline numbers; the strict outputs in ncei/derived/model_validation_1min_full_strict_primary/ must remain mtime/content-identical."}

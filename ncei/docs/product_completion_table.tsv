@@ -1,0 +1,7 @@
+product_name	expected_status	observed_status	reason	rows_processed	expected_rows	valid_count	nodata_count	configured_sampling_method	resolved_sampling_method	elapsed_s	row_count_match	product_role_value	null_validation_weight	null_quality_tier	null_evidence_class	null_matched_rule_id	singlebeam_rows	regional_mrar_rows	finite_residuals	elevation_correlation	sign_error_suspected
+GEBCO_2024	ok	ok		2398774	2398774	2398774	0	cell_median	cell_median	1042.3	PASS	strict_primary_multibeam	0	0	0	0	0	0	PASS	0.9984	False
+ETOPO_2022	ok	ok		2398774	2398774	2398774	0	center_bilinear	center_bilinear	54.1	PASS	strict_primary_multibeam	0	0	0	0	0	0	PASS	0.9983	False
+SRTM15_V2.7	ok	ok		2398774	2398774	2398774	0	cell_median	cell_median	961.9	PASS	strict_primary_multibeam	0	0	0	0	0	0	PASS	0.9982	False
+SDUST_2023	ok	ok		2398774	2398774	2398774	0	cell_median	cell_median	51.5	PASS	strict_primary_multibeam	0	0	0	0	0	0	PASS	0.9980	False
+TOPO_25.1	ok	ok		2398774	2398774	2398774	0	cell_median	cell_median	52.8	PASS	strict_primary_multibeam	0	0	0	0	0	0	PASS	0.9981	False
+SWOT_T1	skipped	skipped	regional footprint product; not part of full global strict-primary run	0	N/A	N/A	N/A	N/A	N/A	0.0	N/A	N/A	N/A	N/A	N/A	N/A	N/A	N/A	N/A	N/A	N/A

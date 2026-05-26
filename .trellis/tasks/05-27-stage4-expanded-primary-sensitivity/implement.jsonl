@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Script structure, run-label gating, atomic write conventions, forbidden patterns — required for any modification of pipeline scripts under */code/."}
+{"file": ".trellis/spec/backend/data-contracts.md", "reason": "Parquet schemas for validation_cells_1min/ products and existing model_validation_1min_full_* outputs — needed when extending output filenames or columns."}
+{"file": ".trellis/spec/backend/pipeline-design-decisions.md", "reason": "Why the strict/expanded separation exists; why model residuals must not filter cells; why we keep outputs in separate directories."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Per-product skip/error pattern that the modified run_full() must continue to honor when expanded products fail."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Stdlib logging conventions; log file naming under ncei/output/logs/."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Stage 4 deliberately reuses run_full / build_strict_expanded_comparison rather than copying — implementer must follow reuse-first rule."}
+{"file": "jamstec/multibeam/docs/model_validation_config_guide.md", "reason": "Authoritative YAML schema for gridded_products_validation.yaml; do not modify YAML without consulting this guide."}
+{"file": "ncei/docs/strict_primary_full_validation_audit_report.md", "reason": "Stage 3 audit GO is this task's precondition. Provides expected numerics (counts, RMSE per product) that the expanded run must match on retained-multibeam cells."}
+{"file": ".trellis/tasks/05-11-step-08-full-global-validation/implement.md", "reason": "Parent task's Stage 4 checklist (L106-118). Stage 4 must keep strict/expanded outputs separate and compare metric + coverage shifts."}

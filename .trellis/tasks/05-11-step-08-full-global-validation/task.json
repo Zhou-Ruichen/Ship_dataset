@@ -2,7 +2,7 @@
   "id": "step-08-full-global-validation",
   "name": "step-08-full-global-validation",
   "title": "Run Step 08 full-global validation",
-  "description": "Execute Step 08 (validate gridded products against ship cells) on the full 2,394,115-cell global validation set. Currently only the 8,121-cell T1 footprint has been validated. Estimated runtime ~3.5-4h, output ~0.6-1.3 GB.",
+  "description": "Execute Step 08 (validate gridded products against ship cells) across the full Step 07B validation set. Stage 3 (strict_primary_multibeam_cells, 2,398,774 cells) completed PASS 2026-05-26; Stage 4 (expanded_primary_ship_cells, 2,732,689 cells) handled in child task 05-27-stage4-expanded-primary-sensitivity, completed PASS 2026-05-27. Stages 5-6 (non-primary diagnostics + final report) remain open. Legacy task description referenced 2,394,115 cells (pre-integration JAMSTEC-only baseline).",
   "status": "in_progress",
   "dev_type": null,
   "scope": null,
@@ -18,9 +18,22 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "05-27-stage4-expanded-primary-sensitivity"
+  ],
   "parent": null,
-  "relatedFiles": [],
-  "notes": "",
+  "relatedFiles": [
+    "ncei/code/14_validate_gridded_products_step08.py",
+    "ncei/code/15_strict_vs_expanded_compare_step08.py",
+    "ncei/docs/strict_primary_global_validation_report.md",
+    "ncei/docs/strict_primary_full_validation_audit_report.md",
+    "ncei/docs/product_completion_table.tsv",
+    "ncei/docs/product_anomaly_summary.tsv",
+    "ncei/docs/strict_primary_weighted_vs_unweighted_summary.tsv",
+    "ncei/docs/expanded_primary_global_validation_report.md",
+    "ncei/docs/stage4_expanded_primary_validation_audit_report.md",
+    "jamstec/multibeam/configs/gridded_products_validation.yaml"
+  ],
+  "notes": "Stage 3 PASS 2026-05-26T18:52Z (elapsed 2164s, commit 1d327e6); Stage 3 audit GO 2026-05-27 (see strict_primary_full_validation_audit_report.md). Stage 4 PASS 2026-05-27T05:07Z (elapsed 2508s validation + 45s compare); Stage 4 audit GO for sensitivity / coverage use, NO-GO for replacing strict baseline (see stage4_expanded_primary_validation_audit_report.md). Documented unreliable singlebeam window: Drake Passage / S Sandwich Trench lat_band -60° (59 gap-fill cells, +2861m mean error).",
   "meta": {}
 }
