@@ -40,7 +40,7 @@ products:
     z_convention: elevation_negative_ocean
     resolution_hint: 15s
     sampling_method: cell_median
-    lon_convention: -180_180
+    lon_convention: "-180_180"
     enabled: true
 
   - name: ETOPO_2022
@@ -52,7 +52,7 @@ products:
     z_convention: elevation_negative_ocean
     resolution_hint: 1min
     sampling_method: center_bilinear
-    lon_convention: -180_180
+    lon_convention: "-180_180"
     enabled: true
 
   - name: SRTM15_V2.7
@@ -64,7 +64,7 @@ products:
     z_convention: elevation_negative_ocean
     resolution_hint: 15s
     sampling_method: cell_median
-    lon_convention: -180_180
+    lon_convention: "-180_180"
     enabled: true
 
   - name: SDUST_2023
@@ -76,7 +76,7 @@ products:
     z_convention: elevation_negative_ocean
     resolution_hint: 15s
     sampling_method: cell_median
-    lon_convention: 0_360
+    lon_convention: "0_360"
     enabled: true
 
   - name: TOPO_25.1
@@ -88,7 +88,7 @@ products:
     z_convention: elevation_negative_ocean
     resolution_hint: 15s
     sampling_method: cell_median
-    lon_convention: -180_180
+    lon_convention: "-180_180"
     enabled: true
 
   - name: SWOT_T1
@@ -99,7 +99,7 @@ products:
     z_name: prediction_absolute
     z_convention: elevation_negative_ocean
     sampling_method: center_bilinear
-    lon_convention: -180_180
+    lon_convention: "-180_180"
     enabled: true
     footprint:
       lon_min: 105.0

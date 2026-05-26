@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/index.md","reason":"Backend pipeline spec entry point and authoritative references for Step 08 / model validation config."}
+{"file":".trellis/spec/backend/data-contracts.md","reason":"Contracts for Step 07B validation products and weight/provenance columns consumed by Step 08."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run-label gating, report-driven verification, and no in-place mutation conventions for pipeline scripts."}
+{"file":".trellis/spec/backend/pipeline-design-decisions.md","reason":"Design invariants for file-balanced cells, validation-cell products, run-label gating, z/residual sign conventions, and NCEI integration decisions."}
