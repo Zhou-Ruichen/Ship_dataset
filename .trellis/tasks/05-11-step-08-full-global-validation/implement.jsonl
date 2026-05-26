@@ -2,3 +2,4 @@
 {"file":".trellis/spec/backend/data-contracts.md","reason":"Contracts for Step 07B validation products and weight/provenance columns consumed by Step 08."}
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run-label gating, report-driven verification, and no in-place mutation conventions for pipeline scripts."}
 {"file":".trellis/spec/backend/pipeline-design-decisions.md","reason":"Design invariants for file-balanced cells, validation-cell products, run-label gating, z/residual sign conventions, and NCEI integration decisions."}
+{"file": "ncei/docs/strict_primary_global_validation_report.md", "reason": "Stage 3 full strict-primary execution artifact: run_label full_strict_primary completed against 2,398,774 strict_primary_multibeam cells for GEBCO_2024, ETOPO_2022, SRTM15_V2.7, SDUST_2023, and TOPO_25.1; SWOT_T1 skipped as a regional footprint product."}

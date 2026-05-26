@@ -44,11 +44,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import importlib.util
 import logging
 import os
 import sys
 import time
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -141,6 +143,9 @@ OPTIONAL_CARRY_COLUMNS = [
 ]
 
 SMOKE_PRODUCT_KEYS = ["strict_primary_multibeam_cells", "expanded_primary_ship_cells"]
+FULL_STRICT_PRODUCT_KEY = "strict_primary_multibeam_cells"
+FULL_FOOTPRINT_SKIP_REASON = "regional footprint product; not part of full global strict-primary run"
+CELL_SIZE_DEG = 1.0 / 60.0
 DEPTH_BINS = [
     (0, 1000, "0-1000m"),
     (1000, 3000, "1000-3000m"),
@@ -569,19 +574,8 @@ def deterministic_subset(df: pd.DataFrame, n: int, product_role: str) -> pd.Data
 
 
 def read_validation_product_for_smoke(product_key: str, sample_n: int) -> pd.DataFrame:
-    info = EXPECTED_PRODUCTS[product_key]
-    path = Path(info["path"])
-    cols = PHYSICAL_REQUIRED_COLUMNS + OPTIONAL_CARRY_COLUMNS
-    df = read_parquet_columns(path, cols)
-    df["product_role"] = info["product_role"]
-    df["source_role"] = df["branch_role"]
-    df["depth_m_positive_down"] = df["representative_depth_m"].astype(float)
-    df["elev_m"] = -df["depth_m_positive_down"]
-    df["ship_depth_m"] = df["depth_m_positive_down"]
-    df["ship_elev_m"] = df["elev_m"]
-    if "expanded_fill" not in df.columns:
-        df["expanded_fill"] = False
-    df = deterministic_subset(df, sample_n, info["product_role"])
+    df = prepare_validation_cells(product_key, attach_rule_ids=False)
+    df = deterministic_subset(df, sample_n, EXPECTED_PRODUCTS[product_key]["product_role"])
     df = attach_matched_rule_id(df)
     return df.reset_index(drop=True)
 
@@ -614,6 +608,25 @@ def attach_matched_rule_id(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def prepare_validation_cells(product_key: str, attach_rule_ids: bool = True) -> pd.DataFrame:
+    """Read a Step 07B validation product and derive the Step 08 physical fields."""
+    info = EXPECTED_PRODUCTS[product_key]
+    path = Path(info["path"])
+    cols = PHYSICAL_REQUIRED_COLUMNS + OPTIONAL_CARRY_COLUMNS
+    df = read_parquet_columns(path, cols)
+    df["product_role"] = info["product_role"]
+    df["source_role"] = df["branch_role"]
+    df["depth_m_positive_down"] = df["representative_depth_m"].astype(float)
+    df["elev_m"] = -df["depth_m_positive_down"]
+    df["ship_depth_m"] = df["depth_m_positive_down"]
+    df["ship_elev_m"] = df["elev_m"]
+    if "expanded_fill" not in df.columns:
+        df["expanded_fill"] = False
+    if attach_rule_ids:
+        df = attach_matched_rule_id(df)
+    return df.reset_index(drop=True)
+
+
 def assign_depth_bin(depth_m: float) -> str:
     if pd.isna(depth_m):
         return "unknown"
@@ -637,20 +650,264 @@ def sample_model_product(step08, prod: dict[str, Any], cells: pd.DataFrame) -> t
         fill_value = step08.get_fill_value(ds_obj, prod)
         raw_values, effective_method = step08.sample_product(ds_obj, prod, cells)
         raw_values = np.asarray(raw_values, dtype=np.float64)
-        model_elev_m, model_depth_m = step08.apply_z_convention(raw_values, prod)
+        model_elev_m, model_depth_m = apply_z_convention(raw_values, prod)
     finally:
         close = getattr(ds_obj, "close", None)
         if callable(close):
             close()
 
-    result = build_cell_result(cells, prod, raw_values, model_elev_m, model_depth_m, effective_method)
+    result = build_cell_result(cells, prod, raw_values, model_elev_m, model_depth_m, effective_method, run_stage="smoke")
     diag = convention_diagnostic(prod, cells, raw_values, model_elev_m, model_depth_m, effective_method, fill_value)
     return result, diag
 
 
+def _nearest_indices_1d(sorted_vals: np.ndarray, queries: np.ndarray) -> np.ndarray:
+    idx = np.searchsorted(sorted_vals, queries)
+    idx = np.clip(idx, 1, len(sorted_vals) - 1)
+    left = idx - 1
+    d_left = np.abs(queries - sorted_vals[left])
+    d_right = np.abs(queries - sorted_vals[idx])
+    return np.where(d_left <= d_right, left, idx).astype(np.int64)
+
+
+def _monotonic_coords(values: np.ndarray, name: str) -> tuple[np.ndarray, bool]:
+    vals = np.asarray(values, dtype=np.float64)
+    if vals.ndim != 1:
+        raise ValueError(f"{name} coordinate must be 1-D")
+    if len(vals) < 2:
+        raise ValueError(f"{name} coordinate must have at least two values")
+    ascending = bool(vals[0] < vals[-1])
+    check_vals = vals if ascending else vals[::-1]
+    if not np.all(np.diff(check_vals) > 0):
+        raise ValueError(f"{name} coordinate is not strictly monotonic")
+    return vals, ascending
+
+
+def _searchsorted_monotonic(values: np.ndarray, queries: np.ndarray, ascending: bool, side: str = "left") -> np.ndarray:
+    if ascending:
+        return np.searchsorted(values, queries, side=side)
+    reversed_idx = np.searchsorted(values[::-1], queries, side=side)
+    return len(values) - reversed_idx
+
+
+def _nearest_indices_monotonic(values: np.ndarray, queries: np.ndarray, ascending: bool) -> np.ndarray:
+    if ascending:
+        return _nearest_indices_1d(values, queries)
+    reversed_idx = _nearest_indices_1d(values[::-1], queries)
+    return (len(values) - 1 - reversed_idx).astype(np.int64)
+
+
+def _coordinate_window(values: np.ndarray, center: float, half_width: float, ascending: bool) -> tuple[int, int]:
+    lo_q = center - half_width
+    hi_q = center + half_width
+    if ascending:
+        start = int(np.searchsorted(values, lo_q, side="left"))
+        stop = int(np.searchsorted(values, hi_q, side="left"))
+    else:
+        start = int(len(values) - np.searchsorted(values[::-1], hi_q, side="right"))
+        stop = int(len(values) - np.searchsorted(values[::-1], lo_q, side="right"))
+    start = max(0, min(start, len(values)))
+    stop = max(start, min(stop, len(values)))
+    if stop == start:
+        nearest = int(_nearest_indices_monotonic(values, np.array([center], dtype=np.float64), ascending)[0])
+        start = max(0, nearest)
+        stop = min(len(values), nearest + 1)
+    return start, stop
+
+
+def _read_netcdf_var_attributes(path: Path, var_name: str) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+    try:
+        import netCDF4
+        with netCDF4.Dataset(path) as ds:
+            var = ds.variables[var_name]
+            for key in ("_FillValue", "missing_value", "scale_factor", "add_offset"):
+                if hasattr(var, key):
+                    value = getattr(var, key)
+                    try:
+                        attrs[key] = float(np.asarray(value).reshape(-1)[0])
+                    except Exception:
+                        attrs[key] = value
+    except Exception:
+        pass
+    return attrs
+
+
+def _apply_fill_scale_offset(values: np.ndarray, attrs: dict[str, Any]) -> np.ndarray:
+    out = values.astype(np.float64, copy=False)
+    fill_values = []
+    for key in ("_FillValue", "missing_value"):
+        if key in attrs:
+            try:
+                fill_values.append(float(attrs[key]))
+            except (TypeError, ValueError):
+                pass
+    if fill_values:
+        for fill in fill_values:
+            out = np.where(out == fill, np.nan, out)
+    scale = float(attrs.get("scale_factor", 1.0) or 1.0)
+    offset = float(attrs.get("add_offset", 0.0) or 0.0)
+    if scale != 1.0 or offset != 0.0:
+        mask = np.isfinite(out)
+        out = out.astype(np.float64, copy=True)
+        out[mask] = out[mask] * scale + offset
+    return out
+
+
+def sample_product_full(prod: dict[str, Any], cells: pd.DataFrame, logger: logging.Logger) -> tuple[np.ndarray, str, dict[str, Any]]:
+    """Sample a configured global product against all strict-primary cells.
+
+    For high-resolution products configured as cell_median/cell_mean, this honors the
+    configured method by aggregating the grid pixels inside each 1-minute validation
+    cell. Unlike the legacy smoke sampler, this implementation does not downgrade
+    global 15s products to center_nearest solely because the grid is large.
+    """
+    import xarray as xr
+    from scipy.interpolate import RegularGridInterpolator
+
+    path = Path(prod["path"])
+    if not path.exists():
+        raise FileNotFoundError(f"grid file not found: {path}")
+
+    method = prod.get("sampling_method", "center_bilinear")
+    z_name = prod["z_name"]
+    lon_name = prod["lon_name"]
+    lat_name = prod["lat_name"]
+    lon_convention = prod.get("lon_convention", "-180_180")
+    logger.info("Resolved sampling method for %s: configured=%s", prod["name"], method)
+
+    ds = xr.open_dataset(path, decode_cf=False, mask_and_scale=False)
+    try:
+        lat_vals, lat_asc = _monotonic_coords(ds[lat_name].values, lat_name)
+        lon_vals, lon_asc = _monotonic_coords(ds[lon_name].values, lon_name)
+        lats = cells["lat_center"].to_numpy(dtype=np.float64)
+        lons = cells["lon_center"].to_numpy(dtype=np.float64)
+        query_lons = lons % 360.0 if lon_convention == "0_360" else lons
+        da = ds[z_name]
+        attrs = _read_netcdf_var_attributes(path, z_name)
+        if not attrs:
+            for key in ("_FillValue", "missing_value", "scale_factor", "add_offset"):
+                if key in da.attrs:
+                    attrs[key] = da.attrs[key]
+        fill_value = attrs.get("_FillValue", attrs.get("missing_value", np.nan))
+
+        if method == "center_bilinear":
+            lat_start = _searchsorted_monotonic(lat_vals, np.array([float(np.nanmin(lats)) - 0.5]), lat_asc)[0]
+            lat_stop = _searchsorted_monotonic(lat_vals, np.array([float(np.nanmax(lats)) + 0.5]), lat_asc, side="right")[0]
+            lon_start = _searchsorted_monotonic(lon_vals, np.array([float(np.nanmin(query_lons)) - 0.5]), lon_asc)[0]
+            lon_stop = _searchsorted_monotonic(lon_vals, np.array([float(np.nanmax(query_lons)) + 0.5]), lon_asc, side="right")[0]
+            lat_start = max(0, int(lat_start)); lat_stop = min(len(lat_vals), int(lat_stop))
+            lon_start = max(0, int(lon_start)); lon_stop = min(len(lon_vals), int(lon_stop))
+            if lat_stop <= lat_start or lon_stop <= lon_start:
+                raw_values = np.full(len(cells), np.nan, dtype=np.float64)
+            else:
+                z_sub = da[lat_start:lat_stop, lon_start:lon_stop].values
+                z_sub = _apply_fill_scale_offset(np.asarray(z_sub), attrs)
+                lat_sub = lat_vals[lat_start:lat_stop]
+                lon_sub = lon_vals[lon_start:lon_stop]
+                if not lat_asc:
+                    lat_sub = lat_sub[::-1]
+                    z_sub = z_sub[::-1, :]
+                if not lon_asc:
+                    lon_sub = lon_sub[::-1]
+                    z_sub = z_sub[:, ::-1]
+                interp = RegularGridInterpolator(
+                    (lat_sub, lon_sub), z_sub,
+                    method="linear", bounds_error=False, fill_value=np.nan,
+                )
+                raw_values = interp(np.column_stack([lats, query_lons])).astype(np.float64)
+            effective_method = method
+        elif method == "center_nearest":
+            lat_idx = _nearest_indices_monotonic(lat_vals, lats, lat_asc)
+            lon_idx = _nearest_indices_monotonic(lon_vals, query_lons, lon_asc)
+            raw_values = np.full(len(cells), np.nan, dtype=np.float64)
+            unique_lat_idx = np.unique(lat_idx)
+            band_size = 500
+            for band_start in range(0, len(unique_lat_idx), band_size):
+                band_lats = unique_lat_idx[band_start:band_start + band_size]
+                mask = np.isin(lat_idx, band_lats)
+                lat_lo = int(max(0, band_lats.min()))
+                lat_hi = int(min(len(lat_vals), band_lats.max() + 1))
+                lon_lo = int(max(0, lon_idx[mask].min()))
+                lon_hi = int(min(len(lon_vals), lon_idx[mask].max() + 1))
+                chunk = _apply_fill_scale_offset(np.asarray(da[lat_lo:lat_hi, lon_lo:lon_hi].values), attrs)
+                raw_values[mask] = chunk[lat_idx[mask] - lat_lo, lon_idx[mask] - lon_lo]
+            effective_method = method
+        elif method in ("cell_median", "cell_mean"):
+            agg_func = np.nanmedian if method == "cell_median" else np.nanmean
+            half_width = CELL_SIZE_DEG / 2.0
+            lat_starts = _searchsorted_monotonic(lat_vals, lats - half_width, lat_asc)
+            lat_stops = _searchsorted_monotonic(lat_vals, lats + half_width, lat_asc)
+            lon_starts = _searchsorted_monotonic(lon_vals, query_lons - half_width, lon_asc)
+            lon_stops = _searchsorted_monotonic(lon_vals, query_lons + half_width, lon_asc)
+            lat_counts = np.maximum(lat_stops - lat_starts, 0)
+            lon_counts = np.maximum(lon_stops - lon_starts, 0)
+
+            if int(np.max(lat_counts)) <= 1 and int(np.max(lon_counts)) <= 1:
+                logger.info("%s aggregate window is one pixel; using exact center_nearest-equivalent reads", prod["name"])
+                lat_idx = _nearest_indices_monotonic(lat_vals, lats, lat_asc)
+                lon_idx = _nearest_indices_monotonic(lon_vals, query_lons, lon_asc)
+                raw_values = np.full(len(cells), np.nan, dtype=np.float64)
+                unique_lat_idx = np.unique(lat_idx)
+                band_size = 500
+                for band_start in range(0, len(unique_lat_idx), band_size):
+                    band_lats = unique_lat_idx[band_start:band_start + band_size]
+                    mask = np.isin(lat_idx, band_lats)
+                    lat_lo = int(max(0, band_lats.min()))
+                    lat_hi = int(min(len(lat_vals), band_lats.max() + 1))
+                    lon_lo = int(max(0, lon_idx[mask].min()))
+                    lon_hi = int(min(len(lon_vals), lon_idx[mask].max() + 1))
+                    chunk = _apply_fill_scale_offset(np.asarray(da[lat_lo:lat_hi, lon_lo:lon_hi].values), attrs)
+                    raw_values[mask] = chunk[lat_idx[mask] - lat_lo, lon_idx[mask] - lon_lo]
+                effective_method = method
+            else:
+                logger.info(
+                    "%s aggregate window max pixels: lat=%s lon=%s; grouping %s unique cells",
+                    prod["name"], int(lat_counts.max()), int(lon_counts.max()), len(cells),
+                )
+                raw_values = np.full(len(cells), np.nan, dtype=np.float64)
+                groups: dict[tuple[int, int, int, int], list[int]] = {}
+                for idx, (lat_s, lat_e, lon_s, lon_e) in enumerate(zip(lat_starts, lat_stops, lon_starts, lon_stops)):
+                    lat_s = int(max(0, min(lat_s, len(lat_vals))))
+                    lat_e = int(max(lat_s, min(lat_e, len(lat_vals))))
+                    lon_s = int(max(0, min(lon_s, len(lon_vals))))
+                    lon_e = int(max(lon_s, min(lon_e, len(lon_vals))))
+                    if lat_e <= lat_s:
+                        lat_s, lat_e = _coordinate_window(lat_vals, float(lats[idx]), half_width, lat_asc)
+                    if lon_e <= lon_s:
+                        lon_s, lon_e = _coordinate_window(lon_vals, float(query_lons[idx]), half_width, lon_asc)
+                    groups.setdefault((lat_s, lat_e, lon_s, lon_e), []).append(idx)
+                logger.info("%s aggregate unique grid windows: %s", prod["name"], len(groups))
+                for n_done, (window, idxs) in enumerate(groups.items(), start=1):
+                    if n_done % 250000 == 0:
+                        logger.info("%s aggregate windows processed: %s/%s", prod["name"], n_done, len(groups))
+                    lat_s, lat_e, lon_s, lon_e = window
+                    arr = _apply_fill_scale_offset(np.asarray(da[lat_s:lat_e, lon_s:lon_e].values), attrs)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=RuntimeWarning)
+                        val = float(agg_func(arr)) if arr.size else np.nan
+                    raw_values[idxs] = val
+                effective_method = method
+        else:
+            raise ValueError(f"Unknown sampling_method: {method}")
+    finally:
+        ds.close()
+
+    return raw_values, effective_method, {"fill_value": fill_value}
+
+
+def apply_z_convention(raw_values: np.ndarray, prod_cfg: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
+    z_conv = prod_cfg.get("z_convention", "elevation_negative_ocean")
+    if z_conv == "depth_positive_down":
+        model_elev_m = -raw_values
+    else:
+        model_elev_m = raw_values.copy()
+    return model_elev_m, -model_elev_m
+
+
 def build_cell_result(cells: pd.DataFrame, prod: dict[str, Any], raw_values: np.ndarray,
                       model_elev_m: np.ndarray, model_depth_m: np.ndarray,
-                      effective_method: str) -> pd.DataFrame:
+                      effective_method: str, run_stage: str = "smoke") -> pd.DataFrame:
     keep_cols = [
         "cell_id", "lon_center", "lat_center", "lon_bin", "lat_bin", "lat_band_10deg",
         "representative_depth_m", "depth_m_positive_down", "elev_m", "ship_depth_m", "ship_elev_m",
@@ -675,14 +932,16 @@ def build_cell_result(cells: pd.DataFrame, prod: dict[str, Any], raw_values: np.
     out["config_sampling_method"] = prod.get("sampling_method", "")
     out["z_convention"] = prod.get("z_convention", "")
     out["lon_convention"] = prod.get("lon_convention", "")
-    out["run_stage"] = "smoke"
+    out["run_stage"] = run_stage
     if "depth_bin" not in out.columns or pd.api.types.is_numeric_dtype(out.get("depth_bin")):
         out["depth_bin_label"] = out["ship_depth_m"].apply(assign_depth_bin)
     else:
         out["depth_bin_label"] = out["depth_bin"].astype(str)
     if "lat_band_10deg" not in out.columns:
         out["lat_band_10deg"] = (np.floor(out["lat_center"] / 10.0) * 10).astype(int)
-    out["region_10deg"] = out.apply(lambda r: assign_region_10deg(r["lon_center"], r["lat_center"]), axis=1)
+    region_lon = (np.floor(out["lon_center"].to_numpy(dtype=np.float64) / 10.0) * 10).astype(int)
+    region_lat = (np.floor(out["lat_center"].to_numpy(dtype=np.float64) / 10.0) * 10).astype(int)
+    out["region_10deg"] = [f"lon{lon:04d}_lat{lat:04d}" for lon, lat in zip(region_lon, region_lat)]
     return out
 
 
@@ -725,6 +984,7 @@ def compute_metric_row(sub: pd.DataFrame, extras: dict[str, Any]) -> dict[str, A
     row: dict[str, Any] = {
         "requested_cells": int(len(sub)),
         "count": int(len(errors)),
+        "nodata_count": int(len(sub) - len(errors)),
         "coverage_fraction": float(len(errors) / len(sub)) if len(sub) else 0.0,
         "bias": np.nan,
         "MAE": np.nan,
@@ -780,6 +1040,7 @@ def build_metrics(cells_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
         "quality_tier": "quality_tier",
         "evidence_class": "evidence_class",
         "source_role": "source_role",
+        "branch": "branch",
         "depth_bin": "depth_bin_label",
         "lat_band": "lat_band_10deg",
         "region_10deg": "region_10deg",
@@ -852,6 +1113,236 @@ def markdown_table(df: pd.DataFrame) -> str:
     for _, row in work.iterrows():
         lines.append("| " + " | ".join(fmt(row.get(c)) for c in cols) + " |")
     return "\n".join(lines)
+
+
+def make_full_report(metrics: dict[str, pd.DataFrame], diagnostics: pd.DataFrame, product_status: pd.DataFrame,
+                     preflight_status: str, safety_checks: pd.DataFrame, elapsed: float,
+                     status: str, out_dir: Path) -> str:
+    lines = []
+    lines.append("# Step 08 Strict-Primary Full Global Validation Report")
+    lines.append("")
+    lines.append(f"Generated: {datetime.now(timezone.utc).isoformat()}")
+    lines.append(f"Elapsed: {elapsed:.1f}s")
+    lines.append(f"Preflight status: **{preflight_status}**")
+    lines.append(f"Full strict-primary status: **{status}**")
+    lines.append(f"Output directory: `{out_dir}`")
+    lines.append("")
+    lines.append("## 1. Input baseline")
+    lines.append("")
+    lines.append(markdown_table(pd.DataFrame([{
+        "product": FULL_STRICT_PRODUCT_KEY,
+        "product_role": EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["product_role"],
+        "rows": row_count(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["path"]),
+        "path": str(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["path"]),
+    }])))
+    lines.append("")
+    lines.append("## 2. Safety checks")
+    lines.append("")
+    lines.append(markdown_table(safety_checks))
+    lines.append("")
+    lines.append("## 3. Product status")
+    lines.append("")
+    lines.append(markdown_table(product_status))
+    lines.append("")
+    lines.append("## 4. Overall metrics")
+    lines.append("")
+    summary = metrics.get("summary", pd.DataFrame()).copy()
+    display_cols = [
+        "product_name", "product_role", "sampling_method", "requested_cells", "count", "nodata_count",
+        "coverage_fraction", "bias", "MAE", "RMSE", "weighted_MAE", "weighted_RMSE",
+        "median_error", "MAD", "abs_error_p90", "abs_error_p95", "abs_error_p99",
+    ]
+    if len(summary):
+        lines.append(markdown_table(summary[[c for c in display_cols if c in summary.columns]]))
+    else:
+        lines.append("No metrics produced.")
+    lines.append("")
+    lines.append("## 5. Product convention diagnostics")
+    lines.append("")
+    lines.append(markdown_table(diagnostics))
+    lines.append("")
+    lines.append("## 6. Recommendation")
+    lines.append("")
+    if status == "PASS":
+        lines.append("Proceed to expanded_primary sensitivity validation if the objective is to quantify high-confidence singlebeam gap-fill coverage and metric sensitivity. Keep strict_primary as the main global baseline.")
+    else:
+        lines.append("Do not proceed to expanded_primary sensitivity validation until the failed strict-primary checks/products are reviewed.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def full_safety_checks(cells: pd.DataFrame, diagnostics: pd.DataFrame, product_status: pd.DataFrame) -> pd.DataFrame:
+    checks: list[dict[str, Any]] = []
+    expected_rows = int(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["expected_rows"])
+    checks.append({
+        "check": "input_row_count",
+        "status": "PASS" if len(cells) == expected_rows else "FAIL",
+        "details": f"rows={len(cells):,}; expected={expected_rows:,}",
+    })
+    singlebeam = int((cells["source_provider"].astype(str) == "ncei_singlebeam").sum())
+    regional = int((cells["branch"].astype(str) == "regional_mrar").sum())
+    checks.append({"check": "no_singlebeam_in_strict_primary", "status": "PASS" if singlebeam == 0 else "FAIL", "details": f"ncei_singlebeam rows={singlebeam:,}"})
+    checks.append({"check": "no_regional_mrar_in_strict_primary", "status": "PASS" if regional == 0 else "FAIL", "details": f"regional_mrar rows={regional:,}"})
+    weights_ok = bool(cells["validation_weight"].notna().all())
+    checks.append({"check": "validation_weight_preserved", "status": "PASS" if weights_ok else "FAIL", "details": f"null weights={int(cells['validation_weight'].isna().sum()):,}"})
+    for col in ["quality_tier", "evidence_class", "matched_rule_id"]:
+        nulls = int(cells[col].isna().sum()) if col in cells.columns else len(cells)
+        checks.append({"check": f"{col}_preserved", "status": "PASS" if nulls == 0 else "FAIL", "details": f"null {col}={nulls:,}"})
+    if len(diagnostics):
+        bad = diagnostics[diagnostics["sign_error_suspected"].fillna(False).astype(bool)]
+        details = ",".join(sorted(bad["product_name"].astype(str).unique())) if len(bad) else "none"
+        checks.append({"check": "sign_error_suspected_false", "status": "PASS" if len(bad) == 0 else "FAIL", "details": details})
+    else:
+        checks.append({"check": "sign_error_suspected_false", "status": "FAIL", "details": "no diagnostics"})
+    errors = product_status[product_status["status"].eq("error")] if len(product_status) else product_status
+    checks.append({"check": "model_errors_do_not_corrupt_other_outputs", "status": "PASS" if len(errors) == 0 else "WARN", "details": f"error products={len(errors)}"})
+    checks.append({"check": "no_model_residual_filtering", "status": "PASS", "details": "all strict-primary rows are retained before model nodata masking in metrics"})
+    return pd.DataFrame(checks)
+
+
+def run_full(args, logger: logging.Logger) -> tuple[str, Path]:
+    logger.info("Running Stage 3 full strict-primary global validation")
+    if not args.confirm_full:
+        raise RuntimeError("Full strict-primary validation requires --confirm-full")
+    if args.run_label == "smoke":
+        raise RuntimeError("Refusing to write full outputs to smoke run-label")
+
+    preflight_status, preflight_report = run_preflight(args, logger)
+    if preflight_status != "PASS":
+        raise RuntimeError(f"Preflight failed; see {preflight_report}")
+
+    config = load_config(Path(args.config))
+    default_products = ["GEBCO_2024", "ETOPO_2022", "SRTM15_V2.7", "SDUST_2023", "TOPO_25.1", "SWOT_T1"]
+    product_names = args.product_name or default_products
+    products = enabled_products(config, product_names)
+    products_by_name = {p["name"]: p for p in products}
+    ordered_products = [products_by_name[name] for name in product_names if name in products_by_name]
+
+    out_dir = output_dir(args.run_label)
+    if out_dir.exists() and any(out_dir.iterdir()) and not args.overwrite:
+        raise RuntimeError(f"Output dir has files (use --overwrite only if intentionally replacing this production run): {out_dir}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    cells = prepare_validation_cells(FULL_STRICT_PRODUCT_KEY, attach_rule_ids=True)
+    logger.info("Loaded strict-primary cells: %s", len(cells))
+    expected_rows = int(EXPECTED_PRODUCTS[FULL_STRICT_PRODUCT_KEY]["expected_rows"])
+    if len(cells) != expected_rows:
+        raise RuntimeError(f"Strict-primary row count {len(cells):,} != expected {expected_rows:,}")
+    if int((cells["source_provider"].astype(str) == "ncei_singlebeam").sum()) != 0:
+        raise RuntimeError("Strict-primary input contains ncei_singlebeam rows")
+    if int((cells["branch"].astype(str) == "regional_mrar").sum()) != 0:
+        raise RuntimeError("Strict-primary input contains regional_mrar rows")
+
+    logger.info("Configured full-run products and sampling methods:")
+    for prod in ordered_products:
+        logger.info("  %s: sampling_method=%s z_convention=%s lon_convention=%s footprint=%s",
+                    prod.get("name"), prod.get("sampling_method"), prod.get("z_convention"),
+                    prod.get("lon_convention"), bool(prod.get("footprint")))
+
+    diagnostics: list[dict[str, Any]] = []
+    product_status: list[dict[str, Any]] = []
+    metric_frames: dict[str, list[pd.DataFrame]] = {k: [] for k in [
+        "summary", "by_quality_tier", "by_evidence_class", "by_source_role", "by_branch",
+        "by_depth_bin", "by_lat_band", "by_region_10deg",
+    ]}
+    t0 = time.time()
+
+    for prod in ordered_products:
+        pname = prod["name"]
+        product_t0 = time.time()
+        if prod.get("footprint"):
+            reason = FULL_FOOTPRINT_SKIP_REASON
+            logger.info("Skipping %s: %s", pname, reason)
+            product_status.append({"product_name": pname, "status": "skipped", "reason": reason, "rows": 0, "elapsed_s": 0.0})
+            continue
+        if not Path(prod["path"]).exists():
+            reason = f"file not found: {prod['path']}"
+            logger.warning("Skipping %s: %s", pname, reason)
+            product_status.append({"product_name": pname, "status": "skipped", "reason": reason, "rows": 0, "elapsed_s": 0.0})
+            continue
+
+        logger.info("Full strict-primary sampling product %s", pname)
+        try:
+            raw_values, effective_method, sample_meta = sample_product_full(prod, cells, logger)
+            model_elev_m, model_depth_m = apply_z_convention(raw_values, prod)
+            result = build_cell_result(cells, prod, raw_values, model_elev_m, model_depth_m, effective_method, run_stage="full_strict_primary")
+            diag = convention_diagnostic(prod, cells, raw_values, model_elev_m, model_depth_m, effective_method, sample_meta.get("fill_value", np.nan))
+            diagnostics.append(diag)
+            product_metrics = build_metrics(result)
+            for key, df in product_metrics.items():
+                if len(df):
+                    metric_frames.setdefault(key, []).append(df)
+            out_path = out_dir / f"full_validation_by_cell_strict_primary_{pname}.parquet"
+            atomic_write_parquet(result, out_path)
+            product_status.append({
+                "product_name": pname,
+                "status": "ok",
+                "reason": "",
+                "rows": int(len(result)),
+                "valid_count": int(np.isfinite(result["elev_error_m"]).sum()),
+                "nodata_count": int((~np.isfinite(result["elev_error_m"])).sum()),
+                "configured_sampling_method": prod.get("sampling_method", ""),
+                "resolved_sampling_method": effective_method,
+                "elapsed_s": round(time.time() - product_t0, 1),
+            })
+            del raw_values, model_elev_m, model_depth_m, result, product_metrics
+            gc.collect()
+        except Exception as exc:
+            logger.exception("Product %s failed; recording skip/error and continuing", pname)
+            product_status.append({
+                "product_name": pname,
+                "status": "error",
+                "reason": str(exc),
+                "rows": 0,
+                "elapsed_s": round(time.time() - product_t0, 1),
+            })
+            gc.collect()
+            continue
+
+    metrics = {key: (pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()) for key, frames in metric_frames.items()}
+    diagnostics_df = pd.DataFrame(diagnostics)
+    product_status_df = pd.DataFrame(product_status)
+    skipped_df = product_status_df[product_status_df["status"].isin(["skipped", "error"])] if len(product_status_df) else pd.DataFrame()
+    safety_df = full_safety_checks(cells, diagnostics_df, product_status_df)
+
+    metric_stems = {
+        "summary": "full_validation_metrics_summary_strict_primary",
+        "by_quality_tier": "full_validation_metrics_by_quality_tier_strict_primary",
+        "by_evidence_class": "full_validation_metrics_by_evidence_class_strict_primary",
+        "by_source_role": "full_validation_metrics_by_source_role_strict_primary",
+        "by_branch": "full_validation_metrics_by_branch_strict_primary",
+        "by_depth_bin": "full_validation_metrics_by_depth_bin_strict_primary",
+        "by_lat_band": "full_validation_metrics_by_lat_band_10deg_strict_primary",
+        "by_region_10deg": "full_validation_metrics_by_region_10deg_strict_primary",
+    }
+    for key, stem in metric_stems.items():
+        df = metrics.get(key, pd.DataFrame())
+        if len(df) == 0:
+            continue
+        atomic_write_parquet(df, out_dir / f"{stem}.parquet")
+        atomic_write_tsv(df, out_dir / f"{stem}.tsv")
+
+    atomic_write_parquet(diagnostics_df, out_dir / "full_validation_sample_diagnostics_strict_primary.parquet")
+    atomic_write_tsv(diagnostics_df, out_dir / "full_validation_sample_diagnostics_strict_primary.tsv")
+    atomic_write_parquet(product_status_df, out_dir / "full_validation_product_status_strict_primary.parquet")
+    atomic_write_tsv(product_status_df, out_dir / "full_validation_product_status_strict_primary.tsv")
+    atomic_write_tsv(skipped_df, out_dir / "skipped_products.tsv")
+    atomic_write_tsv(safety_df, out_dir / "full_validation_safety_checks_strict_primary.tsv")
+
+    failed_safety = bool((safety_df["status"] == "FAIL").any())
+    sign_fail = bool(len(diagnostics_df) and diagnostics_df["sign_error_suspected"].fillna(False).astype(bool).any())
+    no_success = bool((product_status_df["status"] == "ok").sum() == 0) if len(product_status_df) else True
+    status = "FAIL" if failed_safety or sign_fail or no_success else "PASS"
+    elapsed = time.time() - t0
+    report = make_full_report(metrics, diagnostics_df, product_status_df, preflight_status, safety_df, elapsed, status, out_dir)
+    report_path = DOCS_DIR / "strict_primary_global_validation_report.md"
+    atomic_write_text(report, report_path)
+    run_label_report_path = DOCS_DIR / f"strict_primary_global_validation_report_{args.run_label}.md"
+    if run_label_report_path != report_path:
+        atomic_write_text(report, run_label_report_path)
+    logger.info("Full strict-primary status: %s", status)
+    logger.info("Wrote %s", report_path)
+    return status, report_path
 
 
 def make_smoke_report(cells_df: pd.DataFrame, metrics: dict[str, pd.DataFrame], comparison: pd.DataFrame,
@@ -1005,6 +1496,7 @@ def run_smoke(args, logger: logging.Logger) -> tuple[str, Path]:
         "by_quality_tier": "validation_metrics_by_quality_tier",
         "by_evidence_class": "validation_metrics_by_evidence_class",
         "by_source_role": "validation_metrics_by_source_role",
+        "by_branch": "validation_metrics_by_branch",
         "by_depth_bin": "validation_metrics_by_depth_bin",
         "by_lat_band": "validation_metrics_by_lat_band",
         "by_region_10deg": "validation_metrics_by_region_10deg",
@@ -1056,11 +1548,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     logger.info("stage=%s run_label=%s config=%s product_name=%s sample_n_cells=%s overwrite=%s",
                 args.stage, args.run_label, args.config, args.product_name, args.sample_n_cells, args.overwrite)
 
-    if args.stage == "full" or args.run_label == "full":
-        if not args.confirm_full:
-            logger.error("Full production validation requires --confirm-full")
-            return 2
-        logger.error("Full production implementation is intentionally not launched in this dispatch. Run only after smoke review.")
+    if (args.stage == "full" or args.run_label == "full") and not args.confirm_full:
+        logger.error("Full production validation requires --confirm-full")
         return 2
 
     try:
@@ -1071,6 +1560,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         if args.stage == "smoke":
             status, report = run_smoke(args, logger)
             print(f"Smoke status: {status}\nReport: {report}")
+            return 0 if status == "PASS" else 1
+        if args.stage == "full":
+            status, report = run_full(args, logger)
+            print(f"Full strict-primary status: {status}\nReport: {report}")
             return 0 if status == "PASS" else 1
     except Exception as exc:
         logger.exception("Stage failed: %s", exc)

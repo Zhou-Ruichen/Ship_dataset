@@ -1,3 +1,4 @@
 {"file":".trellis/spec/backend/data-contracts.md","reason":"Check Step 07B row counts, roles, and schema preservation in validation outputs."}
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check smoke/full gating and report artifacts."}
 {"file":".trellis/spec/backend/pipeline-design-decisions.md","reason":"Check no primary promotion of supplementary singlebeam or regional MRAR, and sign/residual conventions."}
+{"file": "ncei/docs/strict_primary_global_validation_report.md", "reason": "Stage 3 verification source: full strict-primary status PASS, all safety checks PASS, sign_error_suspected false for completed products, and SWOT_T1 skip reason recorded."}
