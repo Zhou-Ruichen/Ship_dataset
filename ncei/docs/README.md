@@ -100,6 +100,24 @@ Raw inputs (all under `archive/` or upstream paths, all gitignored):
 - `NCEI_singlebeam_tracks_raw_2018files.zip` — original 2,018-file
   archive (matches a subset of singlebeam.xyz; see commit history)
 
+## Step 08 publication pack (v1.0)
+
+Global gridded-product validation results, frozen at commit `b376f95`
+(2026-05-28):
+
+- [`step08_final_global_validation_report.md`](step08_final_global_validation_report.md)
+  — Stage 6 cross-stage final report (policy stance).
+- [`publication_ready_step08_summary.md`](publication_ready_step08_summary.md)
+  — outward-facing summary (metrics, bootstrap CIs, attribution, figure index).
+- [`model_ranking_uncertainty_report.md`](model_ranking_uncertainty_report.md)
+  — paired cluster block bootstrap CIs and ranking stability.
+- [`step08_gapfill_error_structure_report.md`](step08_gapfill_error_structure_report.md)
+  — gap-fill RMSE attribution by quality tier / depth / region.
+
+Method spec: [`../../.trellis/spec/backend/step08_publication_pack.md`](../../.trellis/spec/backend/step08_publication_pack.md).
+Machine-readable artifacts (gitignored) land under
+`derived/model_validation_1min_step08_pub/{a_ranking_uncertainty,b_pub_tables,c_gapfill_structure,d_figures,summary}/`.
+
 ## Provenance / further reading
 
 - Per-step reports under `docs/step{0NA,03_,03b,04_,04a,04b,05a,05b,06a,06b,07a,07b,mrar,trackline,singlebeam,xyz}_*.md`

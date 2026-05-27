@@ -96,6 +96,42 @@ documented in
 
 ---
 
+## Global model validation results (v1.0)
+
+> **Global ship-cell model validation v1.0 is complete.**
+> Frozen on `main` at commit `b376f95` (2026-05-28).
+
+Reports:
+
+- [`ncei/docs/step08_final_global_validation_report.md`](ncei/docs/step08_final_global_validation_report.md)
+  — Stage 6 cross-stage final report; product-role policy stance.
+- [`ncei/docs/publication_ready_step08_summary.md`](ncei/docs/publication_ready_step08_summary.md)
+  — single outward-facing pack: metrics, bootstrap CIs, pairwise
+  significance, gap-fill attribution, figure index.
+- [`ncei/docs/model_ranking_uncertainty_report.md`](ncei/docs/model_ranking_uncertainty_report.md)
+  — paired cluster block bootstrap CIs and ranking stability.
+- [`ncei/docs/step08_gapfill_error_structure_report.md`](ncei/docs/step08_gapfill_error_structure_report.md)
+  — expanded-primary gap-fill RMSE attribution by quality / depth / region.
+
+Method spec: [`.trellis/spec/backend/step08_publication_pack.md`](.trellis/spec/backend/step08_publication_pack.md).
+
+Frozen ranking by strict-primary RMSE (N = 2,398,774 cells, 5 global models):
+**GEBCO_2024 < ETOPO_2022 < SRTM15_V2.7 < TOPO_25.1 < SDUST_2023**. GEBCO
+holds rank-1 with bootstrap probability 0.905; the GEBCO vs ETOPO pair
+is *not* significant at 95% (ΔRMSE CI crosses 0).
+
+Product-role policy (frozen at v1.0):
+
+| product | role |
+|---|---|
+| `strict_primary_multibeam_cells` | global ranking baseline |
+| `expanded_primary_ship_cells` | sensitivity / coverage expansion |
+| `supplementary_singlebeam_cells` | non-primary coverage diagnostic |
+| `regional_mrar_experiment_cells` | regional sensitivity only |
+| `SWOT_T1` | separate regional task (not in v1.0) |
+
+---
+
 ## Repository layout
 
 ```
