@@ -123,20 +123,76 @@ Optional after primary validation is stable.
 
 Checklist:
 
-- `supplementary_singlebeam_cells`: coverage diagnostics only.
-- `regional_mrar_experiment_cells`: regional sensitivity only.
-- Do not mix either into strict-primary validation.
+- [x] `supplementary_singlebeam_cells`: coverage diagnostics only.
+- [x] `regional_mrar_experiment_cells`: regional sensitivity only.
+- [x] Do not mix either into strict-primary validation.
+- [x] Run full-product non-primary diagnostics:
 
-Do not run this stage in the current dispatch.
+```bash
+python ncei/code/16_non_primary_coverage_diagnostics_step08.py \
+  --run-label stage5_non_primary \
+  --confirm-full \
+  --overwrite
+```
+
+Result: PASS 2026-05-27T17:17Z, elapsed 281.8s. All 16 safety checks passed.
+
+Key outputs:
+
+- `ncei/docs/step08_non_primary_diagnostics_report_stage5_non_primary.md`
+- `ncei/derived/model_validation_1min_stage5_non_primary/non_primary_product_summary.{parquet,tsv}`
+- `ncei/derived/model_validation_1min_stage5_non_primary/non_primary_overlap_summary.{parquet,tsv}`
+- `ncei/derived/model_validation_1min_stage5_non_primary/non_primary_safety_checks.{parquet,tsv}`
+
+Key findings:
+
+- `supplementary_singlebeam_cells`: 12,277,633 unique cells; 8,751,456 low-evidence cells; 878,575 overlap expanded-primary cell IDs, but remain coverage diagnostics only.
+- `regional_mrar_experiment_cells`: 9,019,383 unique cells; 9,015,418 `review_or_sensitivity_only`; 574,347 overlap expanded-primary cell IDs, but remain regional sensitivity only.
+- `validation_cell_catalog` intentionally has 12,611,548 `supplementary_singlebeam` catalog rows for 12,277,633 unique cell IDs because the 333,915 expanded-primary singlebeam gap-fill cells are also represented as expanded-primary membership rows.
+
+Completed in this dispatch.
 
 ## Stage 6 — Final report
 
 After full strict and expanded validations are available:
 
-- Summarize strict-primary results.
-- Summarize strict vs expanded sensitivity.
-- Summarize skipped models.
-- Provide final recommendations for whether `expanded_primary_ship_cells` should remain a secondary product only or be considered for specific regional analyses.
+- [x] Summarize strict-primary results.
+- [x] Summarize strict vs expanded sensitivity.
+- [x] Summarize Stage 5 non-primary diagnostics.
+- [x] Summarize skipped/out-of-scope models.
+- [x] Provide final recommendations for whether `expanded_primary_ship_cells` should remain a secondary product only or be considered for specific regional analyses.
+
+Command:
+
+```bash
+python ncei/code/17_step08_final_global_validation_report.py \
+  --run-label stage6_final \
+  --confirm-final \
+  --overwrite
+```
+
+Result: PASS 2026-05-27T18:02Z, elapsed 23.3s. Stage 6 did not resample model grids; it consolidated the existing Stage 3, Stage 4, and Stage 5 machine-readable outputs.
+
+Key outputs:
+
+- `ncei/docs/step08_final_global_validation_report.md`
+- `ncei/derived/model_validation_1min_stage6_final/step08_stage_outcomes.{parquet,tsv}`
+- `ncei/derived/model_validation_1min_stage6_final/step08_final_policy_recommendations.{parquet,tsv}`
+- `ncei/derived/model_validation_1min_stage6_final/expanded_gapfill_sensitivity_summary.{parquet,tsv}`
+
+Review hardening:
+
+- Stage 6 now asserts that retained/gap-fill attribution matches Stage 4 `strict_vs_expanded_comparison`: retained count equals strict count, gap-fill count equals coverage gain, expanded count equals by-cell rows, retained strict cells have `expanded_fill=False`, gap-fill cells have `expanded_fill=True`, and gap-fill cells are `ncei_singlebeam`.
+
+Final recommendation:
+
+- `strict_primary_multibeam_cells` remains the authoritative global validation baseline.
+- `expanded_primary_ship_cells` remains a secondary sensitivity / coverage-expansion output, not a replacement for strict primary.
+- `supplementary_singlebeam_cells` remains coverage diagnostics only.
+- `regional_mrar_experiment_cells` remains explicit regional sensitivity only.
+- `SWOT_T1` remains outside global Step 08 claims because it is a regional-footprint product.
+
+Completed in this dispatch. Parent task is ready for final review / closure, but remains `in_progress` until explicitly finished or archived.
 
 ## Review gates
 

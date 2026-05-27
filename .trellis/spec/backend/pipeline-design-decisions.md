@@ -1198,11 +1198,16 @@ Under `ncei/derived/validation_cells_1min/` (full) or suffixed
    `branch_role='regional_experiment'` and `sensitivity_only_flag`
    carried from Step 06B. Hive-partitioned by `lat_band_10deg`.
    Full count: **9,019,383**.
-5. `validation_cell_catalog.parquet` — long-format UNION (Product 1 +
-   Product 3 + Product 4), one row per (cell_id, product_label).
+5. `validation_cell_catalog.parquet` — long-format membership UNION
+   (Product 1 + Product 3 + Product 4) plus expanded-primary singlebeam
+   membership rows (`product_membership='expanded_primary_ship'`).
    Hive-partitioned by `product_label`. Full count: **24,029,705**.
    `final_primary_source` column documents Product 2's chosen source
-   for the corresponding cell when one exists.
+   for the corresponding cell when one exists. The catalog is not unique
+   on `(cell_id, product_label)`: `supplementary_singlebeam` has
+   12,277,633 unique cell IDs but 12,611,548 catalog rows because the
+   333,915 singlebeam gap-fill cells also carry expanded-primary
+   membership.
 
 Plus markdown: `ncei/docs/step07b_validation_cells_report.md`.
 

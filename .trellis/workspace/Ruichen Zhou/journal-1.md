@@ -103,3 +103,81 @@ Spec captured: role-aware Step 08 safety-check pattern and the "no model residua
 - Optional Stage 5 (supplementary_singlebeam_cells coverage diagnostics).
 - Optional Stage 6 (final cross-stage report tying strict + expanded together with policy decisions).
 - Pi-adapter MCP / skill improvements queued: `_modelMapCache` invalidation on config.toml mtime change; prompt-size guard + `embed_context=false` opt-out; richer error surfacing when `output.log` is empty (full prompts in earlier exchange).
+
+---
+
+## Session 3: Step 08 Stage 5 — Non-primary coverage diagnostics
+
+**Date**: 2026-05-27
+**Task**: `05-11-step-08-full-global-validation`
+**Branch**: `main`
+
+### Summary
+
+Completed Stage 5 non-primary diagnostics for the parent Step 08 task. Added `ncei/code/16_non_primary_coverage_diagnostics_step08.py`, a read-only full-product diagnostic runner that scans `supplementary_singlebeam_cells` and `regional_mrar_experiment_cells` without sampling gridded models or computing residuals. The run completed PASS with all 16 safety checks passing.
+
+Key results: `supplementary_singlebeam_cells` has 12,277,633 unique cells, 8,751,456 low-evidence cells, and 878,575 expanded-primary cell-id overlaps; `regional_mrar_experiment_cells` has 9,019,383 unique cells, 9,015,418 `review_or_sensitivity_only` cells, and 574,347 expanded-primary cell-id overlaps. All overlaps are diagnostic only and do not promote non-primary products into strict-primary validation.
+
+Stage 5 also clarified a Step 07B catalog contract: `validation_cell_catalog` intentionally has 12,611,548 `supplementary_singlebeam` catalog rows for 12,277,633 unique cell IDs because the 333,915 expanded-primary singlebeam gap-fill cells are included as expanded-primary membership rows.
+
+### Main Changes
+
+- `ncei/code/16_non_primary_coverage_diagnostics_step08.py`: new Stage 5 diagnostic runner with role-purity checks, primary-product exclusion checks, catalog unique-cell checks, per-product summaries, stratum summaries, overlap summaries, and report generation.
+- `ncei/docs/step08_non_primary_diagnostics_report_stage5_non_primary.md`: Stage 5 PASS report.
+- `ncei/derived/model_validation_1min_stage5_non_primary/`: machine-readable Stage 5 summaries and safety checks.
+- `.trellis/spec/backend/data-contracts.md` and `.trellis/spec/backend/pipeline-design-decisions.md`: updated validation-cell catalog contract for intentional supplementary membership duplicates.
+- Parent task metadata/context manifests updated for Stage 5 PASS.
+
+### Testing
+
+- [OK] `python -m py_compile ncei/code/16_non_primary_coverage_diagnostics_step08.py`
+- [OK] `python ncei/code/16_non_primary_coverage_diagnostics_step08.py --run-label stage5_non_primary --confirm-full --overwrite`
+- [OK] `non_primary_safety_checks.parquet`: 16 PASS, 0 FAIL
+- [OK] Report status PASS and output summaries cross-checked against parquet/TSV artifacts
+
+### Status
+
+[OK] **Stage 5 completed**; parent task remains `in_progress` for Stage 6 final cross-stage report.
+
+### Next Steps
+
+- Stage 6 final report tying strict-primary, expanded-primary sensitivity, Stage 5 non-primary diagnostics, skipped models, and policy recommendations together.
+
+---
+
+## Session 4: Step 08 Stage 6 — Final global validation report
+
+**Date**: 2026-05-27
+**Task**: `05-11-step-08-full-global-validation`
+**Branch**: `main`
+
+### Summary
+
+Completed Stage 6 final cross-stage report for the parent Step 08 task. Added `ncei/code/17_step08_final_global_validation_report.py`, a read-only report generator that consolidates existing Stage 3 strict-primary validation outputs, Stage 4 expanded-primary sensitivity outputs, and Stage 5 non-primary diagnostics. The run completed PASS and did not resample model grids or mutate validation products.
+
+Final policy recommendation: use `strict_primary_multibeam_cells` as the authoritative global validation baseline; keep `expanded_primary_ship_cells` as a secondary sensitivity / coverage-expansion output; keep `supplementary_singlebeam_cells` as coverage diagnostics only; keep `regional_mrar_experiment_cells` as explicit regional sensitivity only; do not claim global `SWOT_T1` validation.
+
+### Main Changes
+
+- `ncei/code/17_step08_final_global_validation_report.py`: new Stage 6 report generator, with review hardening to assert retained/gap-fill attribution against Stage 4 coverage-gain counts, `expanded_fill` flags, and `ncei_singlebeam` source membership.
+- `ncei/docs/step08_final_global_validation_report.md`: final cross-stage PASS report and recommendations.
+- `ncei/derived/model_validation_1min_stage6_final/`: machine-readable stage outcomes, policy recommendations, and expanded gap-fill sensitivity summary.
+- Parent task metadata/context manifests updated for Stage 6 PASS and final-review readiness.
+
+### Testing
+
+- [OK] `python -m py_compile ncei/code/17_step08_final_global_validation_report.py`
+- [OK] `python ncei/code/17_step08_final_global_validation_report.py --run-label stage6_final --confirm-final --overwrite` (PASS 2026-05-27T18:02Z, elapsed 23.3s)
+- [OK] `step08_stage_outcomes.tsv`: Stage 3, Stage 4, and Stage 5 all PASS with zero failed safety checks.
+- [OK] `expanded_gapfill_sensitivity_summary.tsv`: retained strict-primary count = 2,398,774 and gap-fill count = 333,915 for all five completed global products.
+- [OK] Stage 6 gap-fill attribution checks: retained count equals strict count, gap-fill count equals Stage 4 coverage gain, retained cells are not `expanded_fill`, and gap-fill cells are `ncei_singlebeam`.
+- [OK] Final report recommendation matches Stage 3 / Stage 4 / Stage 5 evidence.
+
+### Status
+
+[OK] **Stage 6 completed**; parent task is ready for final review / closure and remains `in_progress` until explicitly finished or archived.
+
+### Next Steps
+
+- Review `ncei/docs/step08_final_global_validation_report.md`.
+- Optionally finish/archive the Trellis parent task and commit the uncommitted Stage 5 / Stage 6 artifacts.

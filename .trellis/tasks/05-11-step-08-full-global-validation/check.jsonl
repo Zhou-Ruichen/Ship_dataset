@@ -7,3 +7,7 @@
 {"file": "ncei/docs/stage4_expanded_primary_validation_audit_report.md", "reason": "Stage 4 audit: GO for sensitivity / coverage reference use, NO-GO for replacing strict baseline; Drake Passage gap-fill anomaly documented; strict mtime non-mutation verified."}
 {"file": ".trellis/spec/backend/step08_role_aware_safety_checks.md", "reason": "Cross-stage spec: Step 08 strict vs expanded role-aware safety check pattern (extracted from Stages 3 and 4)."}
 {"file": ".trellis/spec/backend/step08_no_residual_filtering.md", "reason": "Cross-stage invariant: model residuals must never be used to filter or relabel validation cells in Step 08."}
+{"file": "ncei/docs/step08_non_primary_diagnostics_report_stage5_non_primary.md", "reason": "Stage 5 verification source: PASS status, all 16 safety checks PASS, non-primary overlap documented as diagnostic only."}
+{"file": "ncei/derived/model_validation_1min_stage5_non_primary/non_primary_safety_checks.tsv", "reason": "Stage 5 machine-readable safety checks: row counts, role purity, primary-product exclusion, and catalog unique-cell checks."}
+{"file": "ncei/docs/step08_final_global_validation_report.md", "reason": "Stage 6 verification source: final PASS report tying strict-primary, expanded-primary, non-primary diagnostics, skipped models, and policy recommendations together."}
+{"file": "ncei/derived/model_validation_1min_stage6_final/step08_stage_outcomes.tsv", "reason": "Stage 6 machine-readable cross-stage outcome table: Stages 3, 4, and 5 all PASS with zero failed safety checks."}

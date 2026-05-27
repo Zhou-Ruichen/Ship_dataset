@@ -283,11 +283,18 @@ under any condition.
 
 ### `validation_cell_catalog.parquet` (24,029,705 rows; hive product_label)
 
-Long-format UNION of strict + supplementary_sb + regional_mrar. One
-row per (cell_id, product_label). Adds `product_label` ∈
+Long-format membership UNION of strict + supplementary_sb + regional_mrar,
+plus expanded-primary singlebeam membership rows. Adds `product_label` ∈
 {`strict_primary_multibeam`, `supplementary_singlebeam`,
 `regional_mrar_experiment`} and `final_primary_source` (the chosen
 source for cells appearing in `expanded_primary_ship_cells`).
+
+The catalog is not unique on `(cell_id, product_label)`: the
+`supplementary_singlebeam` label intentionally includes 333,915 duplicate
+membership rows for high-confidence singlebeam cells that also participate
+in `expanded_primary_ship_cells` (`product_membership='expanded_primary_ship'`).
+Use unique `cell_id` counts when comparing catalog membership to
+`supplementary_singlebeam_cells.parquet`.
 
 ### Weight scale (do NOT rescale)
 
