@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Mandatory script structure and safety-check conventions"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "stdlib logging conventions"}
+{"file": ".trellis/spec/backend/data-contracts.md", "reason": "Validation cell schema; expanded_fill flag semantics"}
+{"file": ".trellis/spec/backend/step08_no_residual_filtering.md", "reason": "Do not use residuals to filter or relabel cells; subset is by expanded_fill only"}
+{"file": ".trellis/spec/backend/step08_role_aware_safety_checks.md", "reason": "Patterns for role-purity and cell-count safety checks"}
+{"file": "ncei/docs/step08_final_global_validation_report.md", "reason": "Cross-check: gap-fill RMSE per model must match Stage 6 section 4 retained_multibeam vs gapfill_singlebeam table"}

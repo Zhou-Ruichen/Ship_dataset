@@ -181,3 +181,55 @@ Final policy recommendation: use `strict_primary_multibeam_cells` as the authori
 
 - Review `ncei/docs/step08_final_global_validation_report.md`.
 - Optionally finish/archive the Trellis parent task and commit the uncommitted Stage 5 / Stage 6 artifacts.
+
+---
+
+## Session 5: Step 08 followup — Ranking uncertainty + publication pack
+
+**Date**: 2026-05-28
+**Tasks**:
+- Parent: `05-28-step08-ranking-uncertainty-and-pub`
+- Children: A `05-28-step08-a-ranking-uncertainty`, B `05-28-step08-b-pub-tables`, C `05-28-step08-c-gapfill-error-structure`, D `05-28-step08-d-pub-figures`
+**Branch**: `main`
+
+### Summary
+
+Built the Step 08 publication pack on top of the existing Stage 3/4/5/6 outputs. Quantified model ranking uncertainty via paired cluster block bootstrap (B=1000, 124 `region_10deg` clusters), produced publication-ready strict-primary and strict-vs-expanded metric tables, attributed the +6 to +8 m expanded-primary RMSE lift to the singlebeam gap-fill subset, and shipped 6 publication figures. Read-only over Step 06B / 07B / Step 08 Stage 3-6 products; no model resampling.
+
+Sub-tasks A, B, C were implemented through Pi-adapter dispatch in isolated worktrees; D and the parent integration script were implemented directly by the main agent. The first A dispatch crashed with a Pi stream_read_error (no patch); a clean re-dispatch with 90 min timeout succeeded.
+
+GEBCO_2024 holds rank-1 with 90.5% bootstrap probability under both RMSE and weighted RMSE. **GEBCO vs ETOPO is not significant at 95%** (ΔRMSE CI = [-4.28, +0.16] m, P(GEBCO better) = 90.6%); GEBCO vs every other model is significant. The expanded-primary RMSE lift is ~82% explained by the `quality_tier=medium_confidence` singlebeam subset (and by an overlapping low-latitude deep-overlap matched_rule_id), confirming that gap-fill is lower-quality singlebeam in known-difficult oceanographic regions rather than a method artifact.
+
+### Main Changes
+
+- `ncei/code/18_step08_ranking_bootstrap.py` — A: paired cluster block bootstrap over Stage 3 by-cell residuals; 19 safety PASS.
+- `ncei/code/19_step08_publication_tables.py` — B: publication-ready strict-primary and strict-vs-expanded tables (TSV + CSV); 99 safety PASS.
+- `ncei/code/20_step08_gapfill_error_structure.py` — C: 6 single-dim gap-fill RMSE slices + top-N attribution; 30+ safety PASS.
+- `ncei/code/21_step08_publication_figures.py` — D: 6 publication figures (matplotlib + cartopy), each with figure-ready TSV + PNG + PDF; 8 safety PASS.
+- `ncei/code/22_step08_publication_summary.py` — parent integration: 30 cross-check assertions (A↔B point/CI, B↔C gap-fill RMSE, B↔Stage 4 anchor) all PASS within 0.01 m tolerance.
+- `ncei/docs/model_ranking_uncertainty_report.md` — A report.
+- `ncei/docs/step08_gapfill_error_structure_report.md` — C report.
+- `ncei/docs/publication_ready_step08_summary.md` — parent integration summary, single outward-facing document.
+- `ncei/derived/model_validation_1min_step08_pub/` — 46 artifact files across `a_ranking_uncertainty/`, `b_pub_tables/`, `c_gapfill_structure/`, `d_figures/`, `summary/`.
+- `.trellis/spec/backend/step08_publication_pack.md` (+ index entry) — bootstrap design, cross-task numerical cross-check, publication output layout, fixed figure colors.
+- 5 Trellis task directories archived under `.trellis/tasks/archive/2026-05/`.
+
+### Testing
+
+- [OK] All 5 scripts `python -m py_compile` PASS.
+- [OK] All 5 scripts `--check-only` PASS in the main repo.
+- [OK] Full A run: 1000 iters bootstrap, elapsed 10.2 s, 19 safety PASS, all 15 (model × metric) CIs cover the point estimate.
+- [OK] Full B run: elapsed 4.1 s, 99 safety PASS; strict_count = 2,398,774 and expanded_count = 2,732,689 hit exactly; RMSE / wRMSE / coverage gain match Stage 6 / Stage 4 numbers exactly.
+- [OK] Full C run: elapsed 32.3 s, 0 safety FAIL / 0 WARN; retained RMSE matches strict-primary baseline exactly per model; top-20 contributors include `quality_tier=medium_confidence` at ~82% of total gap-fill sumsq for every model.
+- [OK] Full D run: elapsed 3.84 s, 8 safety PASS / 0 WARN; F5 / F6 cartopy maps rendered.
+- [OK] Parent integration run: cross-check PASS = 30, FAIL = 0; summary md written; manifest covers 46 artifacts.
+
+### Status
+
+[OK] **Step 08 followup pack complete**; A/B/C/D sub-tasks and parent task archived. Pending: single Phase 3.4 commit covering scripts, reports, derived outputs, archived task directories, spec update, and this journal entry.
+
+### Next Steps
+
+- Phase 3.4 commit (single staged commit referencing the parent task path).
+- Future: SWOT_T1 regional validation task (Stage 6 final report's flagged remaining work).
+

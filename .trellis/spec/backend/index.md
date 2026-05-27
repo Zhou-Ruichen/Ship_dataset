@@ -74,6 +74,7 @@ update this spec to match.
 | [Database Guidelines](./database-guidelines.md) | Parquet, manifests, TSV, YAML — no actual database |
 | [Step 08 Role-Aware Safety Checks](./step08_role_aware_safety_checks.md) | Strict vs expanded primary safety-check pattern in `run_full` |
 | [Step 08 No Residual Filtering](./step08_no_residual_filtering.md) | Invariant: gridded model residuals must never filter or relabel validation cells |
+| [Step 08 Publication Pack](./step08_publication_pack.md) | Paired cluster bootstrap, cross-task numerical cross-check, publication output layout |
 
 ---
 

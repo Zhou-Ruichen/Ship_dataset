@@ -1,0 +1,31 @@
+{
+  "id": "step08-ranking-uncertainty-and-pub",
+  "name": "step08-ranking-uncertainty-and-pub",
+  "title": "Step 08 Followup: Model Ranking Uncertainty and Publication-Ready Tables/Figures",
+  "description": "Parent task for Step 08 followup analysis: quantify model ranking uncertainty (A), produce publication-ready tables (B), explain strict-vs-expanded gap-fill error structure (C), and generate publication-ready figures (D). Read-only over Step 06B/07B validation products; no model resampling.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "Ruichen Zhou",
+  "assignee": "Ruichen Zhou",
+  "createdAt": "2026-05-28",
+  "completedAt": "2026-05-28",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "05-28-step08-a-ranking-uncertainty",
+    "05-28-step08-b-pub-tables",
+    "05-28-step08-c-gapfill-error-structure",
+    "05-28-step08-d-pub-figures"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

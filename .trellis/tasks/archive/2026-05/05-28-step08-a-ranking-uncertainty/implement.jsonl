@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Mandatory script structure: argparse, run-label gating, no silent fallbacks, no broad except, explicit --confirm flags"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "stdlib logging conventions for new pipeline scripts"}
+{"file": ".trellis/spec/backend/data-contracts.md", "reason": "Validation cell schema and weighted-RMSE conventions consumed by Step 08 outputs"}
+{"file": ".trellis/spec/backend/step08_no_residual_filtering.md", "reason": "Step 08 critical constraint: do not use model residuals to filter or relabel validation cells"}
+{"file": ".trellis/spec/backend/step08_role_aware_safety_checks.md", "reason": "Required safety-check patterns: role purity, branch role, no NaN, etc."}
+{"file": "ncei/docs/step08_final_global_validation_report.md", "reason": "Reference point estimates and policy stance the bootstrap CI must align with"}
