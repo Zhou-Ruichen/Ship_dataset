@@ -107,6 +107,19 @@ Required columns:
 
 Cell-id formula MUST match exactly — Step 04b joins by `cell_id` string.
 
+### Median exactness warning
+
+For a file-cell wholly contained in one Step 04a Parquet batch,
+`median_depth_m_positive_down` is the exact median of its QC-passed points.
+When the same file-cell crosses batches, `_combine_chunk_cells()` stores the
+`n_points`-weighted average of per-batch medians. That value is an explicit
+historical approximation, not the exact median of all raw points. The
+`n_points` sum remains exact.
+
+Do not silently promote this column to exact raw-point lineage. A consumer that
+requires exactness must replay all contributing raw/QC points and report the
+signed difference. See [`scs-lineage-audit.md`](./scs-lineage-audit.md).
+
 ---
 
 ## Global cells table (`derived/cells_1min/cells.parquet`, `derived/cells_1min_qcfiltered/cells.parquet`)

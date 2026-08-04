@@ -75,6 +75,7 @@ update this spec to match.
 | [Step 08 Role-Aware Safety Checks](./step08_role_aware_safety_checks.md) | Strict vs expanded primary safety-check pattern in `run_full` |
 | [Step 08 No Residual Filtering](./step08_no_residual_filtering.md) | Invariant: gridded model residuals must never filter or relabel validation cells |
 | [Step 08 Publication Pack](./step08_publication_pack.md) | Paired cluster bootstrap, cross-task numerical cross-check, publication output layout |
+| [SCS Frozen-Cohort Lineage Audit](./scs-lineage-audit.md) | Frozen handoff inputs, five-level lineage statuses, raw replay, and Step 04a median exactness boundary |
 
 ---
 
