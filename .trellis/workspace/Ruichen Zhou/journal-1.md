@@ -233,3 +233,36 @@ GEBCO_2024 holds rank-1 with 90.5% bootstrap probability under both RMSE and wei
 - Phase 3.4 commit (single staged commit referencing the parent task path).
 - Future: SWOT_T1 regional validation task (Stage 6 final report's flagged remaining work).
 
+
+
+## Session 3: SCS ship sounding QC v2 preflight
+
+**Date**: 2026-08-05
+**Task**: SCS ship sounding QC v2 preflight
+**Branch**: `main`
+
+### Summary
+
+Built and independently verified immutable candidate, raw-context, control, aggregation, reference-conflict, and metadata evidence; task remains active pending collaborator decisions before correction.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4c7516` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

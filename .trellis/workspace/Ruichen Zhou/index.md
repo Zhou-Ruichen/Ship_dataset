@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 2
-- **Last Active**: 2026-05-27
+- **Total Sessions**: 3
+- **Last Active**: 2026-08-05
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~140 | Active |
+| `journal-1.md` | ~268 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 3 | 2026-08-05 | SCS ship sounding QC v2 preflight | `a4c7516` | `main` |
 | 2 | 2026-05-27 | Step 08 Stage 3 + Stage 4 — strict-primary full run + expanded-primary sensitivity | `45667cc`, `1d327e6`, `cbf60ef` | `main` |
 | 1 | 2026-05-22 | NCEI Step 04A → Step 07B + PR-G task closure | `7cecded`, `d8d9fe6`, `bad70f9`, `737664b`, `c376622`, `3af6f13`, `e020063`, `5a57931`, `df82f61`, `86316c1`, `5c5159a`, `d581b85` | `main` |
 <!-- @@@/auto:session-history -->
