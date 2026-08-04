@@ -137,22 +137,22 @@ absence of decision/weight columns.
 
 ## Acceptance Criteria
 
-- [ ] Input hashes are recorded and independently rechecked.
-- [ ] Exactly 174,965 per-cell rows are written; all seven product columns are
+- [x] Input hashes are recorded and independently rechecked.
+- [x] Exactly 174,965 per-cell rows are written; all seven product columns are
       present and no input cell is dropped for nodata or disagreement.
-- [ ] Union, lineage, and replay key sets match exactly.
-- [ ] The domain is exactly `(1500, 1200)` with 1,288,723 strict-ocean cells;
+- [x] Union, lineage, and replay key sets match exactly.
+- [x] The domain is exactly `(1500, 1200)` with 1,288,723 strict-ocean cells;
       all 174,965 audited cells are strict ocean.
-- [ ] Area-weighted coverage and nearest-distance summaries independently
+- [x] Area-weighted coverage and nearest-distance summaries independently
       recompute from `coverage_grid_1min.nc`.
-- [ ] Seven-product and family-balanced consensus fields independently
+- [x] Seven-product and family-balanced consensus fields independently
       recompute from persisted product values.
-- [ ] GEBCO 2024/2025/2026 TID code/group counts and fractions close exactly.
-- [ ] Replay closure is 174,913 exact plus 52 documented aggregation
+- [x] GEBCO 2024/2025/2026 TID code/group counts and fractions close exactly.
+- [x] Replay closure is 174,913 exact plus 52 documented aggregation
       differences.
-- [ ] No prediction/residual/model-error input is accessed, and no output
+- [x] No prediction/residual/model-error input is accessed, and no output
       column filters, reweights, relabels, or changes cell eligibility.
-- [ ] Unit tests, a full bounded run, the independent verifier, and
+- [x] Unit tests, a full bounded run, the independent verifier, and
       `git diff --check` pass.
 
 ## Out of Scope

@@ -31,7 +31,7 @@
       read and no decision/weight column was written.
 - [x] Run `git diff --check` and the Trellis check workflow.
 - [x] Update backend specs with the new diagnostic-only contract and commands.
-- [ ] Commit task-owned changes, finish, and archive the Trellis task.
+- [x] Commit task-owned changes, finish, and archive the Trellis task.
 
 ## Validation Commands
 
