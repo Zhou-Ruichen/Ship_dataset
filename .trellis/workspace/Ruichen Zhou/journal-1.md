@@ -266,3 +266,36 @@ Built and independently verified immutable candidate, raw-context, control, aggr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: SCS MRAR/JAMSTEC lineage exact replay v2
+
+**Date**: 2026-08-06
+**Task**: SCS MRAR/JAMSTEC lineage exact replay v2
+**Branch**: `main`
+
+### Summary
+
+Produced and independently verified immutable run 20260805T182211Z for 174,965 frozen SCS cells: 22,859,691 raw-point contributions, exact file/cruise/cell replay, 58-file JAMSTEC capability ceiling, terminal MRAR identity evidence, and exact 52/2,658/2,472/9 closures. Three batch/order/worker variants had identical canonical digests and zero mismatches. Verification status pass; no model/product error read and no correction or data-role decision.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `251f4b6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

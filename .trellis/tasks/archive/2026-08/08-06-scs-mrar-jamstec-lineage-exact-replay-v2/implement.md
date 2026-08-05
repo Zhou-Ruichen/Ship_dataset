@@ -28,7 +28,7 @@
   and recomputes contributor/cell arithmetic from raw-point contributions.
 - [x] Run focused unit tests, syntax checks, estimate-only mode, the full
   immutable audit, verifier, `git diff --check`, and scoped review.
-- [ ] Update the backend spec only with reusable new contracts, commit task-
+- [x] Update the backend spec only with reusable new contracts, commit task-
   owned code/config/tests/spec/task artifacts, record the session, and archive
   the task after the downstream handoff is complete.
 
