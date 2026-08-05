@@ -202,3 +202,44 @@ requires a separate authorization receipt bound to the A.2 run ID, manifest,
 verification, physical-lock hash, ordered primary IDs and cap. Authorized
 downloads remain opaque, length-checked, hashed and `sealed_unprocessed`.
 Archive access and source-internal processing require a separate Stage C.
+
+## 10. Stage B.0 Execution Readiness
+
+Stage B.0 is offline and cannot authorize acquisition. Its immutable readiness
+run is written under:
+
+```text
+ncei/derived/scs_v2_sealed_confirmation/readiness/<RUN_ID>/
+```
+
+The inactive authorization template binds the accepted A.2 run ID, A.2
+manifest/verification/final-lock/physical-lock SHA256 values, immutable ordered
+cruise IDs, binary 12 GiB cap, safe acquisition run ID, fixed archive output
+root and exact downloader/verifier SHA256 values. An actual receipt must have
+exactly the contracted keys, explicit author/time and
+`stage_b_authorized=true`; the readiness template remains false and cannot be
+used directly. Its angle-bracket run-ID placeholder is also deliberately
+rejected by the downloader's safe-segment validator.
+
+For every future GET, the downloader validates the final resolved URL and
+Last-Modified before the first response-body read. The URL must remain HTTPS on
+`data.ngdc.noaa.gov` with the exact locked host/path/query. Missing or changed
+Last-Modified fails closed; ETag remains optional and officially unknown.
+
+The acquisition run ID is one bounded alphanumeric/dot/underscore/hyphen path
+segment with no `..` or separator. The output root is fixed at
+`ncei/archive/scs_v2_sealed_confirmation`; path escape or authorization/source
+hash drift fails before a network request.
+
+A successful future acquisition writes a one-row-per-object Parquet manifest,
+access lock and audit manifest. It remains `sealed_unprocessed`,
+`content_parsed=false`, `confirmation_role_eligible=false`, and inaccessible to
+Stage C. The independent verifier must reopen and SHA256 all 768 objects, close
+each URL/path/cruise/byte/Last-Modified value against A.2, close the exact file
+inventory, and statically reject archive, sonar and depth parsers before
+writing `verification.json=status=pass`.
+
+Any exception preserves received bytes and writes a machine-readable
+`failure_receipt.json` plus completed-object manifest under a `.failed` run.
+Its status and role are `failed_unsealed`; no candidate replacement or sealed
+manifest is permitted.

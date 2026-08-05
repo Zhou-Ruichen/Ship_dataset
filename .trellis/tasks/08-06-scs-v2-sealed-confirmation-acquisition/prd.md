@@ -267,3 +267,34 @@ Any future Stage B execution requires a separate authorization receipt bound
 to the exact A.2 manifest, verification and physical-lock hashes. Stage C is a
 separate authorization required before archive opening or source-internal
 processing.
+
+## Stage B.0 Authorization (2026-08-06)
+
+The user accepted Stage A.2 run `20260805T221441Z` and commit `7359f47`, but
+withheld every physical-object GET, Range GET and body read. Stage B.0 may only
+harden and test the future executor, publish an offline readiness receipt, and
+stop before acquisition.
+
+The future GET response must be rejected before its first body read unless its
+resolved URL remains the exact locked HTTPS `data.ngdc.noaa.gov` host/path and
+its Last-Modified header is present and exactly equals the frozen value. ETag
+remains officially unknown and is not invented as a gate.
+
+A future authorization receipt must bind the acquisition run ID, fixed output
+root, downloader and independent verifier SHA256 values, accepted A.2
+manifest/verification/final-lock/physical-lock SHA256 values, ordered IDs and
+12 GiB cap. The run ID is one safe path segment; the only output location is
+`ncei/archive/scs_v2_sealed_confirmation/<ACQUISITION_RUN_ID>`.
+
+The independently implemented Stage B verifier must reopen and rehash all 768
+opaque objects, close URLs, paths, cruises, bytes, object SHA256 values and
+Last-Modified values against A.2, reject any parser use, and retain
+`content_parsed=false`, `role=sealed_unprocessed`,
+`confirmation_role_eligible=false`. A failed acquisition writes
+`failure_receipt.json`, retains partial/completed bytes, and is never sealed or
+used to replace a candidate.
+
+Stage B.0 acceptance requires offline unit tests, downloader dry-run
+`network_request_count=0`, an inactive authorization template and independent
+readiness `verification.json` with `status=pass`. Passing Stage B.0 does not
+authorize Stage B or Stage C.

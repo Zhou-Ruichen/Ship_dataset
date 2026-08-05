@@ -263,3 +263,32 @@ An authorized future Stage B streams opaque bytes to `.part`, enforces the
 locked length and aggregate cap, hashes each object, atomically renames it and
 marks it read-only. It does not parse archives. Download success yields only
 `sealed_unprocessed`; opening or processing remains a separate Stage C task.
+
+## Stage B.0: offline execution readiness
+
+Stage B.0 adds no discovery and changes no A.2 row. Its downloader performs all
+authorization, run-ID and fixed-root checks before its first network request.
+After a future GET response is opened, it checks the resolved scheme/host/path
+and exact frozen Last-Modified before creating a destination or reading a body.
+
+The authorization schema is exact: no omitted or extra fields are accepted. It
+binds the A.2 run and four artifact hashes, ordered IDs, cap, acquisition run
+ID, fixed root and the downloader/verifier source hashes. The readiness
+template is deliberately non-executable (`stage_b_authorized=false`, blank
+author/time and a syntactically invalid run-ID placeholder).
+
+Successful acquisition creates `sealed_archive_manifest.parquet`,
+`access_lock.json`, `audit_manifest.json` and a copied authorization receipt,
+then publishes atomically with status pending independent verification. The
+independent verifier compares every manifest row with the A.2 dry-run plan,
+reopens and rehashes every object, closes the filesystem inventory, headers,
+roles and parser guards, then alone writes `verification.json=status=pass`.
+
+Any download exception writes `completed_object_manifest.parquet` plus
+`failure_receipt.json` with `status=failed_unsealed`; already received bytes
+remain for inspection, but no sealed manifest or role promotion is issued.
+
+The readiness producer and verifier live under the derived readiness root and
+contain no network path. They freeze the A.2 and source hashes, test source
+hashes, inactive authorization template, offline test result and downloader
+dry-run receipt. Stage B and Stage C remain separate approval gates.

@@ -37,6 +37,13 @@
   opaque Stage B downloader; ensure dry-run contains no network path.
 - [x] Publish and verify the immutable Stage A.2 run, execute only the read-only
   downloader dry-run, record the receipt and stop before Stage B.
+- [x] Harden Stage B.0 resolved-URL and Last-Modified pre-body checks, exact
+  authorization binding, safe run ID/fixed root and failed-unsealed receipt.
+- [x] Implement the independent Stage B object verifier, final sealed manifest
+  and access-lock producers without executing a download.
+- [x] Publish and independently verify the zero-network Stage B.0 readiness run
+  `20260805T224911Z`; 13 offline tests pass and dry-run network/download counts
+  are both zero.
 - [ ] After the approved Stage B gate, download only presealed URLs as opaque
   `*.part` files, record transport headers/commands, atomically seal bytes and
   prohibit archive enumeration/parsing.
@@ -108,13 +115,20 @@ python ncei/code/acquire_scs_v2_sealed_confirmation_stage_b.py \
   --a2-run ncei/derived/scs_v2_sealed_confirmation/discovery/<STAGE_A2_RUN_ID> \
   --dry-run
 
-python ncei/code/acquire_scs_v2_sealed_confirmation.py \
-  --config ncei/configs/scs_v2_sealed_confirmation.yaml \
-  --discovery-dir ncei/derived/scs_v2_sealed_confirmation/discovery/<DISCOVERY_RUN_ID> \
-  --preseal-lock-sha256 <SHA256> \
-  --run-id <ACQUISITION_RUN_ID> --confirm-download
+python ncei/code/prepare_scs_v2_sealed_confirmation_stage_b0.py \
+  --config ncei/configs/scs_v2_sealed_confirmation_stage_b0.yaml \
+  --run-id <STAGE_B0_RUN_ID> --confirm-stage-b0-readiness
 
-python ncei/code/verify_scs_v2_sealed_confirmation.py \
+python ncei/code/verify_scs_v2_sealed_confirmation_stage_b0.py \
+  --run-dir ncei/derived/scs_v2_sealed_confirmation/readiness/<STAGE_B0_RUN_ID>
+
+# Future only, after a separate Stage B authorization:
+python ncei/code/acquire_scs_v2_sealed_confirmation_stage_b.py \
+  --a2-run ncei/derived/scs_v2_sealed_confirmation/discovery/20260805T221441Z \
+  --execute --authorization-receipt <AUTHORIZED_RECEIPT> \
+  --acquisition-run-id <ACQUISITION_RUN_ID> --confirm-stage-b-download
+
+python ncei/code/verify_scs_v2_sealed_confirmation_stage_b.py \
   --acquisition-dir ncei/archive/scs_v2_sealed_confirmation/<ACQUISITION_RUN_ID>
 
 git diff --check

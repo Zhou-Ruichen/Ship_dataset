@@ -46,9 +46,12 @@ class SCSV2SealedConfirmationStageA2Test(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     downloader.validate_authorization_receipt(
                         Path(directory) / "missing.json",
-                        {"physical_object_lock_sha256": "lock"},
+                        {"run_id": "a2", "primary_physical_object_lock_sha256": "lock"},
                         "manifest",
                         "verification",
+                        "final-lock",
+                        "future-stage-b-run",
+                        downloader.STAGE_B_OUTPUT_ROOT,
                     )
                 urlopen.assert_not_called()
 
