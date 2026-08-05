@@ -1,0 +1,33 @@
+{
+  "id": "scs-mrar-jamstec-lineage-exact-replay-v2",
+  "name": "scs-mrar-jamstec-lineage-exact-replay-v2",
+  "title": "SCS MRAR JAMSTEC lineage exact replay v2",
+  "description": "Freeze MRAR/JAMSTEC source lineage, audit contributor field capabilities, and produce exact raw-point replay evidence for the frozen 174,965-cell SCS cohort.",
+  "status": "in_progress",
+  "dev_type": "research_audit",
+  "scope": "backend",
+  "package": null,
+  "priority": "P1",
+  "creator": "Ruichen Zhou",
+  "assignee": "Ruichen Zhou",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "ncei/code/audit_scs_upstream_lineage.py",
+    "ncei/code/audit_scs_ship_qc_v2_preflight.py",
+    "ncei/derived/scs_upstream_lineage_audit/20260804T202026Z",
+    "ncei/derived/scs_ship_qc_v2_preflight/20260804T230252Z",
+    "ncei/archive/zhoushuai_processed_M",
+    "jamstec/multibeam/manifests/file_manifest_points_raw.parquet"
+  ],
+  "notes": "Planning only. Implementation requires explicit review approval and task.py start. Existing v1 and user-modified SOURCE.md are read-only.",
+  "meta": {}
+}

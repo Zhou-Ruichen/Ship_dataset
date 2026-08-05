@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply immutable full-run gating, atomic output, and estimate-only conventions."}
+{"file":".trellis/spec/backend/data-contracts.md","reason":"Preserve canonical file_id, point, file-cell, cell-id, and median exactness contracts."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Use the repository parquet, manifest, config, and report storage conventions."}
+{"file":".trellis/spec/backend/scs-lineage-audit.md","reason":"Reuse the frozen cohort, five-level evidence vocabulary, raw-row lineage, and no-model/no-product boundary."}
+{"file":".trellis/spec/backend/scs-ship-qc-v2-preflight.md","reason":"Preserve raw record-order ceilings, aggregation alternatives, crossover limits, and immutable receipt pattern."}
+{"file":".trellis/tasks/08-06-scs-mrar-jamstec-lineage-exact-replay-v2/research/planning-evidence.md","reason":"Use the verified planning facts, hashes, counts, and field-capability findings."}

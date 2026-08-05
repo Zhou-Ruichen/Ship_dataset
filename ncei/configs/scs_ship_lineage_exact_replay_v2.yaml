@@ -1,0 +1,159 @@
+schema_version: 1
+
+inputs:
+  handoff_contract:
+    path: /mnt/data2/06-Projects/12-ggm_scs/.trellis/tasks/08-04-scs-upstream-lineage-and-label-contract/research/upstream-handoff.md
+    sha256: 8a152151016de6a45cbef966a78d74e9750c40dffba197ad36cae0a76cdfe94c
+  cell_lineage:
+    path: ncei/derived/scs_upstream_lineage_audit/20260804T202026Z/cell_lineage.parquet
+    sha256: 0d58cf5f18233f1abb6cd111f6167eec7e5c00fc7cdb9667b49f00ef9aa7a74d
+  historical_replay:
+    path: ncei/derived/scs_upstream_lineage_audit/20260804T202026Z/raw_to_cell_replay.parquet
+    sha256: 269b23072a0cb5e7c7ca569e03da8a05cca469e7a39271d8920c9a4c389b2ed0
+  vertical_datum_ledger:
+    path: ncei/derived/scs_upstream_lineage_audit/20260804T202026Z/vertical_datum_ledger.csv
+    sha256: 4b83f872997cffcf80bd85e753467be2fc498d5048c826b78c22510690b583d0
+  preflight_manifest:
+    path: ncei/derived/scs_ship_qc_v2_preflight/20260804T230252Z/audit_manifest.json
+    sha256: 8a0d21dde04de9afc4148d5fa6e9869a2e6836737a6d2677f4ef7fef725ca539
+  preflight_verification:
+    path: ncei/derived/scs_ship_qc_v2_preflight/20260804T230252Z/verification.json
+    sha256: 2779d2084ed971044c5457e86149476c45a530ca3760b38a3dbcbf45052983a5
+  preflight_candidates:
+    path: ncei/derived/scs_ship_qc_v2_preflight/20260804T230252Z/candidate_cells.parquet
+    sha256: 98aa96ab7a5d75f115329fbbebca68a41c0834c7cab7b6583ce99aa78d6e1db1
+    allowed_columns: [canonical_cell_id, interpretation_state]
+  jamstec_file_manifest:
+    path: jamstec/multibeam/manifests/file_manifest_points_raw.parquet
+    sha256: 028870bff0b71727b6454d1e507efd5637776283370afa2fddcf8c0fbf913655
+
+mrar_artifacts:
+  - role: source_archive
+    path: ncei/archive/zhoushuai_processed_M/M.rar
+    sha256: 27611517707b361b04ad3b2711bb930cc5d2bfa634ceaa28c2d870e254b84c5a
+    version: RAR4_unversioned_delivery
+    version_status: known
+  - role: extracted_source_points
+    path: ncei/archive/zhoushuai_processed_M/0-180E-0-85N.txt
+    sha256: 13497a24158ef6a8ea863439b31379f818584d5fb1e89a69b327d34514ffa255
+    expected_rows: 38635741
+    version: unversioned_delivery_extract
+    version_status: not_recoverable
+  - role: extracted_source_points
+    path: ncei/archive/zhoushuai_processed_M/0-90W-0-85S.txt
+    sha256: e5d9fadf565ae32c8ecfd95d14b2eae992efd1b2f888abb1b05da175e52caa67
+    expected_rows: 25295079
+    version: unversioned_delivery_extract
+    version_status: not_recoverable
+  - role: extracted_source_points
+    path: ncei/archive/zhoushuai_processed_M/90-180W-0-85S.txt
+    sha256: 7355684928d35ec4402af3d26ce1b47855cf3fcd7ee46d84bd88992324dc5e1c
+    expected_rows: 49480083
+    version: unversioned_delivery_extract
+    version_status: not_recoverable
+  - role: cleaned_bathymetry_points
+    path: ncei/archive/zhoushuai_processed_M/bathymetry_points.parquet
+    sha256: 1d24e0c5f0174ebf3f4a5d0074d327420ef968ce3e2d8eeea07942568a326b67
+    expected_rows: 113356582
+    version: mrar_v0.1.0
+    version_status: known
+  - role: cleaned_land_sidecar
+    path: ncei/archive/zhoushuai_processed_M/land_mask.parquet
+    sha256: f573aa80969003062066d2954554ec8a05e5111c110debf40f9ae3f7a6ada117
+    expected_rows: 6267
+    version: mrar_v0.1.0
+    version_status: known
+  - role: cleaning_audit
+    path: ncei/archive/zhoushuai_processed_M/cleaning_audit.parquet
+    sha256: 20855501124e930c3eed4e20b171b594c39212f8678425edf8129973423abbed
+    expected_rows: 4
+    version: mrar_v0.1.0
+    version_status: known
+  - role: provenance_record
+    path: ncei/archive/zhoushuai_processed_M/SOURCE.md
+    sha256: db83b92457cf8b4874e8cbf3fe39d952a2e4992ca04cff3a07e5c7ddd859eeb1
+    version: current_frozen_bytes
+    version_status: known
+  - role: local_cleaning_producer
+    path: ncei/code/04_clean_mrar.py
+    sha256: ee1e73b906dddfe551a518bb5cc2874f58e68698b1eb494fef758db8a996a793
+    version: mrar_v0.1.0
+    version_status: known
+
+mrar_identity_search:
+  stop_rule: one_local_artifact_pass_plus_one_focused_official_source_pass
+  completed_utc: 2026-08-05T18:10:01Z
+  official_urls:
+    - https://www.tj.kyushu-u.ac.jp/en/g_public/img/report_img/3723.pdf
+    - https://api.lib.kyushu-u.ac.jp/opac_download_md/1924416/p080.pdf
+  finding: Official Kyushu sources describe Tscs as a one-arc-minute multi-source South China Sea grid; no source names M.rar, its hashes, its three-quadrant files, or the Zhou Shuai delivery.
+  geometry_result: Tscs product geometry is a South China Sea one-arc-minute grid; M.rar contains 113410903 irregular points across three global quadrants, so artifact identity is not established.
+  identity_status: not_recoverable
+  source_independence: unknown
+
+output_root: ncei/derived/scs_ship_qc_v2_preflight/lineage
+
+execution_variants:
+  - name: baseline
+    batch_rows: 1000000
+    file_order: ascending
+    workers: 1
+    seed: 42
+  - name: reverse
+    batch_rows: 250000
+    file_order: descending
+    workers: 2
+    seed: 42
+  - name: seeded
+    batch_rows: 333333
+    file_order: seeded
+    workers: 4
+    seed: 42
+
+expected:
+  cell_count: 174965
+  provider_counts:
+    mrar: 165966
+    jamstec: 8999
+  jamstec_file_count: 58
+  jamstec_official_cruise_count: 19
+  jamstec_raw_point_count: 20011021
+  mrar_raw_point_count: 2848670
+  historical_difference_count: 52
+  multi_file_count: 2658
+  multi_cruise_count: 2472
+  aggregation_conflict_count: 9
+
+factual_status_vocabulary:
+  - known
+  - officially_unknown
+  - not_recoverable
+  - inferred_from_filename
+  - verified_from_source_metadata
+
+output_guards:
+  forbidden_column_tokens:
+    - corrected
+    - replacement
+    - delete
+    - exclusion
+    - eligibility
+    - validation_weight
+    - sample_weight
+    - train_role
+    - test_role
+    - split
+    - prediction
+    - residual
+    - model_error
+    - rmse
+    - gebco
+    - product_consensus
+  forbidden_output_path_tokens:
+    - corrected
+    - replacement
+    - validation_cells
+    - split
+    - prediction
+    - residual
+    - model_error

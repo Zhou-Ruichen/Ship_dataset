@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check full-run confirmation, immutability, atomicity, and narrow verification."}
+{"file":".trellis/spec/backend/data-contracts.md","reason":"Check canonical keys, raw-point median exactness, and source schema preservation."}
+{"file":".trellis/spec/backend/scs-lineage-audit.md","reason":"Check cohort/hash closure, five-level statuses, forbidden inputs, and exact replay semantics."}
+{"file":".trellis/spec/backend/scs-ship-qc-v2-preflight.md","reason":"Check row-order/crossover evidence ceilings and absence of correction or role decisions."}
+{"file":".trellis/tasks/08-06-scs-mrar-jamstec-lineage-exact-replay-v2/research/planning-evidence.md","reason":"Cross-check expected file, cruise, conflict, and replay-difference closures."}
