@@ -235,3 +235,31 @@ The v2-H and v2-W fields are conditional branch labels, not proof that either
 world is true. Because MRAR identity remains not recoverable, the actual global
 confirmation role stays false. No message requesting a bulk package is sent;
 that action is only recorded as a human-controlled alternative.
+
+## Stage A.2: offline final download lock
+
+Stage A.2 has no network client. It rehashes the authoritative Stage A.1 run,
+filters the exact four-cruise primary object set, and reopens only the retained
+official directory HTML. Its table parser associates each anchor with the
+listing size cell and accepts only an all-digit size token as exact bytes. This
+permits the two TN352 zero-byte `.fnv` sidecars to close while rejecting rounded
+Apache-style `K/M/G` sizes.
+
+The primary lock preserves byte provenance per object:
+
+- `head_content_length` for unchanged A.1 HEAD headers;
+- `official_directory_listing_exact_integer` plus evidence path/SHA256 for the
+  two TN352 recoveries;
+- `officially_unknown` if either source fails, which blocks publication of a
+  ready final lock.
+
+The dry-run plan gives every object a unique cruise-rooted destination. It is
+read-only and creates no archive directory. The downloader's execution path is
+implemented for later use but validates a separate authorization JSON against
+the exact A.2 run ID, manifest SHA256, verification SHA256, physical-lock
+SHA256, primary IDs and 12 GiB cap before its first network request.
+
+An authorized future Stage B streams opaque bytes to `.part`, enforces the
+locked length and aggregate cap, hashes each object, atomically renames it and
+marks it read-only. It does not parse archives. Download success yields only
+`sealed_unprocessed`; opening or processing remains a separate Stage C task.

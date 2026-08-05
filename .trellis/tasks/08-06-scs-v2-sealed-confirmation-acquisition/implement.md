@@ -29,6 +29,14 @@
   revised branch qualifications and an independent offline A.1 verifier.
 - [x] Publish and independently verify the immutable Stage A.1 discovery run;
   record all paths, rows, schemas, SHA256 values and technical Stage B blocks.
+- [x] Freeze the exact four-cruise Stage A.2 primary set, explicit
+  excluded/deferred set, no-replacement rule and 12 GiB aggregate cap.
+- [x] Implement offline exact-integer listing-size recovery, primary physical
+  lock, budgets, candidate decisions and Stage B dry-run plan.
+- [x] Implement the independent Stage A.2 verifier and separately authorized
+  opaque Stage B downloader; ensure dry-run contains no network path.
+- [x] Publish and verify the immutable Stage A.2 run, execute only the read-only
+  downloader dry-run, record the receipt and stop before Stage B.
 - [ ] After the approved Stage B gate, download only presealed URLs as opaque
   `*.part` files, record transport headers/commands, atomically seal bytes and
   prohibit archive enumeration/parsing.
@@ -88,6 +96,17 @@ python ncei/code/discover_scs_v2_sealed_confirmation_stage_a1.py \
 
 python ncei/code/verify_scs_v2_sealed_confirmation_stage_a1.py \
   --run-dir ncei/derived/scs_v2_sealed_confirmation/discovery/<STAGE_A1_RUN_ID>
+
+python ncei/code/finalize_scs_v2_sealed_confirmation_stage_a2.py \
+  --config ncei/configs/scs_v2_sealed_confirmation_stage_a2.yaml \
+  --run-id <STAGE_A2_RUN_ID> --confirm-stage-a2
+
+python ncei/code/verify_scs_v2_sealed_confirmation_stage_a2.py \
+  --run-dir ncei/derived/scs_v2_sealed_confirmation/discovery/<STAGE_A2_RUN_ID>
+
+python ncei/code/acquire_scs_v2_sealed_confirmation_stage_b.py \
+  --a2-run ncei/derived/scs_v2_sealed_confirmation/discovery/<STAGE_A2_RUN_ID> \
+  --dry-run
 
 python ncei/code/acquire_scs_v2_sealed_confirmation.py \
   --config ncei/configs/scs_v2_sealed_confirmation.yaml \

@@ -178,3 +178,27 @@ recomputes the chronology-first cohort and rank, reconstructs object URLs from
 retained directory HTML, closes GET/HEAD methods against the query ledger, and
 recomputes byte budgets. A passing A.1 receipt still has
 `stage_b_authorized=false` and requires separate user approval.
+
+## 9. Stage A.2 Final Download Lock
+
+Stage A.2 is an offline refinement of a passing A.1 receipt. It accepts an
+explicitly ordered primary cruise set and does not rerank or replace it. Every
+excluded/deferred A.1 candidate remains machine-readable with a fixed reason,
+`replacement_allowed=false`, and `model_or_product_result_used=false`.
+
+A missing HEAD Content-Length may be filled only by a retained official file
+listing whose size token is an exact base-10 integer. Human-readable rounded
+sizes such as `3.5K` are insufficient for a byte lock. The object row records
+whether bytes came from HEAD or listing metadata and retains the evidence
+path/SHA256.
+
+The A.2 lock freezes direct URLs, relative destinations, roles, formats, exact
+bytes, Last-Modified, ETag/status, primary object-lock SHA256, exact total and
+an aggregate binary-byte cap. A dry-run plan must close one-to-one against the
+physical lock, have unique destinations and record zero downloads.
+
+The downloader's execution branch is not authorized by A.2. Before any GET it
+requires a separate authorization receipt bound to the A.2 run ID, manifest,
+verification, physical-lock hash, ordered primary IDs and cap. Authorized
+downloads remain opaque, length-checked, hashed and `sealed_unprocessed`.
+Archive access and source-internal processing require a separate Stage C.

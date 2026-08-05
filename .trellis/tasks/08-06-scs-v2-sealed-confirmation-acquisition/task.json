@@ -26,6 +26,6 @@
     "ncei/archive/zhoushuai_processed_M/SOURCE.md",
     "/mnt/data2/06-Projects/12-ggm_scs/outputs/diagnostics/scs_lineage_contract_v2/20260805T193953Z/confirmation_registry.json"
   ],
-  "notes": "Stage A commit 948519b is retained. Metadata-only Stage A.1 completed in authoritative run 20260805T213226Z with verification status=pass: 8 chronology-first 2018+ unexposed candidates, 11,860 official physical-object URLs, 11,859 successful HEAD responses, 34 successful HEAD responses without Content-Length, and one TN358 HEAD TLS timeout. v2-H remains pending_seal_and_processing, v2-W remains blocked_source_independence_unknown, global confirmation_role_eligible=false, and Stage B is not authorized.",
+  "notes": "Stage A commit 948519b and Stage A.1 commit b6de3a6 are retained. Offline Stage A.2 completed in authoritative run 20260805T221441Z with verification=pass and downloader dry_run_pass. The immutable primary set is EQT20210702, EQT190012, EQT180002, TN352: 768 objects, 9,626,893,507 exact bytes, 5,606.374147 km official SCS track, below the 12 GiB cap. Two TN352 zero-byte .fnv sizes were recovered from frozen official directory HTML. SR1912/TN359 are excluded; TN358/TN354 are deferred with no replacement. v2-H remains pending_seal_and_processing, v2-W blocked_source_independence_unknown, confirmation_role_eligible=false, maximum post-download role sealed_unprocessed, and Stage B is not authorized.",
   "meta": {}
 }

@@ -224,3 +224,46 @@ Required A.1 outputs are `physical_object_lock.parquet`,
 If only a directory URL is available, any HEAD fails, or Content-Length is
 missing, the affected physical lock is incomplete and Stage B remains blocked.
 Even a complete physical lock does not authorize Stage B.
+
+## Stage A.2 Authorization (2026-08-06)
+
+The user accepted Stage A.1 commit `b6de3a6` but did not authorize Stage B.
+Stage A.2 is an offline final download lock. Its immutable primary acquisition
+set is exactly, and only:
+
+```text
+EQT20210702
+EQT190012
+EQT180002
+TN352
+```
+
+`SR1912` is excluded for negligible SCS track length. `TN359` is excluded for
+cost disproportionate to SCS coverage. `TN358` and `TN354` are deferred for
+the current confirmation because of their combined known cost. None may
+replace the primary set after model or product results are observed.
+
+The two TN352 `.fnv` rows lacking HEAD Content-Length may be recovered only
+from already frozen official directory HTML. Only a pure integer listing size
+is exact enough for the lock; rounded `K/M/G` display values are not accepted.
+Failure to recover either row blocks TN352 and does not activate a replacement.
+
+The final aggregate cap is exactly `12 GiB = 12,884,901,888 bytes`. Stage A.2
+must freeze every direct URL, filename, role, format, exact bytes plus source
+status, Last-Modified, ETag plus status, the physical-lock SHA256, per-cruise
+budget, and the ordered primary IDs. It may generate and verify a Stage B
+dry-run plan but must perform no network request or download.
+
+The branch and role ceiling remains:
+
+```text
+v2-H=pending_seal_and_processing
+v2-W=blocked_source_independence_unknown
+confirmation_role_eligible=false
+maximum_post_download_role=sealed_unprocessed
+```
+
+Any future Stage B execution requires a separate authorization receipt bound
+to the exact A.2 manifest, verification and physical-lock hashes. Stage C is a
+separate authorization required before archive opening or source-internal
+processing.
