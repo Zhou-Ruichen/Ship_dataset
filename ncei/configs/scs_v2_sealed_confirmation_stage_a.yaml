@@ -1,0 +1,82 @@
+schema_version: 1
+
+study_area:
+  name: south_china_sea_frozen_rectangle
+  xmin: 105.0
+  ymin: 0.0
+  xmax: 125.0
+  ymax: 25.0
+  boundary: half_open
+
+selection:
+  maximum_selected: 5
+  minimum_required: 0
+  maximum_detail_queries: 100
+  mrar_delivery_cutoff_utc: "2026-05-15T12:26:27Z"
+
+official_metadata:
+  ncei_layer_url: "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0"
+  ncei_page_size: 1000
+  ncei_license_url: "https://www.ncei.noaa.gov/products/seafloor-mapping"
+  ncei_submission_metadata_url: "https://www.ncei.noaa.gov/iho-data-centre-digital-bathymetry/submitting-marine-geophysical-data"
+  ncei_item_template: "https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ngdc.mgg.multibeam%3A{survey_id}_Multibeam/html"
+  jamstec_catalog_url: "https://www.jamstec.go.jp/e/database/"
+  jamstec_policy_url: "https://www.jamstec.go.jp/e/database/data_policy.html"
+  request_timeout_seconds: 90
+  user_agent: "SCS-v2-sealed-confirmation-stage-a/1.0 metadata-only audit"
+
+frozen_inputs:
+  current_19:
+    path: ncei/derived/scs_ship_qc_v2_preflight/lineage/20260805T182211Z/jamstec_file_capabilities.tsv
+    sha256: cbd8405b67efc24ef5146320ddd10a27cf8671e21f02274e6415aba9d9bda37b
+  exposed_12:
+    path: ncei/derived/scs_upstream_lineage_audit/20260804T202026Z/source_identity_ledger.csv
+    sha256: 089ad0cacbff2a3cd89407ec8f818445691883c63f20b44c128b9791c9baaffb
+  lineage_manifest:
+    path: ncei/derived/scs_ship_qc_v2_preflight/lineage/20260805T182211Z/audit_manifest.json
+    sha256: 6823aea09ec24e27b35397c9c2e78f0854567e7848286712f13a9e22bc856018
+  lineage_verification:
+    path: ncei/derived/scs_ship_qc_v2_preflight/lineage/20260805T182211Z/verification.json
+    sha256: f2d4203e8dbb2cee62d5f9bcc5c4ced365b4042b45e9bc16efcca9f18633af10
+  mrar_archive:
+    path: ncei/archive/zhoushuai_processed_M/M.rar
+    sha256: 27611517707b361b04ad3b2711bb930cc5d2bfa634ceaa28c2d870e254b84c5a
+  mrar_source:
+    path: ncei/archive/zhoushuai_processed_M/SOURCE.md
+    sha256: db83b92457cf8b4874e8cbf3fe39d952a2e4992ca04cff3a07e5c7ddd859eeb1
+  mrar_identity_ledger:
+    path: ncei/derived/scs_ship_qc_v2_preflight/lineage/20260805T182211Z/mrar_identity_ledger.tsv
+    sha256: e11c6255ea1f90bdc3e92b5a7dbd11cd9c76d5448c232a4a2d1f23d1233ef188
+  mrar_source_inventory:
+    path: ncei/derived/scs_ship_qc_v2_preflight/lineage/20260805T182211Z/source_artifact_inventory.tsv
+    sha256: 90755af5f9a0d64163f5437514fbcff33bda43dcb578b3dccf92ce82ad50fef7
+  downstream_confirmation_registry:
+    path: /mnt/data2/06-Projects/12-ggm_scs/outputs/diagnostics/scs_lineage_contract_v2/20260805T193953Z/confirmation_registry.json
+    sha256: 69e809404978365325ad60efbe919374bbea746f6e98e464af166da680379063
+  downstream_manifest:
+    path: /mnt/data2/06-Projects/12-ggm_scs/outputs/diagnostics/scs_lineage_contract_v2/20260805T193953Z/manifest.json
+    sha256: 8b6ba1cbb957fda83d6baa5be1ac64a247007ac3575c648342c02c2f1a776ce5
+  downstream_verification:
+    path: /mnt/data2/06-Projects/12-ggm_scs/outputs/diagnostics/scs_lineage_contract_v2/20260805T193953Z/verification.json
+    sha256: 41783d9e139062a461c9b76b45c9bf04b81a96443cc5609f58f86c698978ad02
+
+repositories:
+  ship: /mnt/data2/00-Data/ship
+  downstream: /mnt/data2/06-Projects/12-ggm_scs
+
+output_root: ncei/derived/scs_v2_sealed_confirmation/discovery
+
+factual_status_vocabulary:
+  - known
+  - officially_unknown
+  - not_recoverable
+  - inferred_from_filename
+  - verified_from_source_metadata
+
+stage_a_guards:
+  stage_b_authorized: false
+  candidate_archive_download_allowed: false
+  candidate_archive_enumeration_allowed: false
+  candidate_depth_read_allowed: false
+  cell_generation_allowed: false
+  reference_or_model_comparison_allowed: false

@@ -79,6 +79,7 @@ update this spec to match.
 | [SCS Product Consistency and Coverage Audit](./scs-product-consistency-coverage.md) | Diagnostic-only seven-product comparison, full-domain ship coverage, GEBCO TID composition, and no-weight/no-exclusion boundary |
 | [SCS Ship Sounding QC v2 Pre-Correction Audit](./scs-ship-qc-v2-preflight.md) | Immutable candidate/component/raw-context/control/aggregation evidence before any sounding correction policy |
 | [SCS MRAR/JAMSTEC Lineage Supplement and Exact Replay v2](./scs-ship-lineage-exact-replay-v2.md) | Frozen source inventory, field-capability ceilings, raw contributor evidence, and batch/order/worker-invariant exact replay |
+| [SCS v2 Sealed Confirmation Acquisition](./scs-v2-sealed-confirmation.md) | Metadata-only Stage A discovery, two-repository exposure audit, MRAR evidence ceiling, and separately authorized opaque acquisition gate |
 
 ---
 

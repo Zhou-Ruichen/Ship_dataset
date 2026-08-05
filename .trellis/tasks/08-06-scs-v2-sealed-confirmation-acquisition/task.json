@@ -1,0 +1,31 @@
+{
+  "id": "scs-v2-sealed-confirmation-acquisition",
+  "name": "scs-v2-sealed-confirmation-acquisition",
+  "title": "SCS v2 sealed confirmation acquisition",
+  "description": "Discover 3-5 previously unexposed official SCS cruises from metadata and deployment geometry only, then acquire their raw archives as opaque sealed bytes with reproducible provenance and independent verification.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": "ncei",
+  "package": "scs-v2-sealed-confirmation",
+  "priority": "P2",
+  "creator": "Ruichen Zhou",
+  "assignee": "Ruichen Zhou",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "ncei/derived/scs_ship_qc_v2_preflight/lineage/20260805T182211Z/jamstec_file_capabilities.tsv",
+    "ncei/derived/scs_upstream_lineage_audit/20260804T202026Z/source_identity_ledger.csv",
+    "ncei/archive/zhoushuai_processed_M/SOURCE.md",
+    "/mnt/data2/06-Projects/12-ggm_scs/outputs/diagnostics/scs_lineage_contract_v2/20260805T193953Z/confirmation_registry.json"
+  ],
+  "notes": "Stage A metadata-only discovery completed in authoritative run 20260805T204334Z with verification status=pass. Five candidates are selected_unsealed, zero are confirmation-role eligible because possible MRAR overlap remains unknown. Stage B is not authorized.",
+  "meta": {}
+}

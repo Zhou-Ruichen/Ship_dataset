@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply confirmation gates, atomic publication, immutable run IDs, logging and estimate-only conventions."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Use repository Parquet, TSV, YAML, manifest and raw archive storage contracts."}
+{"file":".trellis/spec/backend/scs-lineage-audit.md","reason":"Reuse the five-level evidence vocabulary, frozen 12-group identity evidence and no-model/no-product boundary."}
+{"file":".trellis/spec/backend/scs-ship-lineage-exact-replay-v2.md","reason":"Freeze the verified current 19 cruises, MRAR identity ceiling and source-artifact hash pattern."}
+{"file":".trellis/tasks/08-06-scs-v2-sealed-confirmation-acquisition/research/planning-evidence.md","reason":"Use the verified repository snapshots, exposed-set hashes, downstream no-confirmation receipt and official metadata endpoints."}

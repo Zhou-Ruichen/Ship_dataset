@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check CLI confirmation, atomicity, immutability, tests and logging."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check archive, Parquet, TSV, config and manifest path/schema conventions."}
+{"file":".trellis/spec/backend/scs-lineage-audit.md","reason":"Check exposed-12 closure, five-level evidence handling and prohibited scientific inputs."}
+{"file":".trellis/spec/backend/scs-ship-lineage-exact-replay-v2.md","reason":"Check current-19 closure, MRAR terminal state and source hash evidence."}
+{"file":".trellis/tasks/08-06-scs-v2-sealed-confirmation-acquisition/research/planning-evidence.md","reason":"Recompute all frozen hashes, set memberships, source endpoints and downstream confirmation ceiling."}
