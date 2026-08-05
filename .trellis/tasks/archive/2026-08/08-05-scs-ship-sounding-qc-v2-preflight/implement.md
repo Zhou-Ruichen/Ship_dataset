@@ -33,7 +33,7 @@
 - [x] Update backend specs with the preflight evidence contract and commands.
 - [x] Commit task-owned code, config, tests, task/spec artifacts; keep immutable
       `derived/` runs local under the repository's existing gitignore policy.
-- [ ] Present the collaborator decision package; do not archive the task or
+- [x] Present the collaborator decision package; do not archive the task or
       start QC v2 correction until the user confirms the scientific choices.
 
 ## Validation Commands
