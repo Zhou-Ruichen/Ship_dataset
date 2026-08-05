@@ -191,3 +191,36 @@ download time, and immutable local path.
 - Whether immutable metadata-only candidate selection must receive a separate
   human approval before the download stage, or whether an explicit CLI
   confirmation bound to the frozen candidate-registry SHA256 is sufficient.
+
+## Stage A.1 Authorization (2026-08-06)
+
+The user accepted Stage A commit `948519b`, withheld Stage B authorization,
+and authorized one new immutable metadata-only preseal run. Stage A.1 may GET
+official NCEI Cruise File List HTML and issue HEAD requests to physical object
+URLs found in those listings. It must not GET a physical object body, issue a
+Range request, parse candidate data, generate cells, contact NCEI, or perform
+any reference/product/model comparison.
+
+The revised comparison cohort is every accepted Stage A record that starts in
+2018 or later, has official SCS track intersection, has an official NCEI file
+list directory, has no current-19 or exposed-12 overlap, and has
+`ever_read_by_repo=false`. There is no candidate-count cap. Ranking is frozen
+before network access as: MRAR delivery chronology class, observation end date
+descending, official SCS track length descending, cruise ID ascending.
+
+The run must report at least `EQT20210702`, `TN358`, `TN354`, `EQT190012`, and
+`TN352`; the frozen accepted registry additionally yields `SR1912`,
+`EQT180002`, and `TN359`. For every selected row:
+
+```text
+confirmation_candidate_v2_H_MRAR_out=pending_seal_and_processing
+confirmation_candidate_v2_W_MRAR_in=blocked_source_independence_unknown
+confirmation_role_eligible=false
+```
+
+Required A.1 outputs are `physical_object_lock.parquet`,
+`per_cruise_byte_budget.tsv`, `revised_candidate_registry.parquet`,
+`revised_preseal_lock.json`, `audit_manifest.json`, and `verification.json`.
+If only a directory URL is available, any HEAD fails, or Content-Length is
+missing, the affected physical lock is incomplete and Stage B remains blocked.
+Even a complete physical lock does not authorize Stage B.

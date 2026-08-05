@@ -138,3 +138,43 @@ python -m py_compile \
 A Stage A result is citable only when its independent `verification.json`
 contains `status=pass`. After that receipt is written, execution stops and
 waits for explicit Stage B approval.
+
+## 8. Stage A.1 Physical Metadata Lock
+
+Stage A.1 is allowed only after a passing Stage A receipt and explicit user
+authorization. It creates a new immutable discovery run and does not alter the
+accepted Stage A run.
+
+Permitted network operations are limited to official NCEI Cruise File List
+HTML `GET` requests and physical-object `HEAD` requests. Before reading a file
+list body, the producer verifies that the resolved URL is still an HTTPS
+directory on `data.ngdc.noaa.gov` and that the response is HTML. A physical
+object request must use HEAD, must not send Range, must not read a response
+body, and must not fall back to GET.
+
+The revised comparison cohort is the complete set of official, SCS-intersecting,
+unexposed candidates beginning in 2018 or later. It has no count cap. Sort by
+chronological MRAR non-overlap class, observation date descending, official
+in-domain track length descending, then official cruise ID. This order is
+frozen in the hashed config before file-list access.
+
+For each object, retain the official cruise ID, filename, direct and resolved
+URL, Content-Length, ETag, Last-Modified, inferred format/role and HEAD result.
+Missing optional headers remain unknown. Per-cruise and all-candidate byte
+budgets must state whether their totals are complete. Directory-only access,
+HEAD failure or missing Content-Length blocks Stage B without invalidating a
+correct negative Stage A.1 receipt.
+
+Conditional branch labels are fixed as follows for the selected cohort:
+
+```text
+confirmation_candidate_v2_H_MRAR_out=pending_seal_and_processing
+confirmation_candidate_v2_W_MRAR_in=blocked_source_independence_unknown
+confirmation_role_eligible=false
+```
+
+An independent verifier rehashes the accepted Stage A inputs and A.1 outputs,
+recomputes the chronology-first cohort and rank, reconstructs object URLs from
+retained directory HTML, closes GET/HEAD methods against the query ledger, and
+recomputes byte budgets. A passing A.1 receipt still has
+`stage_b_authorized=false` and requires separate user approval.

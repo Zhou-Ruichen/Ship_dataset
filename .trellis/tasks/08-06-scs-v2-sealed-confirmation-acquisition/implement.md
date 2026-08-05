@@ -20,6 +20,15 @@
   hard-gate/ranking result without downloading candidate archives.
 - [x] Generate and independently verify the immutable Stage A discovery run,
   including `preseal_lock.json` and exact selected candidate count.
+- [x] Freeze Stage A.1 against accepted Stage A hashes, replace the old top-five
+  policy with the complete chronology-first 2018+ unexposed cohort, and retain
+  the named five cruises in the comparison.
+- [x] Implement allowlisted official directory-metadata GET and physical-object
+  HEAD collection with no Range header, object body read, or GET fallback.
+- [x] Implement physical object lock, per-cruise/all-candidate byte budgets,
+  revised branch qualifications and an independent offline A.1 verifier.
+- [x] Publish and independently verify the immutable Stage A.1 discovery run;
+  record all paths, rows, schemas, SHA256 values and technical Stage B blocks.
 - [ ] After the approved Stage B gate, download only presealed URLs as opaque
   `*.part` files, record transport headers/commands, atomically seal bytes and
   prohibit archive enumeration/parsing.
@@ -72,6 +81,13 @@ python ncei/code/discover_scs_v2_sealed_confirmation.py \
 
 python ncei/code/verify_scs_v2_sealed_confirmation.py \
   --discovery-dir ncei/derived/scs_v2_sealed_confirmation/discovery/<DISCOVERY_RUN_ID>
+
+python ncei/code/discover_scs_v2_sealed_confirmation_stage_a1.py \
+  --config ncei/configs/scs_v2_sealed_confirmation_stage_a1.yaml \
+  --run-id <STAGE_A1_RUN_ID> --confirm-stage-a1
+
+python ncei/code/verify_scs_v2_sealed_confirmation_stage_a1.py \
+  --run-dir ncei/derived/scs_v2_sealed_confirmation/discovery/<STAGE_A1_RUN_ID>
 
 python ncei/code/acquire_scs_v2_sealed_confirmation.py \
   --config ncei/configs/scs_v2_sealed_confirmation.yaml \

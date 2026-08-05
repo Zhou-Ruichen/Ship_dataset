@@ -26,6 +26,6 @@
     "ncei/archive/zhoushuai_processed_M/SOURCE.md",
     "/mnt/data2/06-Projects/12-ggm_scs/outputs/diagnostics/scs_lineage_contract_v2/20260805T193953Z/confirmation_registry.json"
   ],
-  "notes": "Stage A metadata-only discovery completed in authoritative run 20260805T204334Z with verification status=pass. Five candidates are selected_unsealed, zero are confirmation-role eligible because possible MRAR overlap remains unknown. Stage B is not authorized.",
+  "notes": "Stage A commit 948519b is retained. Metadata-only Stage A.1 completed in authoritative run 20260805T213226Z with verification status=pass: 8 chronology-first 2018+ unexposed candidates, 11,860 official physical-object URLs, 11,859 successful HEAD responses, 34 successful HEAD responses without Content-Length, and one TN358 HEAD TLS timeout. v2-H remains pending_seal_and_processing, v2-W remains blocked_source_independence_unknown, global confirmation_role_eligible=false, and Stage B is not authorized.",
   "meta": {}
 }

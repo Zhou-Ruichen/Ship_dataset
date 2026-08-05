@@ -205,3 +205,33 @@ The acquisition verifier:
 - Stage B never overwrites an existing run or archive. Partial `*.part` files
   remain outside the contractual manifest until a controlled retry.
 - Existing v1/v2 data, QC, split, GGM/PINN and downstream worktree are read-only.
+
+## Stage A.1: physical metadata lock
+
+Stage A.1 is a third immutable receipt under the discovery root, not a partial
+Stage B. It reads the accepted Stage A registry by exact SHA256, selects the
+complete 2018+ unexposed cohort without a count cap, and ranks chronology
+before in-domain track length. Its network allowlist has only two operations:
+
+1. `GET` a `https://data.ngdc.noaa.gov/.../` directory URL and read the body
+   only after the resolved URL is still an allowed directory and the response
+   is HTML;
+2. `HEAD` each descendant physical-object URL with `Accept-Encoding: identity`,
+   without a Range header, body read, or GET fallback.
+
+Directory HTML responses are retained and hashed. The independent verifier
+reconstructs their descendant directory and object links, closes them against
+the query ledger and physical lock, and recomputes all per-cruise and aggregate
+byte budgets. A HEAD error or missing Content-Length is a valid negative A.1
+result but blocks Stage B. `ETag` and `Last-Modified` may remain officially
+unknown because they are optional server headers.
+
+Every HEAD failure and every HTTP-success response lacking Content-Length is
+also copied into the negative-result ledger by direct object URL. A byte total
+with any missing Content-Length is explicitly incomplete and must not be
+reported as a complete cruise/archive download size.
+
+The v2-H and v2-W fields are conditional branch labels, not proof that either
+world is true. Because MRAR identity remains not recoverable, the actual global
+confirmation role stays false. No message requesting a bulk package is sent;
+that action is only recorded as a human-controlled alternative.
