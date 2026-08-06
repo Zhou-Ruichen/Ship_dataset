@@ -1,0 +1,60 @@
+schema_version: 3
+stage: C1a_atomic_time_contract
+frozen_before_candidate_body_read: true
+accepted_predecessor:
+  readiness_run_id: 20260806T090504Z
+  audit_manifest_sha256: e822e795d90ebee83459d4c13fb2a3a8ad8879f0b54362bb71fc992ee4074789
+  verification_sha256: 443e864009c87ffb315c784c1edaad4a5f5bad209374c4a3816e93ed63ebfb9e
+supersedes:
+  - contract: stage-c01-source-internal-qc.yaml
+    element: review_rules.R01_time_missing_or_invalid
+  - contract: stage-c01-parser-command-contract.yaml
+    element: join_contract.parser_ping_index
+  - contract: stage-c01-output-schema.yaml
+    element: time_and_failure_invariants
+unique_missing_or_invalid_time_policy:
+  action: abort_source_object_atomically
+  trigger: any_U3_or_U0_M_field_is_empty_nonnumeric_nonfinite_or_negative
+  precondition: validate_all_M_fields_before_emitting_any_sounding_or_assigning_parser_ping_index
+  forbidden_alternatives:
+    - emit_nullable_review_sounding
+    - drop_only_affected_sounding
+    - synthesize_or_interpolate_time
+    - derive_time_from_filename
+    - assign_parser_ping_index_without_valid_epoch
+  source_object_processing:
+    row_retained: true
+    parse_status: failed_invalid_or_missing_time
+    parsed_row_count: 0
+    error_code_required: true
+  sounding_lineage:
+    rows_emitted: 0
+    time_utc_nullable: false
+  cell_cruise_contributors_rows_emitted: 0
+  cell_cruise_candidates_effect: none_from_failed_object
+  field_recovery_ledger:
+    row_required: true
+    field_name: time_utc
+    field_available: false
+    field_status: known
+    evidence_kind: parser_preflight_failure
+valid_time_policy:
+  time_utc:
+    type: timestamp_us_UTC
+    nullable: false
+    unit: seconds_since_Unix_epoch_converted_to_UTC_microseconds
+  parser_ping_index:
+    type: int64
+    nullable: false
+    assignment: zero_based_first_seen_order_of_distinct_valid_time_utc_and_native_ping_counter_pairs_in_U3
+  sounding_primary_key: [source_object_id, parser_ping_index, beam_index]
+  cell_eligibility_requires_emitted_sounding: true
+atomicity:
+  scope: source_object_id
+  commit_outputs_only_after_both_U3_and_U0_streams_validate_and_join: true
+  partial_sounding_or_contributor_output_for_failed_object: false
+  retry_must_replace_no_prior_rows: true
+status_domains:
+  factual_field_status: [known, officially_unknown, not_recoverable, inferred_from_filename, verified_from_source_metadata]
+  source_object_parse_status: [pass, failed_invalid_or_missing_time, failed_parser_contract, not_applicable_sidecar]
+  parse_status_is_factual_five_level_status: false

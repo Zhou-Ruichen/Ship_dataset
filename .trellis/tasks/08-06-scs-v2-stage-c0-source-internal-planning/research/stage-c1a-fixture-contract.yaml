@@ -1,0 +1,36 @@
+schema_version: 3
+stage: C1a_zero_candidate_time_fixtures
+candidate_data_access_allowed: false
+sealed_object_body_read_count_required: 0
+base_fixture_contract: stage-c01-fixture-contract.yaml
+synthetic_cases:
+  - id: missing_time_in_U3_after_valid_row
+    input: _common/tests/fixtures/scs_v2_stage_c1a/synthetic_missing_time_u3.tsv
+    expected_parse_status: failed_invalid_or_missing_time
+    expected_error_code: TIME_UTC_MISSING
+    expected_sounding_rows: 0
+    expected_contributor_rows: 0
+  - id: invalid_time_in_U3_after_valid_row
+    input: _common/tests/fixtures/scs_v2_stage_c1a/synthetic_invalid_time_u3.tsv
+    expected_parse_status: failed_invalid_or_missing_time
+    expected_error_code: TIME_UTC_INVALID
+    expected_sounding_rows: 0
+    expected_contributor_rows: 0
+  - id: invalid_time_in_U0_after_valid_row
+    input: _common/tests/fixtures/scs_v2_stage_c1a/synthetic_invalid_time_u0.tsv
+    expected_parse_status: failed_invalid_or_missing_time
+    expected_error_code: TIME_UTC_INVALID
+    expected_sounding_rows: 0
+    expected_contributor_rows: 0
+required_regressions:
+  - no_partial_output_after_a_valid_prefix
+  - time_utc_remains_nonnullable_for_emitted_soundings
+  - failed_object_parser_ping_index_count_is_zero
+  - failed_object_has_no_cell_eligibility_or_contributor_rows
+  - failed_object_time_utc_ledger_row_is_known_unavailable
+  - valid_stream_parser_ping_index_uses_valid_time_and_native_ping_counter
+  - independent_output_verifier_rejects_sounding_from_failed_object
+pass_condition:
+  mismatch_count: 0
+  candidate_body_read_count: 0
+  candidate_row_count: 0

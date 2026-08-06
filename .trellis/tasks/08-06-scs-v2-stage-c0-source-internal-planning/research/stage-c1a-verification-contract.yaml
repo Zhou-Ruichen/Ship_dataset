@@ -1,0 +1,49 @@
+schema_version: 3
+stage: C1a_zero_candidate_readiness_and_future_output_verification
+accepted_predecessor:
+  readiness_run_id: 20260806T090504Z
+  audit_manifest_sha256: e822e795d90ebee83459d4c13fb2a3a8ad8879f0b54362bb71fc992ee4074789
+  verification_sha256: 443e864009c87ffb315c784c1edaad4a5f5bad209374c4a3816e93ed63ebfb9e
+readiness_checks:
+  - predecessor_manifest_and_verification_hashes_exact
+  - accepted_stage_c0_planning_lock_unchanged
+  - fixed_mbsystem_environment_digest_closed
+  - base_noncandidate_format58_fixture_and_oracle_pass
+  - missing_U3_time_aborts_object_without_partial_rows
+  - invalid_U3_time_aborts_object_without_partial_rows
+  - invalid_U0_time_aborts_object_without_partial_rows
+  - output_verifier_accepts_atomic_failure_evidence
+  - output_verifier_rejects_failed_object_sounding
+  - time_utc_nonnullable_in_emitted_soundings
+  - parser_ping_index_valid_time_dependency_closed
+  - field_recovery_ledger_failure_semantics_closed
+  - contract_code_fixture_test_and_verifier_hashes_closed
+  - inactive_authorization_prohibitions_closed
+  - sealed_object_body_read_count_zero
+  - archive_decompression_count_zero
+  - candidate_sounding_and_cell_count_zero
+future_output_checks:
+  - invalid_time_object_parse_status_exact
+  - invalid_time_object_parsed_row_count_zero
+  - invalid_time_object_error_code_present
+  - invalid_time_object_has_no_sounding_or_contributor_rows
+  - invalid_time_object_has_exactly_one_time_utc_failure_ledger_row
+  - emitted_time_utc_has_no_nulls
+  - emitted_sounding_belongs_to_pass_object
+  - parser_ping_index_matches_first_seen_valid_time_and_native_ping_pair
+  - pass_object_parsed_row_count_matches_sounding_rows
+authorization_template_must_keep_false:
+  - stage_c_authorized
+  - gebco_or_product_comparison_authorized
+  - model_comparison_authorized
+  - mrar_merge_authorized
+  - cross_cruise_aggregation_authorized
+  - datum_or_bias_fit_authorized
+  - confirmation_role_promotion_authorized
+  - confirmation_role_eligible
+stop_conditions:
+  - any_predecessor_environment_contract_code_or_fixture_hash_mismatch
+  - any_time_fixture_or_atomicity_regression_failure
+  - any_nonzero_candidate_access_counter
+  - authorization_template_not_inactive
+maximum_claim: ready_for_separate_source_internal_stage_c_authorization_only
