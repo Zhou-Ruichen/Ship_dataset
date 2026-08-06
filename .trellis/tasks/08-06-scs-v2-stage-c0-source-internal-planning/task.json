@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "08-06-scs-v2-stage-c-source-internal-processing"
+  ],
   "parent": null,
   "relatedFiles": [
     "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z/sealed_archive_manifest.parquet",
