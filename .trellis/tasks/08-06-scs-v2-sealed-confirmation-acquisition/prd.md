@@ -298,3 +298,27 @@ Stage B.0 acceptance requires offline unit tests, downloader dry-run
 `network_request_count=0`, an inactive authorization template and independent
 readiness `verification.json` with `status=pass`. Passing Stage B.0 does not
 authorize Stage B or Stage C.
+
+## Stage B Authorization (2026-08-06)
+
+The user authorized one opaque acquisition using execution-code commit
+`c3871f54f8041fcb2d3ae18cd124d3b5223c118f`, Stage A.2 run
+`20260805T221441Z`, and Stage B.0 readiness run `20260805T224911Z`. The
+authorization is limited to the immutable ordered four-cruise, 768-object,
+`9,626,893,507-byte` lock. It permits physical-object GET and body storage but
+does not permit archive decompression, member enumeration, sounding parsing,
+cell generation, comparison, model execution, candidate replacement or Stage
+C access.
+
+The authoritative successful acquisition run is `20260805T230449Z`. Its
+independent verifier reopened and rehashed all 768 objects and reported
+`status=pass`, with all 768 Last-Modified values closed against Stage A.2. Its
+maximum role is `sealed_unprocessed`; `content_parsed=false`,
+`confirmation_role_eligible=false`, `stage_c_authorized=false`, and
+`access_allowed=false` remain binding.
+
+The preceding run `20260805T225949Z` is retained as `failed_unsealed` after the
+environment proxy rejected the first tunnel before any response body was
+read. The successful retry used a new authorization receipt and the
+user-selected local sing-box 2082/HK-DC route without changing the frozen
+object set.

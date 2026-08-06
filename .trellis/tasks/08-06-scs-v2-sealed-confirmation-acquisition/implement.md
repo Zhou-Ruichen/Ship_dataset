@@ -44,16 +44,16 @@
 - [x] Publish and independently verify the zero-network Stage B.0 readiness run
   `20260805T224911Z`; 13 offline tests pass and dry-run network/download counts
   are both zero.
-- [ ] After the approved Stage B gate, download only presealed URLs as opaque
+- [x] After the approved Stage B gate, download only presealed URLs as opaque
   `*.part` files, record transport headers/commands, atomically seal bytes and
   prohibit archive enumeration/parsing.
-- [ ] Build `sealed_archive_manifest.tsv`, final audit manifest/report and the
+- [x] Build `sealed_archive_manifest.parquet`, final audit manifest/report and the
   sealed-directory access lock.
-- [ ] Run the independent acquisition verifier, rehash every artifact/archive,
+- [x] Run the independent acquisition verifier, rehash every artifact/archive,
   recompute overlap and selection closure, and require `status=pass`.
-- [ ] Run unit tests, syntax checks, estimate/discovery dry runs, source guard,
+- [x] Run unit tests, syntax checks, estimate/discovery dry runs, source guard,
   `git diff --check`, scoped review and Trellis context validation.
-- [ ] Update backend spec with the reusable sealed-confirmation contract;
+- [x] Update backend spec with the reusable sealed-confirmation contract;
   commit task-owned code/config/tests/spec/task artifacts, record the session
   and archive only after returning the downstream path/SHA handoff.
 
