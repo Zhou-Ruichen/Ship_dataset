@@ -318,8 +318,12 @@ def _raw_row_dict(row: RawRow) -> dict[str, Any]:
 def _u0_db(path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(path)
     connection.execute(
-        "CREATE TABLE u0 (epoch_us INTEGER, native_ping INTEGER, beam INTEGER, lon REAL, lat REAL, depth REAL, heading REAL, seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(epoch_us,native_ping,beam))"
+        "CREATE TABLE u0 (epoch_us INTEGER, native_ping INTEGER, beam INTEGER, lon REAL, lat REAL, depth REAL, heading REAL, PRIMARY KEY(epoch_us,native_ping,beam))"
     )
+    connection.execute(
+        "CREATE TABLE u3 (row_order INTEGER PRIMARY KEY, epoch_us INTEGER, native_ping INTEGER, beam INTEGER, lon REAL, lat REAL, depth REAL, depth_is_nan INTEGER NOT NULL, heading REAL)"
+    )
+    connection.execute("CREATE UNIQUE INDEX u3_key ON u3(epoch_us,native_ping,beam)")
     return connection
 
 
@@ -343,69 +347,112 @@ def _raw_from_object(
         for row, epoch_us in iter_mblist_rows(u0_path, check_mode=0):
             batch.append((epoch_us, row.native_ping_counter, row.beam_index, row.lon_deg, row.lat_deg, row.parser_depth_value, row.heading_deg))
             if len(batch) >= 50_000:
-                database.executemany(insert, batch)
-                batch.clear()
+                try:
+                    database.executemany(insert, batch)
+                except sqlite3.IntegrityError as error:
+                    raise ValueError(f"duplicate U0 key: {error}") from error
+                finally:
+                    batch.clear()
         if batch:
-            database.executemany(insert, batch)
+            try:
+                database.executemany(insert, batch)
+            except sqlite3.IntegrityError as error:
+                raise ValueError(f"duplicate U0 key: {error}") from error
         database.commit()
-        appender = ParquetAppender(raw_path, RAW_SCHEMA)
+        u3_insert = "INSERT INTO u3(row_order,epoch_us,native_ping,beam,lon,lat,depth,depth_is_nan,heading) VALUES (?,?,?,?,?,?,?,?,?)"
         ping_ordinals: dict[tuple[int, int], int] = {}
         previous_ping_index = -1
-        seen_u0 = 0
-        row_batch: list[dict[str, Any]] = []
-        key_seen: set[tuple[int, int, int]] = set()
+        u3_batch: list[tuple[Any, ...]] = []
+        row_order = 0
         for row, epoch_us in iter_mblist_rows(u3_path, check_mode=3):
-            key = (epoch_us, row.native_ping_counter, row.beam_index)
-            if key in key_seen:
-                raise ValueError(f"duplicate U3 key: {key}")
-            key_seen.add(key)
             ping_key = (epoch_us, row.native_ping_counter)
             parser_ping_index = ping_ordinals.setdefault(ping_key, len(ping_ordinals))
             if parser_ping_index < previous_ping_index:
                 raise ValueError("U3 parser ping order regressed")
             previous_ping_index = parser_ping_index
-            match = database.execute(
-                "SELECT lon,lat,depth,heading,seen FROM u0 WHERE epoch_us=? AND native_ping=? AND beam=?",
-                key,
-            ).fetchone()
-            if match is None:
-                if math.isnan(row.parser_depth_value):
-                    quality = "null"
-                    depth = None
-                else:
-                    quality = "flagged"
-                    depth = None
+            u3_batch.append(
+                (
+                    row_order,
+                    epoch_us,
+                    row.native_ping_counter,
+                    row.beam_index,
+                    row.lon_deg,
+                    row.lat_deg,
+                    None if math.isnan(row.parser_depth_value) else row.parser_depth_value,
+                    int(math.isnan(row.parser_depth_value)),
+                    row.heading_deg,
+                )
+            )
+            row_order += 1
+            if len(u3_batch) >= 50_000:
+                try:
+                    database.executemany(u3_insert, u3_batch)
+                except sqlite3.IntegrityError as error:
+                    raise ValueError(f"duplicate U3 key: {error}") from error
+                finally:
+                    u3_batch.clear()
+        if u3_batch:
+            try:
+                database.executemany(u3_insert, u3_batch)
+            except sqlite3.IntegrityError as error:
+                raise ValueError(f"duplicate U3 key: {error}") from error
+        database.commit()
+        missing_u0 = database.execute(
+            "SELECT COUNT(*) FROM u0 LEFT JOIN u3 ON u0.epoch_us=u3.epoch_us AND u0.native_ping=u3.native_ping AND u0.beam=u3.beam WHERE u3.row_order IS NULL"
+        ).fetchone()[0]
+        if missing_u0:
+            raise ValueError(f"U0 keys absent from U3: {missing_u0}")
+        appender = ParquetAppender(raw_path, RAW_SCHEMA)
+        row_batch: list[dict[str, Any]] = []
+        joined = database.execute(
+            "SELECT u3.row_order,u3.epoch_us,u3.native_ping,u3.beam,u3.lon,u3.lat,u3.depth,u3.depth_is_nan,u3.heading,u0.lon,u0.lat,u0.depth,u0.heading FROM u3 LEFT JOIN u0 ON u0.epoch_us=u3.epoch_us AND u0.native_ping=u3.native_ping AND u0.beam=u3.beam ORDER BY u3.row_order"
+        )
+        seen_u0 = 0
+        for (
+            _row_order,
+            epoch_us,
+            native_ping,
+            beam,
+            lon,
+            lat,
+            parser_depth,
+            depth_is_nan,
+            heading,
+            good_lon,
+            good_lat,
+            good_depth,
+            good_heading,
+        ) in joined:
+            if good_lon is None:
+                quality = "null" if depth_is_nan else "flagged"
+                depth = None
             else:
                 if any(
                     abs(left - right) > tolerance
                     for left, right, tolerance in (
-                        (row.lon_deg, match[0], 1.0e-10),
-                        (row.lat_deg, match[1], 1.0e-10),
-                        (row.parser_depth_value, match[2], 1.0e-4),
-                        (row.heading_deg, match[3], 1.0e-3),
+                        (lon, good_lon, 1.0e-10),
+                        (lat, good_lat, 1.0e-10),
+                        (parser_depth, good_depth, 1.0e-4),
+                        (heading, good_heading, 1.0e-3),
                     )
                 ):
-                    raise ValueError(f"U0/U3 value mismatch for key {key}")
-                database.execute(
-                    "UPDATE u0 SET seen=1 WHERE epoch_us=? AND native_ping=? AND beam=?",
-                    key,
-                )
+                    raise ValueError(f"U0/U3 value mismatch for key {(epoch_us, native_ping, beam)}")
                 seen_u0 += 1
                 quality = "good"
-                depth = float(match[2])
+                depth = float(good_depth)
             row_batch.append(
                 _raw_row_dict(
                     RawRow(
                         source_object_id=source_object_id_value,
-                        parser_ping_index=parser_ping_index,
-                        native_ping_counter=row.native_ping_counter,
-                        beam_index=row.beam_index,
-                        epoch_us=epoch_us,
-                        lon_deg=normalize_longitude(row.lon_deg),
-                        lat_deg=row.lat_deg,
-                        parser_depth_value=row.parser_depth_value,
+                        parser_ping_index=ping_ordinals[(int(epoch_us), int(native_ping))],
+                        native_ping_counter=int(native_ping),
+                        beam_index=int(beam),
+                        epoch_us=int(epoch_us),
+                        lon_deg=normalize_longitude(float(lon)),
+                        lat_deg=float(lat),
+                        parser_depth_value=math.nan if depth_is_nan else float(parser_depth),
                         depth_m_positive_down=depth,
-                        heading_deg=row.heading_deg,
+                        heading_deg=float(heading),
                         native_quality_state=quality,
                     )
                 )
@@ -415,11 +462,10 @@ def _raw_from_object(
                 row_batch.clear()
         if row_batch:
             appender.append(row_batch)
-        missing_u0 = database.execute("SELECT COUNT(*) FROM u0 WHERE seen=0").fetchone()[0]
-        if missing_u0:
-            raise ValueError(f"U0 keys absent from U3: {missing_u0}")
         database.commit()
         appender.close()
+        if seen_u0 != u0_count:
+            raise ValueError(f"U0 join count mismatch: expected {u0_count}, got {seen_u0}")
         return u3_count, seen_u0, None, None
     finally:
         database.close()

@@ -661,7 +661,7 @@ def run_processing(receipt_path: Path, processing_run_id: str) -> Path:
         atomic_json(audit, temp_dir / "audit_manifest.json")
         os.replace(temp_dir, final_dir)
         return final_dir
-    except Exception as error:
+    except BaseException as error:
         failure = {
             "schema_version": 1,
             "stage": "C_source_internal_candidate_processing",
@@ -669,8 +669,19 @@ def run_processing(receipt_path: Path, processing_run_id: str) -> Path:
             "processing_run_id": processing_run_id,
             "error_type": type(error).__name__,
             "error": str(error),
+            "body_read_scope": {
+                ".mb58.gz": int(locals().get("body_read_count", 0)),
+                ".fnv": 0,
+                ".inf": 0,
+                ".fbt": 0,
+            },
+            "decompression_count": int(locals().get("decompression_count", 0)),
+            "completed_source_object_count": len(locals().get("processing_rows", [])),
+            "completed_closure_count": len(locals().get("closure_rows", [])),
             "stage_c_authorized": True,
             "confirmation_role_eligible": False,
+            "sealed_source_modified": False,
+            "retry_requires_new_processing_run": True,
         }
         try:
             atomic_json(failure, temp_dir / "failure_receipt.json")
