@@ -300,7 +300,16 @@ def process_one_mb58(
                 error_code=error_code,
                 error_detail=error_detail,
             )
-            ledger_rows = source_field_ledger(str(object_record["official_cruise_id"]), object_id, relative, str(object_record["sha256"]), command_hash, parsed=False, time_failure=time_failure)
+            ledger_rows = source_field_ledger(
+                str(object_record["official_cruise_id"]),
+                object_id,
+                relative,
+                str(object_record["sha256"]),
+                command_hash,
+                parsed=False,
+                time_failure=time_failure,
+                parser_failure=not time_failure,
+            )
             return row, ledger_rows
         review_by_ping = ping_review_codes(raw_path)
         object_stage = work / "sounding.parquet"
@@ -548,6 +557,7 @@ def run_processing(receipt_path: Path, processing_run_id: str) -> Path:
         body_read_count = 0
         decompression_count = 0
         failed_time_count = 0
+        failed_parser_count = 0
         try:
             for object_record in manifest.to_dict(orient="records"):
                 object_id = source_object_id(ACQUISITION_RUN_ID, str(object_record["relative_path"]))
@@ -573,7 +583,7 @@ def run_processing(receipt_path: Path, processing_run_id: str) -> Path:
                     if row["parse_status"] == TIME_FAILURE_STATUS:
                         failed_time_count += 1
                     elif row["parse_status"] != PASS_STATUS:
-                        raise RuntimeError(f"non-time parser failure: {row['source_object_id']} {row['error_code']}")
+                        failed_parser_count += 1
                 else:
                     row, object_ledger, closure = sidecar_rows(processing_run_id, object_record)
                     processing_rows.append(row)
@@ -629,6 +639,7 @@ def run_processing(receipt_path: Path, processing_run_id: str) -> Path:
             handle.write(f"contributor_rows\t{int(contributor_count)}\n")
             handle.write(f"candidate_rows\t{int(candidate_count)}\n")
             handle.write(f"failed_invalid_time_objects\t{int(failed_time_count)}\n")
+            handle.write(f"failed_parser_contract_objects\t{int(failed_parser_count)}\n")
             handle.write("external_reference_inputs\t0\n")
         (temp_dir / "audit_report.md").write_text(
             "# Stage C source-internal processing\n\n"
@@ -650,6 +661,7 @@ def run_processing(receipt_path: Path, processing_run_id: str) -> Path:
             "candidate_cell_cruise_contributor_row_count": contributor_count,
             "candidate_cell_row_count": candidate_count,
             "failed_invalid_time_object_count": failed_time_count,
+            "failed_parser_contract_object_count": failed_parser_count,
             "external_product_or_model_reference_count": 0,
             "mrar_merge_count": 0,
             "cross_cruise_aggregation_count": 0,

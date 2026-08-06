@@ -160,8 +160,6 @@ def iter_mblist_rows(path: Path, *, check_mode: int) -> Iterator[tuple[MblistRow
             lon = _parse_finite(fields[3], "X")
             lat = _parse_finite(fields[4], "Y")
             heading = _parse_finite(fields[6], "H")
-            if not -90.0 <= lat <= 90.0 or not 0.0 <= heading < 360.0:
-                raise ValueError(f"navigation range failure at line {line_number}")
             yield (
                 MblistRow(
                     epoch_seconds_utc=epoch,
@@ -338,6 +336,22 @@ def _u0_db(path: Path) -> sqlite3.Connection:
 
 
 def _raw_from_object(
+    source_object_id_value: str,
+    u3_path: Path,
+    u0_path: Path,
+    sqlite_path: Path,
+    raw_path: Path,
+) -> tuple[int, int, str | None, str | None]:
+    """Return an atomic parser-contract failure instead of leaking partial rows."""
+    try:
+        return _raw_from_object_impl(source_object_id_value, u3_path, u0_path, sqlite_path, raw_path)
+    except ValueError as error:
+        raw_path.unlink(missing_ok=True)
+        sqlite_path.unlink(missing_ok=True)
+        return 0, 0, "PARSER_CONTRACT_FAILURE", str(error)
+
+
+def _raw_from_object_impl(
     source_object_id_value: str,
     u3_path: Path,
     u0_path: Path,
@@ -545,6 +559,7 @@ def source_field_ledger(
     *,
     parsed: bool,
     time_failure: bool = False,
+    parser_failure: bool = False,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     direct_fields = {"time_utc", "longitude", "latitude", "heading", "native_quality", "depth", "native_ping_id", "native_beam_id"}
@@ -556,6 +571,10 @@ def source_field_ledger(
             evidence_kind = "parser_preflight_failure"
             note = "M field missing or invalid; source object aborted atomically"
             available = False
+        elif parser_failure:
+            status = "officially_unknown"
+            evidence_kind = "parser_contract_failure"
+            note = "Source object emitted no rows because the frozen parser contract failed"
         elif available:
             status = "known"
             evidence_kind = "decoded_format58_parser_field"

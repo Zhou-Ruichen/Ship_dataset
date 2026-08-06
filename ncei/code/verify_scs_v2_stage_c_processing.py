@@ -231,9 +231,11 @@ def verify_object_tables(run_dir: Path, manifest: pd.DataFrame) -> tuple[pd.Data
         if fmt == ".mb58.gz":
             require(row["body_read_authorized"] is True and row["body_read_performed"] is True, f"{object_id}: primary body flags")
             require(row["parser_name"] == "MB-System" and row["parser_version"] == "5.8.3beta16", f"{object_id}: parser identity")
-            require(row["parse_status"] in {"pass", "failed_invalid_or_missing_time"}, f"{object_id}: parse status")
+            require(row["parse_status"] in {"pass", "failed_invalid_or_missing_time", "failed_parser_contract"}, f"{object_id}: parse status")
             if row["parse_status"] == "pass":
                 require(int(row["parsed_row_count"]) >= 0, f"{object_id}: parsed row count")
+            else:
+                require(int(row["parsed_row_count"]) == 0 and row["error_code"], f"{object_id}: failed parser closure")
         else:
             require(fmt in SIDECAR_FORMATS, f"{object_id}: unexpected sidecar format")
             require(row["body_read_authorized"] is False and row["body_read_performed"] is False, f"{object_id}: sidecar body was read")
@@ -267,7 +269,7 @@ def verify_object_tables(run_dir: Path, manifest: pd.DataFrame) -> tuple[pd.Data
         require(row["source_object_relative_path"] == record["relative_path"] and row["source_object_sha256"] == record["sha256"], "field ledger object binding mismatch")
         require(row["field_status"] in FIVE_LEVEL_STATUS, "field ledger status invalid")
         if str(record["format"]) == ".mb58.gz" and row["field_name"] in {"time_utc", "longitude", "latitude", "heading", "native_quality", "depth"}:
-            if row["field_status"] != "known" and row["evidence_kind"] != "parser_preflight_failure":
+            if row["field_status"] != "known" and row["evidence_kind"] not in {"parser_preflight_failure", "parser_contract_failure"}:
                 raise AssertionError(f"primary parser field status mismatch: {row}")
     return objects, contributors, candidates, ledger, expected_objects
 
@@ -484,6 +486,7 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
         "contributor_row_count": len(contributors),
         "candidate_row_count": len(candidates),
         "failed_invalid_time_object_count": int((objects["parse_status"] == "failed_invalid_or_missing_time").sum()),
+        "failed_parser_contract_object_count": int((objects["parse_status"] == "failed_parser_contract").sum()),
         "reviewed_sounding_row_count": sounding_counts["reviewed_rows"],
         "sealed_object_body_read_count": access["sealed_object_body_read_count"],
         "archive_decompression_count": access["decompression_count"],

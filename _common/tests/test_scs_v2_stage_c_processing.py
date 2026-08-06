@@ -143,6 +143,30 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
         finally:
             path.unlink(missing_ok=True)
 
+    def test_navigation_range_is_retained_for_source_internal_qc(self):
+        path = REPO_ROOT / ".tmp-stage-c-navigation-range.tsv"
+        try:
+            path.write_text("1700000000.000000\t1\t2\t240\t95\t250\t360\n", encoding="ascii")
+            rows = list(iter_mblist_rows(path, check_mode=3))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0][0].lat_deg, 95.0)
+            self.assertEqual(rows[0][0].heading_deg, 360.0)
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_parser_contract_failure_is_atomic_and_has_no_raw_rows(self):
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            u3 = directory / "u3.tsv"
+            u0 = directory / "u0.tsv"
+            line = "1700000000.000000\t1\t2\t120\t10\t250\t90\n"
+            u3.write_text(line + line, encoding="ascii")
+            u0.write_text(line, encoding="ascii")
+            raw = directory / "raw.parquet"
+            result = _raw_from_object("object", u3, u0, directory / "u0.sqlite", raw)
+            self.assertEqual(result[2], "PARSER_CONTRACT_FAILURE")
+            self.assertFalse(raw.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
