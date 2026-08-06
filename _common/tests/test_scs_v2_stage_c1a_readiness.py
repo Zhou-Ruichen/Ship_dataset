@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from ncei.code.prepare_scs_v2_stage_c1a_readiness import normalize_ldd_snapshot
 from ncei.code.scs_v2_stage_c1_contract import ACQUISITION_RUN_ID, source_object_id
 from ncei.code.scs_v2_stage_c1a_contract import (
     PASS_STATUS,
@@ -197,6 +198,13 @@ class SCSV2StageC1aReadinessTest(unittest.TestCase):
         self.assertFalse(policy["sounding_lineage"]["time_utc_nullable"])
         self.assertEqual(policy["sounding_lineage"]["rows_emitted"], 0)
         self.assertFalse(policy["field_recovery_ledger"]["field_available"])
+
+    def test_ldd_snapshot_normalization_removes_only_aslr_addresses(self):
+        first = "libx.so => /fixed/libx.so (0x00007f111111)\n"
+        second = "libx.so => /fixed/libx.so (0x00007f999999)\n"
+        expected = "libx.so => /fixed/libx.so (0xADDR)\n"
+        self.assertEqual(normalize_ldd_snapshot(first), expected)
+        self.assertEqual(normalize_ldd_snapshot(second), expected)
 
 
 if __name__ == "__main__":

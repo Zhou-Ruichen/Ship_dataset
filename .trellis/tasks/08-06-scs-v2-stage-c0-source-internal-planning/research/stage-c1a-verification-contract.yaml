@@ -8,6 +8,7 @@ readiness_checks:
   - predecessor_manifest_and_verification_hashes_exact
   - accepted_stage_c0_planning_lock_unchanged
   - fixed_mbsystem_environment_digest_closed
+  - ldd_ASLR_load_addresses_normalized_before_environment_digest
   - base_noncandidate_format58_fixture_and_oracle_pass
   - missing_U3_time_aborts_object_without_partial_rows
   - invalid_U3_time_aborts_object_without_partial_rows

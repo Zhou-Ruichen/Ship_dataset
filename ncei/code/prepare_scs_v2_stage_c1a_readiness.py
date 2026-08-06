@@ -73,6 +73,24 @@ TIME_FIXTURES = {
 }
 
 
+def normalize_ldd_snapshot(text: str) -> str:
+    """Remove ASLR load addresses while preserving resolved dependency paths."""
+    return re.sub(r"\(0x[0-9a-fA-F]+\)", "(0xADDR)", text)
+
+
+def normalize_environment_ldd(material: dict[str, Any], run_dir: Path) -> None:
+    for name, record in material["binaries"].items():
+        path = run_dir / f"{name}-ldd.txt"
+        normalized = normalize_ldd_snapshot(path.read_text(encoding="utf-8"))
+        path.write_text(normalized, encoding="utf-8")
+        record["ldd_sha256"] = sha256_file(path)
+    material["ldd_snapshot_contract"] = {
+        "aslr_load_addresses_replaced_with": "0xADDR",
+        "resolved_dependency_paths_preserved": True,
+        "dependency_file_hashes_recorded_separately": True,
+    }
+
+
 def validate_inputs(environment_root: Path, source_root: Path, planning_commit: str) -> dict[str, Any]:
     c0_lock = validate_c1_inputs(environment_root, source_root, planning_commit)
     if sha256_file(PREDECESSOR_RUN / "audit_manifest.json") != PREDECESSOR_MANIFEST_SHA256:
@@ -216,6 +234,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
             }
 
         material, _help_paths = environment_material(environment_root, source_root, temporary_dir)
+        normalize_environment_ldd(material, temporary_dir)
         environment_digest = canonical_sha256(material)
         atomic_json(
             {
