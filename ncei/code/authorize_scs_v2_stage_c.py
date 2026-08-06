@@ -20,6 +20,8 @@ SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T2304
 READINESS_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T093740Z"
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 ACQUISITION_RUN_ID = "20260805T230449Z"
+C1A_MANIFEST_SHA256 = "c260960dc4999f08bad710b7d2f6111acd90087a158eb661957f01280bc89615"
+C1A_VERIFICATION_SHA256 = "9f3464bfa3f1a90d319761b543bb5488d0d5c154bfc6837b23a278d53558c717"
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -109,6 +111,8 @@ def main() -> int:
             "time_fixture_verification_sha256": sha256_file(READINESS_ROOT / "time_contract_fixture_verification.json"),
             "format58_fixture_bytes_sha256": fixture["fixture"]["sha256"],
             "format58_fixture_oracle_sha256": fixture["oracle"]["sha256"],
+            "stage_c1a_readiness_manifest_sha256": C1A_MANIFEST_SHA256,
+            "stage_c1a_readiness_verification_sha256": C1A_VERIFICATION_SHA256,
             "source_internal_only": True,
             "permitted_body_read_counts": {".mb58.gz": 192, ".fnv": 0, ".inf": 0, ".fbt": 0},
             "prohibited_external_inputs": ["GEBCO", "product", "model", "GGM", "PINN", "MRAR_merge"],
