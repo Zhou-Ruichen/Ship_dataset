@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "stage": "C1a_zero_candidate_contract_correction",
+  "status": "pass",
+  "authoritative_run": {
+    "run_id": "20260806T093740Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T093740Z",
+    "audit_manifest_sha256": "c260960dc4999f08bad710b7d2f6111acd90087a158eb661957f01280bc89615",
+    "verification_sha256": "9f3464bfa3f1a90d319761b543bb5488d0d5c154bfc6837b23a278d53558c717",
+    "readiness_lock_sha256": "e89d7bb02a0075ed3d44d303484bac189f17abb034df05f0d97b3735e49b0c07",
+    "environment_lock_sha256": "e57f0c171805de639f2fcbd1f8fc3b94ae1033b6d4e1a9718a07bec13275f5d9",
+    "time_fixture_verification_sha256": "2b1606484ba440116116761fe7c02c3daaa103aab08debca04077671c91fa5b0",
+    "inactive_authorization_template_sha256": "40772949aa71f44b325039910aa3a4632a125532974f9e238065b1552d2d4bfa"
+  },
+  "accepted_predecessor": {
+    "run_id": "20260806T090504Z",
+    "audit_manifest_sha256": "e822e795d90ebee83459d4c13fb2a3a8ad8879f0b54362bb71fc992ee4074789",
+    "verification_sha256": "443e864009c87ffb315c784c1edaad4a5f5bad209374c4a3816e93ed63ebfb9e"
+  },
+  "superseded_intermediate_run": {
+    "run_id": "20260806T093501Z",
+    "status": "pass_but_not_authoritative",
+    "reason": "Raw ldd snapshots included nondeterministic ASLR load addresses in the environment digest.",
+    "binary_or_dependency_drift_detected": false,
+    "preserved_immutable": true
+  },
+  "implementation_commits": [
+    "ef01a9d802ce524436bea4d32f5dd0a3ff3a8a23",
+    "e0249151b450d843e350d47099c3c9c10f54a636"
+  ],
+  "time_contract": {
+    "policy": "abort_source_object_atomically",
+    "trigger": "any U3 or U0 M field is empty, nonnumeric, nonfinite, or negative",
+    "time_utc_nullable_in_emitted_soundings": false,
+    "failed_object_parsed_row_count": 0,
+    "failed_object_sounding_row_count": 0,
+    "failed_object_contributor_row_count": 0,
+    "parser_ping_index_requires_valid_time": true,
+    "field_recovery_time_status": "known",
+    "field_recovery_time_available": false,
+    "field_recovery_evidence_kind": "parser_preflight_failure"
+  },
+  "contract_sha256": {
+    "stage-c1a-time-and-output-contract.yaml": "d3eed2bc10c961dd306494f8048643bf406fcc25d1c3a5e39dae378f079881f6",
+    "stage-c1a-fixture-contract.yaml": "2f555309c857330785d05f77970667e8f945b569a4931015fb498b40b26841dc",
+    "stage-c1a-verification-contract.yaml": "739c3fae04d79243e7da0263554846e6173c6c285dd4dca04efdab630a72419f"
+  },
+  "environment": {
+    "digest": "b2c47303df33602a297754e48057f68ce8a8801fbd95a987866bf9d25172b0bb",
+    "mbsystem_version": "5.8.3beta16",
+    "mbsystem_source_commit": "1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422",
+    "ldd_aslr_load_addresses_normalized": true,
+    "resolved_dependency_paths_preserved": true,
+    "runtime_dependency_file_hashes_preserved": true,
+    "fresh_mblist_ldd_closure_match": true,
+    "fresh_mbinfo_ldd_closure_match": true
+  },
+  "verification": {
+    "status": "pass",
+    "checks_passed": 420,
+    "offline_tests_run": 17,
+    "missing_time_u3_fixture": "pass",
+    "invalid_time_u3_fixture": "pass",
+    "invalid_time_u0_fixture": "pass",
+    "independent_output_verifier_acceptance_test": "pass",
+    "independent_output_verifier_rejection_test": "pass",
+    "sealed_object_body_read_count": 0,
+    "archive_decompression_count": 0,
+    "candidate_sounding_row_count": 0,
+    "candidate_cell_row_count": 0,
+    "stage_b_objects_root_opened": false
+  },
+  "authorization": {
+    "stage_c_authorized": false,
+    "gebco_or_product_comparison_authorized": false,
+    "model_comparison_authorized": false,
+    "mrar_merge_authorized": false,
+    "cross_cruise_aggregation_authorized": false,
+    "datum_or_bias_fit_authorized": false,
+    "confirmation_role_promotion_authorized": false,
+    "confirmation_role_eligible": false
+  },
+  "scope_stop": "Actual Stage C candidate body access remains unauthorized."
+}
