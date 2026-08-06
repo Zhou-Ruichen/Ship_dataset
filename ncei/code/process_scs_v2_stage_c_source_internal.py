@@ -40,7 +40,7 @@ from ncei.code.scs_v2_stage_c_processing import (
     source_field_ledger,
     source_object_id,
     source_processing_row,
-    sounding_row,
+    sounding_batch_table,
     _raw_from_object,
 )
 
@@ -197,6 +197,44 @@ def update_counts(counts: dict[tuple[str, str, str], dict[str, Any]], row: dict[
     item["time_end_us"] = epoch_us if item["time_end_us"] is None else max(item["time_end_us"], epoch_us)
 
 
+def update_counts_from_batch(counts: dict[tuple[str, str, str], dict[str, Any]], data: dict[str, list[Any]]) -> None:
+    summary = pd.DataFrame(
+        {
+            "cell_id": data["cell_id"],
+            "native_quality_state": data["native_quality_state"],
+            "qc_eligible_for_cell": data["qc_eligible_for_cell"],
+            "n_review": [bool(value) for value in data["qc_review_codes"]],
+            "epoch_us": [int(pd.Timestamp(value).value // 1_000) for value in data["time_utc"]],
+        }
+    )
+    summary = summary[summary["cell_id"].notna()]
+    for cell_id, group in summary.groupby("cell_id", sort=False):
+        key = (str(cell_id), str(data["official_cruise_id"][0]), str(data["source_object_id"][0]))
+        item = counts.setdefault(
+            key,
+            {
+                "n_soundings_all": 0,
+                "n_native_good": 0,
+                "n_native_flagged": 0,
+                "n_native_null": 0,
+                "n_qc_eligible": 0,
+                "n_review": 0,
+                "time_start_us": None,
+                "time_end_us": None,
+            },
+        )
+        quality_counts = group["native_quality_state"].value_counts()
+        item["n_soundings_all"] += len(group)
+        for quality in ("good", "flagged", "null"):
+            item[f"n_native_{quality}"] += int(quality_counts.get(quality, 0))
+        item["n_qc_eligible"] += int(group["qc_eligible_for_cell"].sum())
+        item["n_review"] += int(group["n_review"].sum())
+        start_us = int(group["epoch_us"].min())
+        end_us = int(group["epoch_us"].max())
+        item["time_start_us"] = start_us if item["time_start_us"] is None else min(item["time_start_us"], start_us)
+        item["time_end_us"] = end_us if item["time_end_us"] is None else max(item["time_end_us"], end_us)
+
+
 def process_one_mb58(
     object_record: dict[str, Any],
     *,
@@ -267,37 +305,42 @@ def process_one_mb58(
         review_by_ping = ping_review_codes(raw_path)
         object_stage = work / "sounding.parquet"
         stage_writer = ParquetAppender(object_stage, schemas["sounding_lineage.parquet"])
-        batch: list[dict[str, Any]] = []
         eligible_rows: list[tuple[Any, ...]] = []
         for arrow_batch in pq.ParquetFile(raw_path).iter_batches(batch_size=50_000):
-            for raw in arrow_batch.to_pylist():
-                row = sounding_row(
-                    raw,
-                    processing_run_id,
-                    ACQUISITION_RUN_ID,
-                    object_record,
-                    receipt["parser_environment_digest"],
-                    command_hash,
-                    review_by_ping.get(int(raw["parser_ping_index"]), set()),
+            table = sounding_batch_table(
+                arrow_batch,
+                processing_run_id,
+                ACQUISITION_RUN_ID,
+                object_record,
+                receipt["parser_environment_digest"],
+                command_hash,
+                review_by_ping,
+                schemas["sounding_lineage.parquet"],
+            )
+            stage_writer.append_table(table)
+            data = table.to_pydict()
+            update_counts_from_batch(counts, data)
+            eligible_rows.extend(
+                (
+                    data["cell_id"][index],
+                    data["official_cruise_id"][index],
+                    data["source_object_id"][index],
+                    int(data["parser_ping_index"][index]),
+                    float(data["depth_m_positive_down"][index]),
+                    int(pd.Timestamp(data["time_utc"][index]).value // 1_000),
                 )
-                update_counts(counts, row)
-                if row["qc_eligible_for_cell"]:
-                    eligible_rows.append((row["cell_id"], row["official_cruise_id"], row["source_object_id"], int(row["parser_ping_index"]), float(row["depth_m_positive_down"]), int(pd.Timestamp(row["time_utc"]).value // 1_000)))
-                batch.append(row)
-                if len(batch) >= 50_000:
-                    stage_writer.append(batch)
-                    batch.clear()
-                if len(eligible_rows) >= 50_000:
-                    database.executemany("INSERT INTO eligible(cell_id,cruise_id,source_object_id,parser_ping_index,depth,epoch_us) VALUES (?,?,?,?,?,?)", eligible_rows)
-                    eligible_rows.clear()
-        if batch:
-            stage_writer.append(batch)
+                for index, eligible in enumerate(data["qc_eligible_for_cell"])
+                if eligible
+            )
+            if len(eligible_rows) >= 50_000:
+                database.executemany("INSERT INTO eligible(cell_id,cruise_id,source_object_id,parser_ping_index,depth,epoch_us) VALUES (?,?,?,?,?,?)", eligible_rows)
+                eligible_rows.clear()
         if eligible_rows:
             database.executemany("INSERT INTO eligible(cell_id,cruise_id,source_object_id,parser_ping_index,depth,epoch_us) VALUES (?,?,?,?,?,?)", eligible_rows)
         database.commit()
         stage_writer.close()
         for arrow_batch in pq.ParquetFile(object_stage).iter_batches(batch_size=50_000):
-            global_sounding.append(arrow_batch.to_pylist())
+            global_sounding.append_table(arrow_batch)
         row = source_processing_row(
             processing_run_id,
             ACQUISITION_RUN_ID,

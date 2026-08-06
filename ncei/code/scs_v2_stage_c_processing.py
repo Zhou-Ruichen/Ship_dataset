@@ -207,6 +207,16 @@ class ParquetAppender:
         self.writer.write_table(table)
         self.row_count += len(rows)
 
+    def append_table(self, table: pa.Table | pa.RecordBatch) -> None:
+        if isinstance(table, pa.RecordBatch):
+            table = pa.Table.from_batches([table], schema=self.schema)
+        if table.schema != self.schema:
+            table = table.cast(self.schema)
+        if self.writer is None:
+            self.writer = pq.ParquetWriter(self.path, self.schema, compression="zstd")
+        self.writer.write_table(table)
+        self.row_count += table.num_rows
+
     def close(self) -> None:
         if self.writer is None:
             pq.write_table(pa.Table.from_pylist([], schema=self.schema), self.path, compression="zstd")
@@ -709,6 +719,129 @@ def sounding_row(
         "role_v2_w": "blocked_source_independence_unknown",
         "confirmation_role_eligible": False,
     }
+
+
+def sounding_batch_table(
+    raw_batch: pa.RecordBatch,
+    processing_run_id: str,
+    acquisition_run_id: str,
+    object_record: dict[str, Any],
+    parser_environment_digest: str,
+    parser_command_sha256: str,
+    review_codes: dict[int, set[str]],
+    schema: pa.Schema,
+) -> pa.Table:
+    """Build one lineage batch with column operations and no per-row dictionaries."""
+    raw = raw_batch.to_pydict()
+    count = len(raw["parser_ping_index"])
+    object_id = str(raw["source_object_id"][0]) if count else ""
+    relative = str(object_record["relative_path"])
+    cruise = str(object_record["official_cruise_id"])
+    lon_values = [float(value) for value in raw["lon_deg"]]
+    lat_values = [float(value) for value in raw["lat_deg"]]
+    depth_values = [
+        None if value is None or math.isnan(float(value)) else float(value)
+        for value in raw["depth_m_positive_down"]
+    ]
+    quality_values = [str(value) for value in raw["native_quality_state"]]
+    nav_values = [
+        math.isfinite(lon) and -180.0 <= lon < 180.0 and math.isfinite(lat) and -90.0 <= lat <= 90.0
+        for lon, lat in zip(lon_values, lat_values)
+    ]
+    depth_ok_values = [
+        value is not None and math.isfinite(value) and 0.0 < value <= 12_000.0
+        for value in depth_values
+    ]
+    hard_values = [quality == "good" and nav_ok and depth_ok for quality, nav_ok, depth_ok in zip(quality_values, nav_values, depth_ok_values)]
+    cell_values: list[str | None] = []
+    lon_bins: list[int | None] = []
+    lat_bins: list[int | None] = []
+    for lon, lat, nav_ok in zip(lon_values, lat_values, nav_values):
+        if nav_ok:
+            lon_bin, lat_bin, cell_id = cell_assignment(lon, lat)
+            lon_bins.append(lon_bin)
+            lat_bins.append(lat_bin)
+            cell_values.append(cell_id)
+        else:
+            lon_bins.append(None)
+            lat_bins.append(None)
+            cell_values.append(None)
+    times = [datetime_from_us(int(value)) for value in raw["epoch_us"]]
+    review_values = [sorted(review_codes.get(int(value), set())) for value in raw["parser_ping_index"]]
+    failure_values: list[list[str]] = []
+    for quality, nav_ok, depth_ok in zip(quality_values, nav_values, depth_ok_values):
+        codes: list[str] = []
+        if quality != "good":
+            codes.append("H02_NATIVE_NOT_GOOD")
+        if not nav_ok:
+            codes.append("H03_NAVIGATION_RANGE")
+        if not depth_ok:
+            codes.append("H04_DEPTH_RANGE")
+        failure_values.append(codes)
+    parser_depth_values = [float(value) for value in raw["parser_depth_value"]]
+    data: dict[str, Any] = {
+        "processing_run_id": [processing_run_id] * count,
+        "acquisition_run_id": [acquisition_run_id] * count,
+        "source_object_id": [object_id] * count,
+        "source_object_relative_path": [relative] * count,
+        "source_object_sha256": [str(object_record["sha256"])] * count,
+        "official_cruise_id": [cruise] * count,
+        "official_cruise_id_status": ["verified_from_source_metadata"] * count,
+        "parser_name": ["MB-System"] * count,
+        "parser_version": ["5.8.3beta16"] * count,
+        "parser_source_commit": ["1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422"] * count,
+        "parser_environment_digest": [parser_environment_digest] * count,
+        "parser_command_sha256": [parser_command_sha256] * count,
+        "parser_ping_index": [int(value) for value in raw["parser_ping_index"]],
+        "parser_ping_index_status": ["known"] * count,
+        "native_ping_counter": [int(value) for value in raw["native_ping_counter"]],
+        "native_ping_counter_status": ["known"] * count,
+        "native_ping_id": [None] * count,
+        "native_ping_id_status": ["officially_unknown"] * count,
+        "beam_index": [int(value) for value in raw["beam_index"]],
+        "beam_index_status": ["known"] * count,
+        "native_beam_id": [None] * count,
+        "native_beam_id_status": ["officially_unknown"] * count,
+        "line_id": [None] * count,
+        "line_id_status": ["officially_unknown"] * count,
+        "time_utc": times,
+        "time_utc_status": ["known"] * count,
+        "lon_deg": lon_values,
+        "lon_deg_status": ["known"] * count,
+        "lat_deg": lat_values,
+        "lat_deg_status": ["known"] * count,
+        "horizontal_datum": [None] * count,
+        "horizontal_datum_status": ["officially_unknown"] * count,
+        "parser_depth_value": parser_depth_values,
+        "depth_m_positive_down": depth_values,
+        "depth_m_positive_down_status": ["known"] * count,
+        "elev_m": [None if value is None else -value for value in depth_values],
+        "depth_unit": ["m"] * count,
+        "depth_direction": ["positive_down"] * count,
+        "vertical_datum": [None] * count,
+        "vertical_datum_status": ["officially_unknown"] * count,
+        "heading_deg": [float(value) for value in raw["heading_deg"]],
+        "heading_deg_status": ["known"] * count,
+        "native_quality_state": quality_values,
+        "native_quality_state_status": ["known"] * count,
+        "native_quality_code": [None] * count,
+        "native_quality_code_status": ["officially_unknown"] * count,
+        "qc_hard_pass": hard_values,
+        "qc_hard_failure_codes": failure_values,
+        "qc_review_codes": review_values,
+        "qc_eligible_for_cell": hard_values,
+        "lon_bin": lon_bins,
+        "lat_bin": lat_bins,
+        "cell_id": cell_values,
+        "held_out": [True] * count,
+        "use_for_training": [False] * count,
+        "use_for_tuning": [False] * count,
+        "use_for_threshold_selection": [False] * count,
+        "role_v2_h": ["held_out_candidate_mrar_out"] * count,
+        "role_v2_w": ["blocked_source_independence_unknown"] * count,
+        "confirmation_role_eligible": [False] * count,
+    }
+    return pa.Table.from_pydict(data, schema=schema)
 
 
 def aggregate_stats(values: list[float]) -> dict[str, float | None]:

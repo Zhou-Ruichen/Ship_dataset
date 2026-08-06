@@ -1,12 +1,19 @@
 import hashlib
+import math
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import pyarrow.parquet as pq
 
 from ncei.code.scs_v2_stage_c_processing import (
     canonical_authorization_receipt_sha256,
     iter_mblist_rows,
     load_output_schemas,
+    ping_review_codes,
+    _raw_from_object,
     scan_time_contract,
+    sounding_batch_table,
     sounding_row,
 )
 
@@ -16,6 +23,58 @@ SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-
 
 
 class SCSV2StageCProcessingTest(unittest.TestCase):
+    def test_column_batch_matches_row_contract_on_golden_fixture(self):
+        fixture = REPO_ROOT / "_common/tests/fixtures/scs_v2_stage_c1"
+        object_record = {
+            "relative_path": "objects/TN352/example.mb58.gz",
+            "sha256": hashlib.sha256(b"example").hexdigest(),
+            "official_cruise_id": "TN352",
+        }
+        schema = load_output_schemas(SCHEMA_PATH)["sounding_lineage.parquet"]
+        with TemporaryDirectory() as directory:
+            directory = Path(directory)
+            raw_path = directory / "raw.parquet"
+            _raw_from_object(
+                "20260805T230449Z/objects/TN352/example.mb58.gz",
+                fixture / "synthetic_all_u3.tsv",
+                fixture / "synthetic_good_u0.tsv",
+                directory / "u0.sqlite",
+                raw_path,
+            )
+            review = ping_review_codes(raw_path)
+            batch = next(pq.ParquetFile(raw_path).iter_batches())
+            vectorized = sounding_batch_table(
+                batch,
+                "run",
+                "20260805T230449Z",
+                object_record,
+                "env",
+                "cmd",
+                review,
+                schema,
+            ).to_pylist()
+            rowwise = [
+                sounding_row(
+                    raw,
+                    "run",
+                    "20260805T230449Z",
+                    object_record,
+                    "env",
+                    "cmd",
+                    review.get(int(raw["parser_ping_index"]), set()),
+                )
+                for raw in batch.to_pylist()
+            ]
+            self.assertEqual(len(vectorized), len(rowwise))
+            for vectorized_row, rowwise_row in zip(vectorized, rowwise):
+                for field in vectorized_row:
+                    if field == "time_utc":
+                        self.assertEqual(vectorized_row[field].timestamp(), rowwise_row[field].timestamp())
+                    elif isinstance(vectorized_row[field], float) and math.isnan(vectorized_row[field]):
+                        self.assertTrue(math.isnan(rowwise_row[field]), field)
+                    else:
+                        self.assertEqual(vectorized_row[field], rowwise_row[field], field)
+
     def test_missing_and_invalid_time_have_distinct_frozen_codes(self):
         path = REPO_ROOT / ".tmp-stage-c-time-contract.tsv"
         try:
