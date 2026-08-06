@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "stage": "C0.1_C1_zero_candidate_readiness",
+  "status": "pass",
+  "accepted_stage_c0": {
+    "planning_lock_path": ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json",
+    "planning_lock_sha256": "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e",
+    "preserved_unchanged": true
+  },
+  "planning_implementation_commit": "172adbdd0e652cdaf7af9633b5455d974ac03f1d",
+  "readiness_run": {
+    "run_id": "20260806T090504Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T090504Z",
+    "audit_manifest_sha256": "e822e795d90ebee83459d4c13fb2a3a8ad8879f0b54362bb71fc992ee4074789",
+    "verification_sha256": "443e864009c87ffb315c784c1edaad4a5f5bad209374c4a3816e93ed63ebfb9e",
+    "readiness_lock_sha256": "a4935020b35c225b7dadb84d90e768ceef95faf644042d4572a816fd9a17ae1f",
+    "environment_lock_sha256": "e3eafd90cc58f6802f74eb7db2585def4af5d7717775d63615cd72000e795b4d",
+    "fixture_verification_sha256": "dcaeeb9768863e0fd9afc06dffff16c6a8154fb22b5cb588679ebc29a520fc4d",
+    "inactive_authorization_template_sha256": "0f213c940b79abd2f73414c108cdc8717e50e869694bfe98c177598624407608"
+  },
+  "fixed_environment": {
+    "name": "MB-System",
+    "version": "5.8.3beta16",
+    "source_commit": "1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422",
+    "source_tree": "b5113ce8a246f833e74b3c6a377c5d7ec08ea108",
+    "environment_digest": "d0805c37966543292ee3fc69c4d2b29bdac51116eaf873f04eb6e925178be78b",
+    "conda_package_count": 130,
+    "runtime_file_count": 106,
+    "mblist_sha256": "ca058a5de4f1c949d68f08af7965a66a2450793fd4708b6615cea660a024f03e",
+    "mblist_help_sha256": "5af99e01cb94fed0a310d4fb20c84a5a52aca6077ecf0b54f62dd71620adc8d3",
+    "mbinfo_sha256": "37321b8ae0101c175b1fdba64b512550f0778b8b36b402aa6a744a7535eaa1a9",
+    "mbinfo_help_sha256": "0466df55b5714cca90c96ebcadfcfd05d6b9eb683f77be8a9d89a8006139bcf1"
+  },
+  "fixture_and_oracle": {
+    "noncandidate_cruise_id": "MGL1104",
+    "format58_fixture_sha256": "03dae8f817bcb4d9b5262bc4094367cbcd011d37cf8c35685aee6fd3d33af2a0",
+    "oracle_sha256": "eaf6982c5ece55e1502c55b628848a0c901a9a8d692832238d627e92080a4d24",
+    "u3_rows": 3456,
+    "u0_rows": 3450,
+    "native_good_rows": 3450,
+    "native_flagged_rows": 6,
+    "native_null_rows": 0,
+    "mismatch_count": 0
+  },
+  "frozen_code_sha256": {
+    "readiness_producer": "b30f8bd65dbc6f25e58fbd0c59bb9fb2e2b06651d6b33a4070fc98f3c0360a4d",
+    "readiness_verifier": "6759ddb3fd2e49830e4134554ec07c8571c615b55efab41d8ea3c48af1a9ce2a",
+    "future_stage_c_verifier": "a11f4e1faef6fe5f08e15a4a0ebfc091a15266777dee90591c566942ec2a735a",
+    "adapter": "8067faae7127748b260e3c8f0e63b49121c9e401f814aa727606fc643543b891",
+    "tests": "989d4774fdd6c896f8caf3dc32fe174258c624a97bc20cefa8b87ecab69ee014"
+  },
+  "object_identity": {
+    "formula": "acquisition_run_id + '/' + canonical_source_object_relative_path",
+    "source_object_sha256_semantics": "content_integrity_only",
+    "two_zero_byte_tn352_same_sha_different_objects_test": "pass"
+  },
+  "verification": {
+    "status": "pass",
+    "checks_passed": 355,
+    "offline_tests_run": 9,
+    "sealed_object_body_read_count": 0,
+    "archive_decompression_count": 0,
+    "candidate_sounding_row_count": 0,
+    "candidate_cell_row_count": 0,
+    "stage_b_objects_root_opened": false,
+    "stage_c_authorized": false,
+    "confirmation_role_eligible": false
+  },
+  "scope_stop": "Stage C candidate body access remains unauthorized."
+}
