@@ -1,0 +1,34 @@
+{
+  "checks": {
+    "accepted_access_lock_sha256": "75c290a9b4f17ed2b529a372417f4fd18770c08cf66836c07ddde3bb90e00a6f",
+    "accepted_manifest_sha256": "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94",
+    "accepted_verification_sha256": "d0d868f560c628bd24d1d52d399c7ed9d03af337be72967a874a5c26db7c2e86",
+    "archive_decompression_count": 0,
+    "authorization_template_active": false,
+    "cell_row_count": 0,
+    "locked_output_count": 11,
+    "locked_output_hash_mismatch_count": 0,
+    "manifest_object_count": 768,
+    "manifest_total_bytes": 9626893507,
+    "ordered_cruise_ids": [
+      "EQT20210702",
+      "EQT190012",
+      "EQT180002",
+      "TN352"
+    ],
+    "product_or_model_reference_count": 0,
+    "qc_result_count": 0,
+    "sealed_object_body_read_count": 0,
+    "sounding_row_count": 0,
+    "stage_c_authorized": false,
+    "tool_readiness": "blocked_tool_and_fixture_not_ready",
+    "yaml_document_count": 5
+  },
+  "planning_lock_bytes": 3631,
+  "planning_lock_path": "/mnt/data2/00-Data/ship/.trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json",
+  "planning_lock_sha256": "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e",
+  "schema_version": 1,
+  "stage": "C0_source_internal_processing_planning_verification",
+  "status": "pass",
+  "verified_utc": "2026-08-06T07:45:07Z"
+}

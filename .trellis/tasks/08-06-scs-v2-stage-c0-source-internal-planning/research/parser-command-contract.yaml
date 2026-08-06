@@ -1,0 +1,138 @@
+schema_version: 1
+stage: C_source_internal_parser_commands
+target_parser:
+  name: MB-System
+  version: 5.8.3beta16
+  source_commit: 1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422
+  mbio_format: 58
+environment:
+  network_enabled: false
+  timezone: UTC
+  locale: C.UTF-8
+  sealed_mount: /sealed
+  sealed_mount_mode: read_only
+  derived_mount: /derived
+  derived_mount_mode: read_write
+  container_digest_required: true
+  parser_help_snapshot_required: true
+commands:
+  - id: verify_sealed_sha256
+    argv:
+      - sha256sum
+      - --
+      - <SEALED_MB58_GZ>
+    stdout_role: sealed_hash_check
+    body_read: true
+  - id: decompress_to_derived_tmp
+    argv:
+      - pigz
+      - -dc
+      - --
+      - <SEALED_MB58_GZ>
+    stdout_path: <DERIVED_TMP_MB58>
+    input_mode: read_only
+    output_must_be_under: /derived
+  - id: mbinfo_capture
+    argv:
+      - mbinfo
+      - -I
+      - <DERIVED_TMP_MB58>
+      - -F58
+      - -V
+    stdout_path: <DERIVED_MBINFO_STDOUT>
+    stderr_path: <DERIVED_MBINFO_STDERR>
+  - id: mblist_all_beams
+    argv:
+      - mblist
+      - -I
+      - <DERIVED_TMP_MB58>
+      - -F58
+      - -P1
+      - -L0
+      - -MA
+      - -U3
+      - "-OMN#XYzH"
+    output_columns:
+      - epoch_seconds_utc
+      - parser_ping_index
+      - beam_index
+      - lon_deg
+      - lat_deg
+      - parser_depth_value
+      - heading_deg
+    stdout_path: <DERIVED_ALL_BEAMS_TSV>
+  - id: mblist_native_good_beams
+    argv:
+      - mblist
+      - -I
+      - <DERIVED_TMP_MB58>
+      - -F58
+      - -P1
+      - -L0
+      - -MA
+      - -U0
+      - "-OMN#XYzH"
+    output_columns:
+      - epoch_seconds_utc
+      - parser_ping_index
+      - beam_index
+      - lon_deg
+      - lat_deg
+      - depth_m_positive_down
+      - heading_deg
+    stdout_path: <DERIVED_NATIVE_GOOD_BEAMS_TSV>
+join_contract:
+  key:
+    - source_object_sha256
+    - parser_ping_index
+    - beam_index
+  all_stream_key_unique: true
+  good_stream_key_unique: true
+  good_stream_must_be_subset_of_all_stream: true
+  native_quality_state:
+    good: key_present_in_good_stream
+    flagged_or_null: key_absent_from_good_stream
+  depth_population:
+    good: use_good_stream_depth
+    flagged_or_null: null
+allowed_recovered_fields:
+  - time_utc
+  - parser_ping_index
+  - beam_index
+  - lon_deg
+  - lat_deg
+  - depth_m_positive_down
+  - heading_deg
+  - native_quality_state
+fields_requiring_separate_direct_evidence:
+  - line_id
+  - native_ping_id
+  - native_beam_id
+  - native_quality_code
+  - horizontal_datum
+  - vertical_datum
+prohibited_commands:
+  - mbprocess
+  - mbclean
+  - mbareaclean
+  - mbnavadjust
+  - mbnavedit
+  - mbpreprocess
+  - mbgrid
+  - mbswath
+  - mbedit
+prohibited_options_or_behaviors:
+  - ping_averaging_other_than_1
+  - speed_filter
+  - geographic_filter
+  - time_filter
+  - edit_save
+  - navigation_merge
+  - tide_correction
+  - raytrace_recalculation
+  - in_place_write
+pre_candidate_gates:
+  - exact_binary_help_matches_argv_contract
+  - independent_format58_fixture_pass
+  - environment_digest_frozen
+  - all_command_argv_hashes_frozen

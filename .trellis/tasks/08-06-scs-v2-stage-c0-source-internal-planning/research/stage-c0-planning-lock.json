@@ -1,0 +1,96 @@
+{
+  "acquisition_run": {
+    "access_lock_path": "/mnt/data2/00-Data/ship/ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z/access_lock.json",
+    "access_lock_sha256": "75c290a9b4f17ed2b529a372417f4fd18770c08cf66836c07ddde3bb90e00a6f",
+    "object_count": 768,
+    "ordered_cruise_ids": [
+      "EQT20210702",
+      "EQT190012",
+      "EQT180002",
+      "TN352"
+    ],
+    "run_id": "20260805T230449Z",
+    "sealed_archive_manifest_path": "/mnt/data2/00-Data/ship/ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z/sealed_archive_manifest.parquet",
+    "sealed_archive_manifest_sha256": "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94",
+    "total_bytes": 9626893507,
+    "verification_path": "/mnt/data2/00-Data/ship/ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z/verification.json",
+    "verification_sha256": "d0d868f560c628bd24d1d52d399c7ed9d03af337be72967a874a5c26db7c2e86"
+  },
+  "authorization_state": {
+    "confirmation_role_eligible": false,
+    "model_or_product_evaluation_authorized": false,
+    "stage_c_authorized": false,
+    "stage_d_confirmation_evaluation_authorized": false
+  },
+  "created_utc": "2026-08-06T07:34:55Z",
+  "object_role_counts": {
+    "multibeam_data_compressed/.mb58.gz": 192,
+    "navigation_sidecar/.fnv": 192,
+    "processing_sidecar/.fbt": 192,
+    "processing_sidecar/.inf": 192
+  },
+  "outputs": {
+    "design.md": {
+      "bytes": 9260,
+      "sha256": "71ec9e546fa0e8cd476b81428c22c470f6a71ce0bcf5e172781a3648ca252528"
+    },
+    "implement.md": {
+      "bytes": 2296,
+      "sha256": "935412808a5eb07f714c102079581b9d3303a9deba1ff37f2c66e38238ee977b"
+    },
+    "prd.md": {
+      "bytes": 8207,
+      "sha256": "f183ba79d7a5a79dbabd7ac2b7c1572d50baa8a2bef3846dce024e315c243cd7"
+    },
+    "research/fixture-contract.yaml": {
+      "bytes": 2477,
+      "sha256": "d7dd41f9d802df29dae4a678b608972e0c87f042f54007ada1a10b7b27f1ccb7"
+    },
+    "research/output-schema.yaml": {
+      "bytes": 11037,
+      "sha256": "0c5807612d2103ef216c8f4bf2db1c320c142fe333d32b41aa6933813817e0c5"
+    },
+    "research/parser-command-contract.yaml": {
+      "bytes": 3025,
+      "sha256": "acddeba63ecc2ae98abf740d75da401d8e40325ee6a2d2944d9e5441721f8a4e"
+    },
+    "research/source-internal-qc.yaml": {
+      "bytes": 3256,
+      "sha256": "94bded81e0719829dd1815de8620f3949d9bb0db32033f38031888a2e778adfa"
+    },
+    "research/stage-c-authorization.template.json": {
+      "bytes": 2307,
+      "sha256": "483b6981fdb7b2dfbc84053feec6ccfb1188827cdd50758887028cb8d0f295ac"
+    },
+    "research/stage-c0-planning-evidence.md": {
+      "bytes": 1550,
+      "sha256": "650ec7b281d000d3e533487af4fbd5b5bbfe2a71ee6c0fed8d418bfe26b22a17"
+    },
+    "research/stage-c0-verification-contract.yaml": {
+      "bytes": 2892,
+      "sha256": "185a560579ad41cbd0c5e1aad14a49935a414244e8569803e306e86a80ae3430"
+    },
+    "research/tool-availability.md": {
+      "bytes": 2489,
+      "sha256": "7d0932250d7a94b5143be96849bf5d81c4a0b9b392a3d79e8d86231e13704966"
+    }
+  },
+  "parser_target": {
+    "mbio_format": 58,
+    "name": "MB-System",
+    "source_commit": "1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422",
+    "version": "5.8.3beta16"
+  },
+  "planning_counters": {
+    "archive_decompression_count": 0,
+    "cell_row_count": 0,
+    "product_or_model_reference_count": 0,
+    "qc_result_count": 0,
+    "sealed_object_body_read_count": 0,
+    "sounding_row_count": 0
+  },
+  "schema_version": 1,
+  "stage": "C0_source_internal_processing_planning",
+  "status": "planning_complete_waiting_separate_stage_c_authorization",
+  "tool_readiness": "blocked_tool_and_fixture_not_ready"
+}

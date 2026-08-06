@@ -1,0 +1,71 @@
+schema_version: 1
+stage: C0_fixture_contract
+candidate_data_access_allowed: false
+target_parser:
+  name: MB-System
+  version: 5.8.3beta16
+  source_commit: 1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422
+  mbio_format: 58
+fixture_layers:
+  - id: adapter_synthetic_v1
+    independence: hand_specified_expected_rows_not_generated_by_parser
+    input_kind: synthetic_mblist_stdout
+    required_cases:
+      - longitude_minus_180_inclusive
+      - longitude_180_wraps_to_minus_180
+      - longitude_359_wraps_to_minus_1
+      - latitude_minus_90_and_plus_90_inclusive
+      - latitude_out_of_range_rejected
+      - unix_fractional_seconds_to_utc_microseconds
+      - positive_down_depth_meters
+      - elevation_exact_negative_of_depth
+      - nan_maps_to_null
+      - zero_depth_is_not_missing_and_fails_depth_range
+      - duplicate_ping_beam_key_aborts
+      - all_stream_minus_good_stream_is_flagged_or_null
+  - id: format58_golden_v1
+    independence: oracle_not_generated_by_tested_mbsystem_invocation
+    input_kind: non_candidate_kongsberg_format58_fixture
+    required_before_stage_c_authorization: true
+    bytes_path: <REQUIRED_NON_CANDIDATE_FIXTURE_PATH>
+    bytes_sha256: <REQUIRED_SHA256>
+    oracle_path: <REQUIRED_HAND_OR_UPSTREAM_ORACLE_PATH>
+    oracle_sha256: <REQUIRED_SHA256>
+    required_cases:
+      - exact_record_count
+      - exact_ping_count
+      - exact_beam_count_all
+      - exact_beam_count_native_good
+      - known_epoch_utc
+      - known_longitude_latitude_degrees
+      - known_depth_positive_down_meters
+      - known_heading_degrees
+      - known_ping_beam_key
+      - known_flagged_beam_excluded_from_good_stream
+      - known_null_beam_maps_to_null
+conventions:
+  longitude_range: "[-180,180)"
+  latitude_range: "[-90,90]"
+  time_type: timestamp_us_UTC_nullable
+  depth_field: depth_m_positive_down
+  depth_unit: m
+  depth_direction: positive_down
+  elevation_formula: elev_m == -depth_m_positive_down
+  missing_float: Arrow_null
+  zero_is_missing: false
+tolerances:
+  longitude_deg_abs: 1.0e-9
+  latitude_deg_abs: 1.0e-9
+  epoch_seconds_abs: 1.0e-6
+  depth_m_abs: 1.0e-6
+  heading_deg_abs: 1.0e-6
+required_determinism_variants:
+  - batch_rows_1000_file_order_ascending_workers_1
+  - batch_rows_100000_file_order_descending_workers_1
+  - batch_rows_8192_file_order_seeded_workers_4
+pass_condition:
+  mismatch_count: 0
+  duplicate_key_count: 0
+  schema_mismatch_count: 0
+  variant_digest_mismatch_count: 0
+stop_before_candidate_read_on_failure: true

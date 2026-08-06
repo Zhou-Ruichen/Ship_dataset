@@ -1,0 +1,78 @@
+schema_version: 1
+stage: C0_and_future_C_verification_contract
+stage_c0_checks:
+  - accepted_stage_b_manifest_sha256_exact
+  - accepted_stage_b_verification_sha256_exact
+  - accepted_stage_b_access_lock_sha256_exact
+  - acquisition_run_id_exact
+  - ordered_cruise_ids_exact
+  - object_count_768
+  - total_bytes_9626893507
+  - manifest_roles_and_filenames_only
+  - sealed_object_body_read_count_zero
+  - archive_decompression_count_zero
+  - sounding_row_count_zero
+  - cell_row_count_zero
+  - qc_result_count_zero
+  - product_or_model_reference_count_zero
+  - authorization_template_inactive
+future_stage_c_pre_body_checks:
+  - exact_authorization_schema_no_extra_or_missing_keys
+  - stage_c_authorized_true
+  - authorized_by_and_utc_nonempty
+  - safe_single_segment_processing_run_id
+  - fixed_output_root_exact
+  - stage_b_input_hashes_exact
+  - parser_name_version_commit_exact
+  - environment_digest_exact
+  - parser_help_snapshot_hash_exact
+  - fixture_contract_and_pass_receipt_hashes_exact
+  - qc_contract_hash_exact
+  - output_schema_hash_exact
+  - producer_and_verifier_hashes_exact
+  - sealed_root_read_only
+  - output_root_outside_sealed_root
+  - no_existing_processing_run
+future_stage_c_post_processing_checks:
+  - sealed_object_hash_size_mode_mtime_inode_unchanged
+  - only_manifest_allowlisted_roles_read
+  - fbt_body_read_count_zero
+  - all_primary_mb58_objects_parsed_once
+  - no_cross_cruise_pooling
+  - sounding_primary_key_unique
+  - all_factual_statuses_in_five_level_enum
+  - line_and_native_ids_not_inferred_from_filename
+  - vertical_datum_direct_evidence_only
+  - positive_down_and_elevation_identity
+  - exact_cell_grid_recomputation
+  - exact_cell_cruise_median_nmad_quantiles
+  - batch_file_order_worker_invariance
+  - all_four_cruises_held_out
+  - training_tuning_threshold_selection_all_false
+  - v2_h_role_exact
+  - v2_w_blocked_source_independence_unknown
+  - confirmation_role_eligible_false
+  - forbidden_product_model_residual_import_path_schema_tokens_absent
+  - command_and_environment_ledger_complete
+  - audit_manifest_hash_closure
+stop_conditions:
+  before_body_read:
+    - any_input_or_authorization_hash_mismatch
+    - tool_or_environment_unavailable
+    - fixture_not_passed
+    - sealed_root_not_read_only
+    - output_path_escape_or_existing_run
+  during_processing:
+    - source_object_hash_changes
+    - primary_object_decompression_or_parse_failure
+    - parser_field_count_or_key_semantics_drift
+    - duplicate_sounding_primary_key
+    - forbidden_command_or_input_access
+  before_publication:
+    - any_required_cruise_has_zero_qc_eligible_soundings
+    - exact_aggregation_or_invariance_failure
+    - sealed_source_metadata_or_hash_changed
+    - verifier_status_not_pass
+failure_role: failed_processing_not_candidate_ready
+candidate_success_role: source_internal_candidate_labels_only
+maximum_claim: no_confirmation_metric_or_role_promotion
