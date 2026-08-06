@@ -3,7 +3,7 @@
   "name": "scs-v2-stage-c0-source-internal-planning",
   "title": "SCS v2 Stage C.0 source-internal processing planning",
   "description": "Freeze the parser, environment, independent fixture, source-internal QC, sounding/cell-cruise lineage schemas, verifier and inactive authorization contract for the accepted Stage B run without opening any sealed object body.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": "ncei",
   "package": "scs-v2-sealed-confirmation",

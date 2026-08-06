@@ -1,0 +1,118 @@
+schema_version: 2
+stage: C_source_internal_parser_commands
+supersedes_for_future_stage_c:
+  path: research/parser-command-contract.yaml
+  preserved_unchanged: true
+target_parser:
+  name: MB-System
+  version: 5.8.3beta16
+  source_commit: 1d9a52ce076c3c3c5f0150b9bcaa30fa108c7422
+  source_tag: 5.8.3beta16
+  mbio_format: 58
+environment:
+  frozen_environment_digest: bound_by_stage_c1_readiness_lock
+  network_enabled: false
+  timezone: UTC
+  locale: C
+  candidate_sealed_root_mount: forbidden_during_readiness
+  future_sealed_mount: /sealed
+  future_sealed_mount_mode: read_only
+  future_derived_mount: /derived
+  future_derived_mount_mode: read_write
+decompression:
+  executable: <FROZEN_ENVIRONMENT_ROOT>/bin/gzip
+  version: 1.14
+  argv: [gzip, -dc, --, <SEALED_MB58_GZ>]
+  output_path: <DERIVED_TMP_MB58>
+  input_mode: read_only
+  output_must_be_under: /derived
+text_contract:
+  encoding: ASCII
+  delimiter_name: horizontal_tab
+  delimiter_hex: "09"
+  delimiter_source: pinned_mblist_default
+  record_terminator_name: line_feed
+  record_terminator_hex: "0A"
+  carriage_return_allowed: false
+  header_rows: 0
+  quoting: none
+  blank_rows_allowed: false
+  surrounding_ascii_space_in_numeric_fields: allowed
+  exact_field_count: 7
+  output_format_string: "MN#XYzH"
+  output_columns_in_order:
+    - epoch_seconds_utc_decimal
+    - native_ping_counter
+    - beam_index
+    - lon_deg
+    - lat_deg
+    - parser_depth_value
+    - heading_deg
+commands:
+  - id: mbinfo_capture
+    argv: [mbinfo, -I<DERIVED_TMP_MB58>, -F58, -X1]
+  - id: mblist_all_beams_u3
+    argv: [mblist, -I<DERIVED_TMP_MB58>, -F58, -P1, -L0, -MA, -U3, "-OMN#XYzH", -X<DERIVED_ALL_BEAMS_TSV>]
+    semantics:
+      MA: all beam slots
+      U3: value checks off; null numeric values print NaN; flagged finite values remain numeric
+  - id: mblist_native_good_beams_u0
+    argv: [mblist, -I<DERIVED_TMP_MB58>, -F58, -P1, -L0, -MA, -U0, "-OMN#XYzH", -X<DERIVED_NATIVE_GOOD_BEAMS_TSV>]
+    semantics:
+      MA: all beam slots considered
+      U0: only native-good beams emitted
+join_contract:
+  object_key: source_object_id
+  source_object_id_formula: acquisition_run_id + '/' + canonical_source_object_relative_path
+  source_object_sha256_is_identity: false
+  stream_key: [source_object_id, epoch_seconds_utc_decimal, native_ping_counter, beam_index]
+  sounding_primary_key: [source_object_id, parser_ping_index, beam_index]
+  all_stream_key_unique: true
+  good_stream_key_unique: true
+  good_stream_must_be_subset_of_all_stream: true
+  good_stream_values_must_equal_all_stream: true
+  parser_ping_index: zero-based first-seen order of distinct epoch_seconds_utc_decimal and native_ping_counter pairs in U3
+  native_quality_state:
+    good: key present in U0
+    null: key absent from U0 and U3 parser_depth_value is NaN
+    flagged: key absent from U0 and U3 parser_depth_value is finite
+  depth_population:
+    good: use U0 depth as depth_m_positive_down
+    flagged: null
+    null: null
+field_meanings:
+  M: Unix epoch seconds UTC with six decimal places
+  N: source ping counter exposed by MB-System; not a file-global row identity
+  "#": zero-based MB-System beam array index; not promoted to native_beam_id
+  X: beam-footprint longitude in decimal degrees
+  Y: beam-footprint latitude in decimal degrees
+  z: depth in meters positive down
+  H: heading in decimal degrees clockwise from north
+fields_requiring_separate_direct_evidence:
+  - line_id
+  - native_ping_id_beyond_N_counter
+  - native_beam_id
+  - native_quality_code
+  - horizontal_datum
+  - vertical_datum
+prohibited_commands:
+  - mbprocess
+  - mbclean
+  - mbareaclean
+  - mbnavadjust
+  - mbnavedit
+  - mbpreprocess
+  - mbgrid
+  - mbswath
+  - mbedit
+prohibited_behaviors:
+  - post_candidate_column_guessing
+  - ping_averaging_other_than_1
+  - speed_filter
+  - geographic_filter
+  - time_filter
+  - edit_save
+  - navigation_merge
+  - tide_correction
+  - raytrace_recalculation
+  - in_place_write

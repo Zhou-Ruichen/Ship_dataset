@@ -1,0 +1,66 @@
+schema_version: 2
+stage: C1_zero_candidate_readiness_fixtures
+candidate_data_access_allowed: false
+sealed_object_body_read_count_required: 0
+fixture_layers:
+  - id: adapter_synthetic_v2
+    input_all: _common/tests/fixtures/scs_v2_stage_c1/synthetic_all_u3.tsv
+    input_good: _common/tests/fixtures/scs_v2_stage_c1/synthetic_good_u0.tsv
+    independence: hand_specified_rows_not_generated_by_mbsystem
+    required_cases:
+      - exact_ASCII_HT_LF_seven_column_parse
+      - Unix_fractional_seconds_preserved_to_microseconds
+      - positive_down_meter_depth
+      - U0_good
+      - U3_finite_absent_from_U0_flagged
+      - U3_NaN_absent_from_U0_null
+      - duplicate_ping_beam_key_aborts
+      - longitude_half_open_normalization
+  - id: format58_golden_mgl1104_v1
+    bytes_path: _common/tests/fixtures/scs_v2_stage_c1/MGL1104-9999-eight-ping.mb58
+    provenance_path: _common/tests/fixtures/scs_v2_stage_c1/golden_provenance.json
+    candidate_data: false
+    source_cruise: MGL1104
+    source_region: California_margin_outside_SCS
+    source_object_role: noncandidate_official_NCEI_fixture
+    bytes: 377852
+    bytes_sha256: 03dae8f817bcb4d9b5262bc4094367cbcd011d37cf8c35685aee6fd3d33af2a0
+    exact_ping_count: 8
+    exact_beam_count_u3: 3456
+    exact_beam_count_u0: 3450
+    exact_flagged_count: 6
+    exact_null_count: 0
+    independence: low_level_python_oracle_does_not_import_execute_or_link_mbsystem
+    oracle_path: _common/scs_v2_stage_c1_oracle.py
+    required_cases:
+      - complete_Kongsberg_datagram_framing
+      - exact_XYZ88_and_active_position_payload_decode
+      - M_epoch_UTC
+      - N_ping_counter
+      - beam_array_index
+      - X_Y_beam_footprint_decimal_degrees
+      - z_positive_down_meters
+      - H_heading_degrees
+      - U0_key_set_equals_oracle_good_set
+      - U3_key_set_equals_oracle_all_set
+      - six_flagged_beams_present_in_U3_and_absent_from_U0
+  - id: grid_1arcminute_v2
+    required_cases:
+      - exact_boundary
+      - resolvable_float_below_boundary
+      - resolvable_float_above_boundary
+      - immediate_predecessor_rounding_matches_historical_float64_formula
+      - longitude_dateline_wrap
+      - latitude_minus90_plus90
+      - existing_cell_id_examples
+tolerances:
+  longitude_deg_abs: 5.0e-8
+  latitude_deg_abs: 5.0e-8
+  epoch_seconds_abs: 1.0e-6
+  depth_m_abs: 1.1e-4
+  heading_deg_abs: 1.0e-3
+pass_condition:
+  mismatch_count: 0
+  duplicate_key_count: 0
+  schema_mismatch_count: 0
+stop_before_candidate_read_on_failure: true

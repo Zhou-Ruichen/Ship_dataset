@@ -1,0 +1,76 @@
+schema_version: 2
+stage: C1_zero_candidate_readiness_and_future_C_verification
+accepted_stage_c0_lock:
+  path: .trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json
+  sha256: ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e
+readiness_checks:
+  - accepted_stage_c0_lock_hash_unchanged
+  - stage_b_manifest_and_verification_hashes_bound_without_object_body_read
+  - sealed_object_body_read_count_zero
+  - archive_decompression_count_zero
+  - candidate_sounding_and_cell_count_zero
+  - source_object_id_formula_and_primary_keys_exact
+  - two_empty_TN352_objects_remain_distinct
+  - fixed_MBSYSTEM_source_commit_tag_tree
+  - complete_conda_package_records_and_explicit_lock
+  - CMake_cache_and_build_inputs_hashed
+  - mblist_mbinfo_binary_and_help_hashes
+  - runtime_shared_library_closure_hashed
+  - synthetic_adapter_fixture_pass
+  - noncandidate_format58_oracle_pass
+  - U0_U3_MA_and_M_N_beam_X_Y_z_H_contract_pass
+  - one_arcminute_boundary_and_dateline_contract_pass
+  - command_QC_schema_fixture_verifier_hashes_closed
+  - authorization_template_inactive
+future_stage_c_pre_body_checks:
+  - exact_authorization_schema_no_extra_or_missing_keys
+  - stage_c_authorized_true
+  - authorized_by_and_utc_nonempty
+  - safe_single_segment_processing_run_id
+  - fixed_output_root_exact
+  - stage_b_input_hashes_exact
+  - readiness_manifest_and_verification_hashes_exact
+  - parser_environment_digest_exact
+  - producer_adapter_and_verifier_hashes_exact
+  - sealed_root_read_only
+  - output_root_outside_sealed_root
+  - no_existing_processing_run
+future_stage_c_post_processing_checks:
+  - sealed_object_hash_size_mode_mtime_inode_unchanged
+  - source_object_id_recomputed_from_acquisition_run_and_relative_path
+  - source_object_sha256_never_used_as_identity_or_join_key
+  - all_primary_mb58_objects_parsed_once
+  - sounding_primary_key_unique
+  - contributor_primary_key_unique
+  - field_recovery_primary_key_unique
+  - all_factual_statuses_in_five_level_enum
+  - line_native_ping_and_native_beam_ids_not_inferred_from_filename
+  - vertical_datum_direct_evidence_only
+  - positive_down_and_elevation_identity
+  - exact_cell_grid_recomputation
+  - exact_cell_cruise_aggregation
+  - no_cross_cruise_pooling
+  - all_four_cruises_held_out
+  - training_tuning_threshold_selection_all_false
+  - v2_h_role_exact
+  - v2_w_blocked_source_independence_unknown
+  - confirmation_role_eligible_false
+  - forbidden_external_product_model_inputs_absent
+  - audit_manifest_hash_closure
+stop_conditions:
+  before_body_read:
+    - any_input_authorization_environment_or_code_hash_mismatch
+    - fixture_or_oracle_failure
+    - sealed_root_not_read_only
+    - output_path_escape_or_existing_run
+  during_processing:
+    - source_object_hash_changes
+    - parser_field_count_or_key_semantics_drift
+    - duplicate_sounding_primary_key
+    - forbidden_command_or_input_access
+  before_publication:
+    - exact_aggregation_or_invariance_failure
+    - verifier_status_not_pass
+failure_role: failed_processing_not_candidate_ready
+candidate_success_role: source_internal_candidate_labels_only
+maximum_claim: no_confirmation_metric_or_role_promotion

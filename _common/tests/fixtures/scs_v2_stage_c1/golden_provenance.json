@@ -1,0 +1,13 @@
+{
+  "candidate_data": false,
+  "cruise_id": "MGL1104",
+  "derived_fixture_bytes": 377852,
+  "derivation": "byte prefix ending exactly after the eighth complete XYZ88/raw-range/seabed-image ping group",
+  "filename": "MGL1104-9999-eight-ping.mb58",
+  "official_source_filename": "9999.all.mb58.gz",
+  "official_source_gzip_sha256": "c2254b15b6359b9bb10f83bc16b0615288e161daba5bb205811fafd62ee16641",
+  "official_source_url": "https://data.ngdc.noaa.gov/platforms/ocean/ships/marcus_g._langseth/MGL1104/multibeam/data/version1/MB/9999.all.mb58.gz",
+  "repo_prior_read_record_match_count": 0,
+  "stage_b_primary_cruise_overlap": false,
+  "truncation_end_offset_exclusive": 377852
+}

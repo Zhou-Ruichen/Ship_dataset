@@ -1,0 +1,40 @@
+{
+  "acquisition_run_id": "20260805T230449Z",
+  "canonical_formula": "source_object_id = acquisition_run_id + '/' + canonical_source_object_relative_path",
+  "content_hash_identity_allowed": false,
+  "join_rules": {
+    "mblist_stream_join_key": [
+      "source_object_id",
+      "epoch_seconds_utc_decimal",
+      "native_ping_counter",
+      "beam_index"
+    ],
+    "parser_ping_index_assignment": "zero-based first-seen order of distinct (epoch_seconds_utc_decimal,native_ping_counter) groups in the U3 stream",
+    "sounding_primary_key": [
+      "source_object_id",
+      "parser_ping_index",
+      "beam_index"
+    ]
+  },
+  "path_rules": {
+    "absolute": false,
+    "backslash": false,
+    "dot_segment": false,
+    "dotdot_segment": false,
+    "empty_segment": false,
+    "encoding": "UTF-8",
+    "separator": "/"
+  },
+  "regression_case": {
+    "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "expected_distinct_source_object_ids": 2,
+    "paths": [
+      "objects/TN352/em302/a.fnv",
+      "objects/TN352/em302/b.fnv"
+    ],
+    "purpose": "two zero-byte TN352 navigation sidecars share content bytes but remain distinct physical objects"
+  },
+  "schema_version": 2,
+  "source_object_sha256_semantics": "content_integrity_only",
+  "stage": "C0.1_object_identity_amendment"
+}

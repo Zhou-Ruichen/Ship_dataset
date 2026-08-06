@@ -1,0 +1,84 @@
+schema_version: 2
+stage: C_source_internal_qc
+supersedes_for_future_stage_c:
+  path: research/source-internal-qc.yaml
+  preserved_unchanged: true
+frozen_before_candidate_depth_read: true
+external_reference_inputs: []
+model_inputs: []
+threshold_tuning_after_candidate_read: false
+actions:
+  delete_sounding: false
+  delete_line: false
+  delete_cruise: false
+  crossover_adjustment: false
+  datum_or_bias_fit: false
+  global_three_std_filter: false
+hard_rules:
+  - id: H01_parser_row_key
+    expression: source_object_id_is_valid && parser_ping_index >= 0 && beam_index >= 0 && key_is_unique
+    on_fail: qc_eligible_for_cell_false
+  - id: H02_native_quality
+    expression: native_quality_state == good
+    on_fail: qc_eligible_for_cell_false
+  - id: H03_navigation_finite_range
+    expression: isfinite(lon_deg) && -180 <= lon_deg && lon_deg < 180 && isfinite(lat_deg) && -90 <= lat_deg && lat_deg <= 90
+    on_fail: qc_eligible_for_cell_false
+  - id: H04_depth_finite_positive_range
+    expression: isfinite(depth_m_positive_down) && 0 < depth_m_positive_down && depth_m_positive_down <= 12000
+    thresholds: {minimum_exclusive_m: 0.0, maximum_inclusive_m: 12000.0}
+    on_fail: qc_eligible_for_cell_false
+  - id: H05_elevation_identity
+    expression: elev_m == -depth_m_positive_down
+    tolerance_m: 0.0
+    on_fail: abort_file
+cell_eligibility_expression: H01 && H02 && H03 && H04 && H05
+review_rules:
+  - id: R01_time_missing_or_invalid
+    expression: time_utc_is_null || time_parse_failed
+    affects_cell_eligibility: false
+  - id: R02_time_nonmonotonic
+    scope: source_object_parser_ping_order
+    expression: delta_time_seconds < 0
+    affects_cell_eligibility: false
+  - id: R03_navigation_speed
+    scope: consecutive_distinct_pings_with_valid_time_and_navigation
+    expression: geodesic_speed_m_per_s > 20
+    thresholds: {maximum_m_per_s: 20.0}
+    affects_cell_eligibility: false
+  - id: R04_within_ping_depth_discontinuity
+    scope: native_good_structurally_valid_beams_in_ping
+    minimum_context_count: 9
+    nmad_scale: 1.4826
+    expression: abs(depth - ping_median) > max(1000, 10 * max(ping_nmad, 1))
+    thresholds: {absolute_floor_m: 1000.0, nmad_multiplier: 10.0, nmad_floor_m: 1.0}
+    affects_cell_eligibility: false
+  - id: R05_alongtrack_ping_median_discontinuity
+    scope: same_source_object_nearest_five_preceding_and_five_following_pings
+    minimum_context_ping_count: 3
+    target: ping_median_depth_m
+    nmad_scale: 1.4826
+    expression: abs(target - context_median) > max(1000, 10 * max(context_nmad, 1))
+    thresholds: {neighbour_pings_each_side: 5, absolute_floor_m: 1000.0, nmad_multiplier: 10.0, nmad_floor_m: 1.0}
+    affects_cell_eligibility: false
+aggregation:
+  grid: geographic_1_arcminute_historical_float64_contract
+  formula:
+    longitude: normalize_to_half_open_then_floor((lon+180)/(1/60))
+    latitude: floor((lat+90)/(1/60))
+    cell_id: "1min_<lat_bin>_<lon_bin>"
+  group_key: [cell_id, official_cruise_id]
+  contributor_key: [cell_id, official_cruise_id, source_object_id]
+  input_predicate: qc_eligible_for_cell == true
+  exact_from_individual_beams: true
+  allow_chunk_median_reaggregation: false
+  allow_cross_cruise_pooling: false
+  summaries: [count, median, mean, nmad, q25, q75, min, max, range]
+role_contract:
+  held_out: true
+  use_for_training: false
+  use_for_tuning: false
+  use_for_threshold_selection: false
+  v2_h: held_out_candidate_mrar_out
+  v2_w: blocked_source_independence_unknown
+  confirmation_role_eligible: false
