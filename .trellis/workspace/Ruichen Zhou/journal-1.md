@@ -299,3 +299,36 @@ Produced and independently verified immutable run 20260805T182211Z for 174,965 f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: SCS v2 Stage B opaque sealed acquisition
+
+**Date**: 2026-08-06
+**Task**: SCS v2 Stage B opaque sealed acquisition
+**Branch**: `main`
+
+### Summary
+
+Acquired the frozen four-cruise 768-object set as 9,626,893,507 opaque bytes via the user-selected 2082/HK-DC route; independent verification passed 768 Last-Modified closures and 768 reopened SHA256 checks. Retained one prior failed_unsealed pre-body proxy attempt. Stage C remains unauthorized.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `84287ac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
