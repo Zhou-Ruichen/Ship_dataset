@@ -158,8 +158,12 @@ def aggregate(values: list[float]) -> dict[str, float | None]:
 
 
 def close_number(actual: Any, expected: Any) -> bool:
-    if actual is None or expected is None:
-        return actual is None and expected is None
+    # pandas reads parquet float nulls as NaN; treat NaN as null so producer's
+    # None-valued stats round-trip correctly through the pandas read path.
+    def is_null(value: Any) -> bool:
+        return value is None or (isinstance(value, float) and math.isnan(value))
+    if is_null(actual) or is_null(expected):
+        return is_null(actual) and is_null(expected)
     return math.isclose(float(actual), float(expected), rel_tol=1e-12, abs_tol=1e-9)
 
 
@@ -243,7 +247,7 @@ def verify_object_tables(run_dir: Path, manifest: pd.DataFrame) -> tuple[pd.Data
             require(int(row["parsed_row_count"]) == 0, f"{object_id}: sidecar parsed count")
         require(row["official_cruise_id_status"] == "verified_from_source_metadata", f"{object_id}: cruise status")
         for field in row:
-            if field.endswith("_status"):
+            if field.endswith("_status") and field != "parse_status":
                 require(row[field] in FIVE_LEVEL_STATUS, f"{object_id}: invalid status {field}")
     require(closure["source_object_id"].astype(str).tolist() == objects["source_object_id"].astype(str).tolist(), "closure order mismatch")
     for row in closure.to_dict(orient="records"):

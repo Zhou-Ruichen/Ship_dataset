@@ -19,7 +19,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ncei.code.scs_v2_stage_c1_contract import cell_assignment
+from ncei.code.scs_v2_stage_c1_contract import cell_assignment, cell_center
 from ncei.code.scs_v2_stage_c_processing import (
     FIELD_NAMES,
     PASS_STATUS,
