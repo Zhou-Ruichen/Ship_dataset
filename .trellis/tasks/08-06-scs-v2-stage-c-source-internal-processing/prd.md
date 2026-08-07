@@ -20,11 +20,14 @@ Authorized source-internal Stage C processing for the sealed four-cruise acquisi
 
 ## Acceptance Criteria
 
-- [ ] Active receipt binds the Stage B and C1a hashes, parser environment, and
+- [x] Active receipt binds the Stage B and C1a hashes, parser environment, and
   current producer/verifier/helper hashes before any body read.
-- [ ] Independent verifier passes schemas, object closures, time semantics,
+- [x] Independent verifier passes schemas, object closures, time semantics,
   exact cell-by-cruise summaries, roles, and zero prohibited-operation counters.
-- [ ] Stage B objects are unchanged; the run is immutable and machine-readable.
+- [x] Stage B objects are unchanged; the run is immutable and machine-readable.
+
+Verification: run `20260807T090000Z`, `verification.json status=pass`, all
+prohibited-operation counters zero, `independent_verifier_opened_sealed_body=false`.
 
 ## Notes
 
