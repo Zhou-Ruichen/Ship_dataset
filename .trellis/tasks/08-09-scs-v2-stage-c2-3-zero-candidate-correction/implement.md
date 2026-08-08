@@ -25,7 +25,9 @@
 
 - [x] Run all related unit tests, Python compilation, `git diff --check`, and
       Trellis task validation.
-- [ ] Commit code, tests, contracts, and C.2.3 task files.
-- [ ] Create and verify immutable readiness `20260809T040000Z`.
-- [ ] Recompute old-run hashes and Stage C directory names, then commit evidence.
-- [ ] Leave C.2/C.2.1/C.2.2/C.2.3 `in_progress` for separate review.
+- [x] Commit code, tests, contracts, and C.2.3 task files.
+- [x] Create and verify immutable readiness `20260809T040000Z`.
+- [x] Recompute old-run hashes and Stage C directory names, then commit evidence.
+- [x] Leave C.2/C.2.1/C.2.2/C.2.3 `in_progress` for separate review.
+- [ ] Receive a decision from a separate reviewer. The implementation agent does
+      not approve this task or authorize Stage C.

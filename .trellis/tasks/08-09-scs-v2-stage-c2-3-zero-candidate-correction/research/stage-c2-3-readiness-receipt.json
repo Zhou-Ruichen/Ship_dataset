@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": "SCS v2 Stage C.2.3 zero-candidate correction",
+  "implementation_commit": "41eabc69730adcb32c1136c8602461fa6c3e14eb",
+  "readiness": {
+    "run_id": "20260809T040000Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260809T040000Z",
+    "status": "pass",
+    "checks_passed": 469,
+    "offline_tests_run": 71,
+    "stage_c_authorized": false,
+    "confirmation_role_eligible": false
+  },
+  "planning_lock": {
+    "sha256": "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e",
+    "commit": "0aadea0d5f94783d138fdf6b4479e6f51b0d35db"
+  },
+  "receipt_field_classification": {
+    "template_field_count": 33,
+    "template_fixed": [
+      "access_lock_sha256",
+      "acquisition_run_id",
+      "command_contract_sha256",
+      "confirmation_role_eligible",
+      "fixed_output_root",
+      "fixture_contract_sha256",
+      "immutable_primary_cruise_ids",
+      "model_or_product_evaluation_authorized",
+      "object_count",
+      "parser_name",
+      "parser_source_commit",
+      "parser_version",
+      "permitted_object_reads",
+      "sealed_archive_manifest_sha256",
+      "stage_b_verification_sha256",
+      "stage_d_confirmation_evaluation_authorized",
+      "total_bytes"
+    ],
+    "readiness_evidence_filled": [
+      "fixture_verification_sha256",
+      "format58_fixture_bytes_sha256",
+      "format58_fixture_oracle_sha256",
+      "output_schema_sha256",
+      "parser_environment_digest",
+      "parser_help_snapshot_sha256",
+      "qc_contract_sha256",
+      "stage_c0_planning_commit",
+      "stage_c0_planning_lock_sha256",
+      "verification_contract_sha256",
+      "verifier_sha256"
+    ],
+    "activation_controlled": [
+      "authorized_by",
+      "authorized_utc",
+      "processing_run_id",
+      "schema_version",
+      "stage_c_authorized"
+    ],
+    "unclassified_fields": [],
+    "active_receipt_field_count": 52,
+    "exact_value_fields": 48,
+    "variable_activation_fields": 3,
+    "canonical_self_hash_fields": 1
+  },
+  "negative_receipt_tests": {
+    "fixed_fields_mutated_rehashed_and_rejected": 48,
+    "invalid_activation_values_rejected": 6,
+    "json_number_type_drift_rejected": true,
+    "shared_gate_rejected": true,
+    "processor_rejected": true,
+    "production_verifier_rejected": true
+  },
+  "navigation_evidence": {
+    "old_schema_version": 3,
+    "old_field_count": 61,
+    "new_schema_version": 4,
+    "new_field_count": 63,
+    "added_fields": [
+      {
+        "name": "u3_navigation_finite",
+        "type": "bool",
+        "nullable": false
+      },
+      {
+        "name": "u0_navigation_finite",
+        "type": "bool",
+        "nullable": true,
+        "null_meaning": "no corresponding U0 row"
+      }
+    ],
+    "verifier_formula": "u3_navigation_finite and (u0_navigation_finite is null or u0_navigation_finite) and output_coordinate_range_valid",
+    "row_batch_all_fields_equal": true,
+    "forged_navigation_cases_rejected": 2,
+    "invalid_sounding_excluded_from_contributor_and_candidate": true
+  },
+  "artifact_sha256": {
+    "access_ledger.json": "0e86ab9384ee68c3502588091a5fe16f11d90c979353bb7cce18a82d13a71a3f",
+    "audit_manifest.json": "b0ed8eefa836f041eb9435920790932a7d59034a2d17ddd943d06607625fc3eb",
+    "readiness_lock.json": "dd003259be324f535cc728c02988bd8ca3788bfdf1c0cd2effac3376e3d9aafe",
+    "stage_c_authorization.template.json": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+    "test_results.json": "0de5d7f646de6c92561c68c9f2b62fb87e82ff8b8ce15645862b3ce706a060cc",
+    "verification.json": "20ee6ec064edd0b04aaa158605d5a28dd01ba5910e742be9982a3b20fcd43937"
+  },
+  "production_code_sha256": {
+    "authorize_scs_v2_stage_c.py": "78c61b9a1fe9993adade69b5d6a43f1a12b71905c14378755fbe01ac166d9c6e",
+    "prepare_scs_v2_stage_c1a_readiness.py": "7225c5d15fd71ae294a945ba09e2fa8701fada235d3e142e7f8e27c8e7e4b08a",
+    "process_scs_v2_stage_c_source_internal.py": "44fca4e315e8438d55611843516860cbb2341ae17a5c12d6fbeaab28c2d3d558",
+    "scs_v2_stage_c_processing.py": "d7f1697737c74c01dd94f18a2f87f1e091427f8a4d4669509c848567aa6d62c9",
+    "verify_scs_v2_stage_c1a_readiness.py": "954d7d374885e464070b2cd62d1810c21d186048157afa01f1dfaddf6cd90e5a",
+    "verify_scs_v2_stage_c_processing.py": "4941ad5baebc2050773140b1b8aa02ebd945ad4b5fac724fa4d640bfb30a5073"
+  },
+  "contract_sha256": {
+    "stage-c01-output-schema.yaml": "a1dbb2fc3ba14fc46cf2af36be0b2975a202d4e3e27c1d4bbaffe61d013aed31",
+    "stage-c01-source-internal-qc.yaml": "eefccbb576e41b62f7394709797ab291d686b1bf1fd0c144229fafca3fcb7fdc",
+    "stage-c01-verification-contract.yaml": "1bd0a5e081abd48f0245db475d8779e01bf8a6188cbd0744de9330c3d2a1406a",
+    "stage-c2-1-contract.yaml": "382ec1236548687997714303396522cd74ed51016625945c0eb48aaa6327e2be",
+    "stage-c2-2-contract.yaml": "1a4e9e6113d4f7eea2625fc28bbf60be0356a2e5ebe232bd8fcd5263f8e04a46",
+    "stage-c2-3-contract.yaml": "2b36e89481f610ba7b452c3aa889c6502e89073e8147b317c5e41a1b79cf6b50"
+  },
+  "test_sha256": {
+    "test_scs_v2_stage_c1_readiness.py": "989d4774fdd6c896f8caf3dc32fe174258c624a97bc20cefa8b87ecab69ee014",
+    "test_scs_v2_stage_c1a_readiness.py": "f7c151288081f803a43b09c50259ff05fc04488e659a478980383a25d1fbd0af",
+    "test_scs_v2_stage_c_processing.py": "954cd691f1384a39cbf44ae8c7e5cc80c061ef639e7a22f162b8a17bdacfeb33",
+    "test_verify_scs_v2_stage_c_processing.py": "0ae1eeefdb8d4a395a94d2a6ba816c9fa40c5ce7618e664a67dac0dbf21744b7"
+  },
+  "zero_access": {
+    "sealed_object_body_read_count": 0,
+    "archive_decompression_count": 0,
+    "candidate_sounding_row_count": 0,
+    "candidate_cell_row_count": 0,
+    "stage_b_objects_root_opened": false
+  },
+  "old_run_invariance": {
+    "hash_check_status": "pass",
+    "runs": {
+      "20260807T090000Z": {
+        "classification": "immutable_stage_c_reference",
+        "hashes_unchanged": true
+      },
+      "20260809T000001Z": {
+        "classification": "immutable_superseded_readiness",
+        "hashes_unchanged": true
+      },
+      "20260809T020000Z": {
+        "classification": "incomplete_failed_readiness",
+        "hashes_unchanged": true
+      },
+      "20260809T020001Z": {
+        "classification": "superseded_not_authorizable",
+        "hashes_unchanged": true
+      },
+      "20260809T030000Z": {
+        "classification": "verified_but_not_authorizable_due_review_blockers",
+        "hashes_unchanged": true
+      }
+    }
+  },
+  "stage_c_directories": {
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c",
+    "before": [
+      "20260806T102715Z.failed",
+      "20260806T105036Z.failed",
+      "20260806T110939Z",
+      "20260807T090000Z"
+    ],
+    "after": [
+      "20260806T102715Z.failed",
+      "20260806T105036Z.failed",
+      "20260806T110939Z",
+      "20260807T090000Z"
+    ],
+    "unchanged": true
+  },
+  "stage_c_rerun_performed": false,
+  "stage_c_hold": true,
+  "tasks_left_in_progress": [
+    "C.2",
+    "C.2.1",
+    "C.2.2",
+    "C.2.3"
+  ],
+  "separate_reviewer_required": true,
+  "implementation_agent_approval": false
+}

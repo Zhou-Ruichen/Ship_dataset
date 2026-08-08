@@ -69,8 +69,27 @@
         "candidate_sounding_row_count": 0,
         "sealed_object_body_read_count": 0
       }
+    },
+    "20260809T040000Z": {
+      "classification": "verified_pass_pending_separate_review",
+      "immutable": true,
+      "verification_present": true,
+      "files": {
+        "access_ledger.json": "0e86ab9384ee68c3502588091a5fe16f11d90c979353bb7cce18a82d13a71a3f",
+        "audit_manifest.json": "b0ed8eefa836f041eb9435920790932a7d59034a2d17ddd943d06607625fc3eb",
+        "readiness_lock.json": "dd003259be324f535cc728c02988bd8ca3788bfdf1c0cd2effac3376e3d9aafe",
+        "stage_c_authorization.template.json": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+        "test_results.json": "0de5d7f646de6c92561c68c9f2b62fb87e82ff8b8ce15645862b3ce706a060cc",
+        "verification.json": "20ee6ec064edd0b04aaa158605d5a28dd01ba5910e742be9982a3b20fcd43937"
+      },
+      "zero_access": {
+        "archive_decompression_count": 0,
+        "candidate_cell_row_count": 0,
+        "candidate_sounding_row_count": 0,
+        "sealed_object_body_read_count": 0
+      }
     }
   },
   "target_readiness_run_id": "20260809T040000Z",
-  "target_status": "pending_c2_3_implementation"
+  "target_status": "verified_pass_pending_separate_review"
 }
