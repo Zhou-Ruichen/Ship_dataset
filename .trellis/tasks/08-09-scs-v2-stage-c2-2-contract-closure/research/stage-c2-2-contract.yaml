@@ -1,0 +1,63 @@
+schema_version: 1
+stage: C2_2_contract_closure
+status: frozen_before_implementation
+navigation:
+  u3_or_present_u0_nonfinite_xy:
+    object_action: retain_object_and_other_soundings
+    sounding_action: retain_sounding_and_valid_depth
+    native_quality_state: good_when_u0_key_present
+    hard_failure_codes_exact: [H03_NAVIGATION_RANGE]
+    qc_hard_pass: false
+    qc_eligible_for_cell: false
+    lon_bin: null
+    lat_bin: null
+    cell_id: null
+  missing_u0_key:
+    native_quality_policy_unchanged: true
+    does_not_by_itself_assert_h03: true
+  finite_u0_u3_mismatch:
+    object_action: abort_atomically
+  invalid_or_missing_time:
+    object_action: abort_atomically
+  duplicate_or_structural_key_failure:
+    object_action: abort_atomically
+readiness:
+  run_id: 20260809T030000Z
+  production_template_is_run_snapshot: true
+  require_inactive_pass: true
+  frozen_sha_bindings:
+    - processing_helper
+    - processor
+    - authorizer
+    - production_verifier
+    - readiness_producer
+    - readiness_verifier
+    - relevant_tests
+    - output_schema
+    - qc_contract
+    - verification_contract
+    - c2_1_contract
+    - c2_2_contract
+    - authorization_template_snapshot
+  zero_counters:
+    - sealed_object_body_read_count
+    - archive_decompression_count
+    - candidate_sounding_row_count
+    - candidate_cell_row_count
+  stage_c_authorized: false
+  confirmation_role_eligible: false
+previous_readiness:
+  20260809T020000Z: incomplete_failed_readiness
+  20260809T020001Z: superseded_not_authorizable
+hard_stops:
+  sealed_body_read: prohibited
+  stage_c_rerun: prohibited
+  candidate_generation: prohibited
+  external_product_or_model_comparison: prohibited
+  mrar_merge: prohibited
+  datum_or_bias_fit: prohibited
+  cross_cruise_aggregation: prohibited
+  confirmation_role_promotion: prohibited
+review:
+  implementer_self_approval: prohibited
+  separate_reviewer_required: true

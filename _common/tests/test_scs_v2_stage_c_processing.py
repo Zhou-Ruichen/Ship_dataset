@@ -4,7 +4,9 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pyarrow as pa
 import pyarrow.parquet as pq
+import yaml
 
 from ncei.code.scs_v2_stage_c_processing import (
     canonical_authorization_receipt_sha256,
@@ -21,6 +23,8 @@ from ncei.code.scs_v2_stage_c_processing import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
+QC_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-source-internal-qc.yaml"
+VERIFICATION_CONTRACT_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-verification-contract.yaml"
 
 
 class SCSV2StageCProcessingTest(unittest.TestCase):
@@ -108,6 +112,8 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
                 "epoch_us": 1_700_000_000_000_000,
                 "lon_deg": 120.0,
                 "lat_deg": 10.0,
+                "u3_navigation_finite": True,
+                "u0_navigation_finite": None,
                 "parser_depth_value": 250.0,
                 "depth_m_positive_down": None,
                 "heading_deg": 45.0,
@@ -127,8 +133,26 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
 
     def test_output_schema_is_frozen_and_time_nonnullable(self):
         schemas = load_output_schemas(SCHEMA_PATH)
-        self.assertEqual(len(schemas["sounding_lineage.parquet"]), 60)
-        self.assertFalse(schemas["sounding_lineage.parquet"].field("time_utc").nullable)
+        sounding_schema = schemas["sounding_lineage.parquet"]
+        self.assertEqual(len(sounding_schema), 61)
+        self.assertFalse(sounding_schema.field("time_utc").nullable)
+        self.assertEqual(sounding_schema.field("navigation_valid").type, pa.bool_())
+        self.assertFalse(sounding_schema.field("navigation_valid").nullable)
+
+    def test_qc_and_verification_contracts_bind_dual_source_navigation(self):
+        qc = yaml.safe_load(QC_PATH.read_text(encoding="utf-8"))
+        navigation = qc["navigation_validity"]
+        self.assertEqual(navigation["u0_key_absent"], "not_a_navigation_failure_by_itself")
+        self.assertEqual(navigation["u3_xy_nonfinite"], "navigation_valid_false")
+        self.assertEqual(navigation["present_u0_xy_nonfinite"], "navigation_valid_false")
+        h03 = next(rule for rule in qc["hard_rules"] if rule["id"] == "H03_navigation_finite_range")
+        self.assertIn("navigation_valid", h03["expression"])
+
+        verification = yaml.safe_load(VERIFICATION_CONTRACT_PATH.read_text(encoding="utf-8"))
+        checks = verification["future_stage_c_post_processing_checks"]
+        self.assertIn("u3_nonfinite_navigation_is_h03_only_and_has_no_cell", checks)
+        self.assertIn("present_u0_nonfinite_navigation_is_h03_only_and_has_no_cell", checks)
+        self.assertIn("dual_nonfinite_navigation_is_h03_only_and_has_no_cell", checks)
 
     def test_authorization_hash_excludes_only_self_field(self):
         receipt = {"stage_c_authorized": True, "processing_run_id": "20260806T000000Z"}
@@ -277,11 +301,8 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
     # --- C.2.1: U0 X/Y non-finite demotion (C.2 only relaxed U3) ---
 
     def test_u0_xy_nan_row_is_demoted_not_aborted(self):
-        # U0 X=NaN (the case C.2 left aborting the whole object). The U0 key is
-        # present, so native_quality_state must stay "good" and there must be no
-        # H02 (requirement 2). The sounding's own lon/lat come from U3, which is
-        # finite here, so the row's own navigation is valid and it stays
-        # cell-eligible -- U0 NaN is not a native-quality demotion.
+        # A present U0 key keeps native quality good, but its non-finite X is a
+        # navigation failure even when the U3 coordinates are finite.
         u3 = self._VALID + "1700000001.000000\t1\t7\t120\t10\t250\t90\n"
         u0 = self._VALID + "1700000001.000000\t1\t7\tnan\t10\t250\t90\n"
         directory, raw, result = self._process(u3, u0)
@@ -289,11 +310,64 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
         rows = self._sounding_rows(directory, raw)
         nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
         self.assertEqual(nan_row["native_quality_state"], "good")
-        self.assertNotIn("H02_NATIVE_NOT_GOOD", nan_row["qc_hard_failure_codes"])
-        self.assertNotIn("H03_NAVIGATION_RANGE", nan_row["qc_hard_failure_codes"])
-        self.assertTrue(nan_row["qc_hard_pass"])
-        self.assertTrue(nan_row["qc_eligible_for_cell"])
-        self.assertIsNotNone(nan_row["cell_id"])
+        self.assertEqual(nan_row["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+        self.assertAlmostEqual(nan_row["depth_m_positive_down"], 250.0)
+        self.assertFalse(nan_row["qc_hard_pass"])
+        self.assertFalse(nan_row["qc_eligible_for_cell"])
+        self.assertIsNone(nan_row["lon_bin"])
+        self.assertIsNone(nan_row["lat_bin"])
+        self.assertIsNone(nan_row["cell_id"])
+
+    def test_nonfinite_navigation_row_and_batch_paths_match(self):
+        cases = {
+            "u3_nan": ("nan", "10", "120", "10"),
+            "u3_inf": ("inf", "10", "120", "10"),
+            "u0_nan": ("120", "10", "nan", "10"),
+            "both_nonfinite": ("inf", "10", "120", "-inf"),
+        }
+        for name, (u3_x, u3_y, u0_x, u0_y) in cases.items():
+            with self.subTest(name=name):
+                u3 = self._VALID + f"1700000001.000000\t1\t7\t{u3_x}\t{u3_y}\t250\t90\n"
+                u0 = self._VALID + f"1700000001.000000\t1\t7\t{u0_x}\t{u0_y}\t250\t90\n"
+                directory, raw, result = self._process(u3, u0)
+                self.assertIsNone(result[2])
+                raw_table = pq.read_table(raw)
+                raw_rows = raw_table.to_pylist()
+                review = ping_review_codes(raw)
+                rowwise = [
+                    sounding_row(
+                        item,
+                        "run",
+                        "20260805T230449Z",
+                        self._object_record(),
+                        "env",
+                        "cmd",
+                        review.get(int(item["parser_ping_index"]), set()),
+                    )
+                    for item in raw_rows
+                ]
+                batch = sounding_batch_table(
+                    raw_table.to_batches()[0],
+                    "run",
+                    "20260805T230449Z",
+                    self._object_record(),
+                    "env",
+                    "cmd",
+                    review,
+                    load_output_schemas(SCHEMA_PATH)["sounding_lineage.parquet"],
+                ).to_pylist()
+                for batch_row, rowwise_row in zip(batch, rowwise):
+                    for field, value in batch_row.items():
+                        if isinstance(value, float) and math.isnan(value):
+                            self.assertTrue(math.isnan(rowwise_row[field]), field)
+                        else:
+                            self.assertEqual(value, rowwise_row[field], field)
+                invalid = next(item for item in batch if item["parser_ping_index"] == 1)
+                self.assertFalse(invalid["navigation_valid"])
+                self.assertEqual(invalid["native_quality_state"], "good")
+                self.assertEqual(invalid["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+                self.assertAlmostEqual(invalid["depth_m_positive_down"], 250.0)
+                self.assertIsNone(invalid["cell_id"])
 
     def test_u0_y_nan_row_is_demoted_not_aborted(self):
         u3 = self._VALID + "1700000001.000000\t1\t8\t120\t10\t250\t90\n"
@@ -303,8 +377,9 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
         rows = self._sounding_rows(directory, raw)
         nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
         self.assertEqual(nan_row["native_quality_state"], "good")
-        self.assertNotIn("H02_NATIVE_NOT_GOOD", nan_row["qc_hard_failure_codes"])
-        self.assertTrue(nan_row["qc_eligible_for_cell"])
+        self.assertEqual(nan_row["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+        self.assertFalse(nan_row["qc_eligible_for_cell"])
+        self.assertIsNone(nan_row["cell_id"])
 
     def test_u0_xy_inf_row_is_demoted_not_aborted(self):
         # Inf in U0 also no longer aborts the object; sqlite reads inf back as
@@ -316,7 +391,34 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
         rows = self._sounding_rows(directory, raw)
         bad_row = next(r for r in rows if r["parser_ping_index"] == 1)
         self.assertEqual(bad_row["native_quality_state"], "good")
-        self.assertNotIn("H02_NATIVE_NOT_GOOD", bad_row["qc_hard_failure_codes"])
+        self.assertEqual(bad_row["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+        self.assertAlmostEqual(bad_row["depth_m_positive_down"], 250.0)
+        self.assertFalse(bad_row["qc_eligible_for_cell"])
+        self.assertIsNone(bad_row["cell_id"])
+
+    def test_u3_and_u0_nonfinite_navigation_is_h03_only(self):
+        u3 = self._VALID + "1700000001.000000\t1\t14\tnan\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t14\t120\tinf\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        invalid = next(
+            item for item in self._sounding_rows(directory, raw)
+            if item["parser_ping_index"] == 1
+        )
+        self.assertEqual(invalid["native_quality_state"], "good")
+        self.assertEqual(invalid["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+        self.assertAlmostEqual(invalid["depth_m_positive_down"], 250.0)
+        self.assertFalse(invalid["navigation_valid"])
+        self.assertFalse(invalid["qc_eligible_for_cell"])
+        self.assertIsNone(invalid["lon_bin"])
+        self.assertIsNone(invalid["lat_bin"])
+        self.assertIsNone(invalid["cell_id"])
+
+    def test_negative_time_still_aborts_object(self):
+        u3 = "-1.000000\t1\t2\t120\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, self._VALID)
+        self.assertEqual(result[2], "TIME_UTC_INVALID")
+        self.assertFalse(raw.exists())
 
     def test_u0_nan_prefix_then_valid_keeps_valid(self):
         # Valid prefix retained and eligible when a later U0 NaN row appears.

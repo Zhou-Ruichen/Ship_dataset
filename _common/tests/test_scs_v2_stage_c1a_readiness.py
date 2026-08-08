@@ -25,6 +25,58 @@ TASK_RESEARCH = (
 
 
 class SCSV2StageC1aReadinessTest(unittest.TestCase):
+    def test_c2_2_readiness_binds_production_chain_and_contracts(self):
+        from ncei.code.prepare_scs_v2_stage_c1a_readiness import (
+            AUTHORIZATION_TEMPLATE_SOURCE_PATH,
+            CONTRACT_FILES,
+            SOURCE_FILES,
+        )
+        from ncei.code.scs_v2_stage_c_processing import (
+            STAGE_C2_2_TEMPLATE_PATH,
+            STAGE_C2_2_TEMPLATE_SOURCE_PATH,
+        )
+
+        self.assertEqual(AUTHORIZATION_TEMPLATE_SOURCE_PATH, STAGE_C2_2_TEMPLATE_SOURCE_PATH)
+        self.assertNotEqual(AUTHORIZATION_TEMPLATE_SOURCE_PATH.resolve(), STAGE_C2_2_TEMPLATE_PATH.resolve())
+        self.assertIn("stage-c2-1-contract.yaml", CONTRACT_FILES)
+        self.assertIn("stage-c2-2-contract.yaml", CONTRACT_FILES)
+        self.assertTrue(
+            {
+                "c1a_readiness_producer",
+                "c1a_readiness_verifier",
+                "stage_c_processor",
+                "stage_c_authorizer",
+                "stage_c_verifier",
+                "stage_c_processing_helper",
+                "stage_c_tests",
+                "stage_c_verifier_tests",
+            }.issubset(SOURCE_FILES)
+        )
+
+    def test_c2_2_readiness_verifier_requires_all_frozen_sha_fields(self):
+        from ncei.code.verify_scs_v2_stage_c1a_readiness import REQUIRED_READINESS_SHA_KEYS
+
+        self.assertTrue(
+            {
+                "authorization_template_sha256",
+                "stage_c_processing_helper_sha256",
+                "stage_c_processor_sha256",
+                "stage_c_authorizer_sha256",
+                "stage_c_verifier_sha256",
+                "readiness_producer_sha256",
+                "readiness_verifier_sha256",
+                "stage_c_tests_sha256",
+                "stage_c_verifier_tests_sha256",
+                "base_tests_sha256",
+                "c1a_tests_sha256",
+                "stage_c2_1_contract_sha256",
+                "stage_c2_2_contract_sha256",
+                "output_schema_sha256",
+                "qc_contract_sha256",
+                "verification_contract_sha256",
+            }.issubset(REQUIRED_READINESS_SHA_KEYS)
+        )
+
     def _valid_texts(self) -> tuple[str, str]:
         return (
             (C1_FIXTURES / "synthetic_all_u3.tsv").read_text(encoding="ascii"),

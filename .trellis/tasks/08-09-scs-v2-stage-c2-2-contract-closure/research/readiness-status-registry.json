@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-08-09",
+  "records": {
+    "20260807T090000Z": {
+      "classification": "immutable_stage_c_reference",
+      "immutable": true,
+      "files": {
+        "audit_manifest.json": "53fd36868f36447daa7025bbe1a6efefcc29713767698107744817343fbd2067",
+        "authorization_receipt.json": "0c4a8313d7306dcf0c75cba24663dd6cffac9847cf24771e6f43febf1209e412",
+        "verification.json": "9b768fa5eaa59ba67d20fab707b324cbb5c10e95f3a550738d279f2c07e2d0c8"
+      }
+    },
+    "20260809T000001Z": {
+      "classification": "immutable_superseded_readiness",
+      "immutable": true,
+      "files": {
+        "audit_manifest.json": "ac6d21360e2e7384a334056cdb0b547e33bac631dbd6d13285908ec8d917aa9b",
+        "environment_lock.json": "e57f0c171805de639f2fcbd1f8fc3b94ae1033b6d4e1a9718a07bec13275f5d9",
+        "fixture_verification.json": "132b8e425d3505b4d03d4e463942d01860b315a7ee6d3730d8ac1751ec258202",
+        "readiness_lock.json": "5c974a1ff2c3c7015a2bd4b564714f861e909025ae73ea91f8d1bebfbc62f27f",
+        "test_results.json": "a9306ee15e5b763cdc8c1f1dfecec2bb62a5e85259ea223c850675d86d8f729d",
+        "time_contract_fixture_verification.json": "2b1606484ba440116116761fe7c02c3daaa103aab08debca04077671c91fa5b0",
+        "verification.json": "fb53bfe7dde9b0471248c714d431b75e344009efa8dd50abe464459430e94a07"
+      }
+    },
+    "20260809T020000Z": {
+      "classification": "incomplete_failed_readiness",
+      "immutable": true,
+      "reason": "verification.json is absent",
+      "verification_present": false,
+      "files": {
+        "audit_manifest.json": "b1da98948031bfdc22dd8f5445c82bab44508cbe528231521e1ca5eb33f87f97",
+        "readiness_lock.json": "3e2fd490593165085c9fc81f67b15e1e5989f098aa2cfd2247685d7df863f215",
+        "stage_c_authorization.template.json": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+        "test_results.json": "2bdc400bb721ae109965d7a0387e0d5be608daf7e4b13427fc09740dc0fe74d2"
+      }
+    },
+    "20260809T020001Z": {
+      "classification": "superseded_not_authorizable",
+      "immutable": true,
+      "verification_present": true,
+      "files": {
+        "audit_manifest.json": "a477bfd2109ab252aba4806e28db56c85e3a17bf1a0e8cd63214d53ee31b73af",
+        "readiness_lock.json": "b75abb300aec82224885f000c909a3827cd2a5cfb4078c458bc0e66bb842d566",
+        "stage_c_authorization.template.json": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+        "test_results.json": "9569d8674903aafa26999aed79b0276508a1985561ea7490aeb65f799f2d5130",
+        "verification.json": "7fd59f297496b2854dd784315370f02501d606efd6a6614e105841a438c74542"
+      }
+    }
+  },
+  "target_readiness_run_id": "20260809T030000Z",
+  "target_status": "pending_creation_after_code_commit"
+}

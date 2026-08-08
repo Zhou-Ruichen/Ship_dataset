@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 stage: C_source_internal_qc
 supersedes_for_future_stage_c:
   path: research/source-internal-qc.yaml
@@ -14,6 +14,11 @@ actions:
   crossover_adjustment: false
   datum_or_bias_fit: false
   global_three_std_filter: false
+navigation_validity:
+  u3_xy_nonfinite: navigation_valid_false
+  present_u0_xy_nonfinite: navigation_valid_false
+  u0_key_absent: not_a_navigation_failure_by_itself
+  lineage_coordinates: U3_X_Y_when_finite
 hard_rules:
   - id: H01_parser_row_key
     expression: source_object_id_is_valid && parser_ping_index >= 0 && beam_index >= 0 && key_is_unique
@@ -22,7 +27,7 @@ hard_rules:
     expression: native_quality_state == good
     on_fail: qc_eligible_for_cell_false
   - id: H03_navigation_finite_range
-    expression: isfinite(lon_deg) && -180 <= lon_deg && lon_deg < 180 && isfinite(lat_deg) && -90 <= lat_deg && lat_deg <= 90
+    expression: navigation_valid && isfinite(lon_deg) && -180 <= lon_deg && lon_deg < 180 && isfinite(lat_deg) && -90 <= lat_deg && lat_deg <= 90
     on_fail: qc_eligible_for_cell_false
   - id: H04_depth_finite_positive_range
     expression: isfinite(depth_m_positive_down) && 0 < depth_m_positive_down && depth_m_positive_down <= 12000

@@ -40,8 +40,9 @@ from ncei.code.scs_v2_stage_c1a_contract import (
     parse_source_streams_atomically,
 )
 from ncei.code.scs_v2_stage_c_processing import (
-    STAGE_C2_1_READINESS_ROOT,
-    STAGE_C2_1_TEMPLATE_PATH,
+    STAGE_C2_2_READINESS_ROOT,
+    STAGE_C2_2_READINESS_RUN_ID,
+    STAGE_C2_2_TEMPLATE_SOURCE_PATH,
 )
 
 
@@ -54,14 +55,21 @@ C1A_CONTRACT_FILES = [
     "stage-c1a-fixture-contract.yaml",
     "stage-c1a-verification-contract.yaml",
 ]
-CONTRACT_FILES = [*C1_CONTRACT_FILES, *C1A_CONTRACT_FILES, "stage-c2-1-contract.yaml"]
+CONTRACT_FILES = [
+    *C1_CONTRACT_FILES,
+    *C1A_CONTRACT_FILES,
+    "stage-c2-1-contract.yaml",
+    "stage-c2-2-contract.yaml",
+]
 C2_1_TASK_ROOT = REPO_ROOT / ".trellis/tasks/08-09-scs-v2-stage-c2-1-correction"
+C2_2_TASK_ROOT = REPO_ROOT / ".trellis/tasks/08-09-scs-v2-stage-c2-2-contract-closure"
 CONTRACT_SOURCES = {
     **{name: RESEARCH_ROOT / name for name in [*C1_CONTRACT_FILES, *C1A_CONTRACT_FILES]},
     "stage-c2-1-contract.yaml": C2_1_TASK_ROOT / "research/stage-c2-1-contract.yaml",
+    "stage-c2-2-contract.yaml": C2_2_TASK_ROOT / "research/stage-c2-2-contract.yaml",
 }
-AUTHORIZATION_TEMPLATE_PATH = STAGE_C2_1_TEMPLATE_PATH
-READINESS_ROOT = STAGE_C2_1_READINESS_ROOT.parent
+AUTHORIZATION_TEMPLATE_SOURCE_PATH = STAGE_C2_2_TEMPLATE_SOURCE_PATH
+READINESS_ROOT = STAGE_C2_2_READINESS_ROOT.parent
 FIXTURE_ROOT = REPO_ROOT / "_common/tests/fixtures"
 C1_FIXTURE_ROOT = FIXTURE_ROOT / "scs_v2_stage_c1"
 C1A_FIXTURE_ROOT = FIXTURE_ROOT / "scs_v2_stage_c1a"
@@ -129,7 +137,7 @@ def validate_inputs(environment_root: Path, source_root: Path, planning_commit: 
     for path in [
         *SOURCE_FILES.values(),
         *CONTRACT_SOURCES.values(),
-        AUTHORIZATION_TEMPLATE_PATH,
+        AUTHORIZATION_TEMPLATE_SOURCE_PATH,
         *TIME_FIXTURES.values(),
         C1_FIXTURE_ROOT / "synthetic_all_u3.tsv",
         C1_FIXTURE_ROOT / "synthetic_good_u0.tsv",
@@ -215,9 +223,20 @@ def run_tests() -> dict[str, Any]:
         "test_independent_verifier_accepts_atomic_failure_evidence",
         "test_independent_verifier_rejects_failed_object_sounding",
         "test_xy_nan_row_is_demoted_not_aborted",
+        "test_nonfinite_navigation_row_and_batch_paths_match",
+        "test_u3_and_u0_nonfinite_navigation_is_h03_only",
         "test_synthetic_producer_output_passes_production_verifier",
+        "test_real_authorizer_generates_synthetic_active_receipt",
+        "test_readiness_rejects_each_frozen_file_drift",
+        "test_readiness_rejects_missing_verification",
+        "test_receipt_binding_rejects_wrong_readiness_id",
+        "test_receipt_rejects_each_frozen_sha_drift",
         "test_gate_rejects_nested_placeholder_recursively",
+        "test_gate_rejects_missing_field",
+        "test_gate_rejects_extra_field",
+        "test_gate_rejects_wrong_template_sha",
         "test_command_count_closure_768_576_0",
+        "test_command_count_closure_rejects_wrong_role_count",
     )
     if completed.returncode != 0 or count < 16 or any(name not in combined for name in required_names):
         raise RuntimeError(f"Stage C.1a tests failed:\n{combined}")
@@ -238,6 +257,8 @@ def run_tests() -> dict[str, Any]:
 def produce(environment_root: Path, source_root: Path, planning_commit: str, run_id: str) -> Path:
     if not RUN_ID_RE.fullmatch(run_id):
         raise ValueError("readiness run ID must be YYYYMMDDTHHMMSSZ")
+    if run_id != STAGE_C2_2_READINESS_RUN_ID:
+        raise ValueError("readiness run ID does not match the C2.2 production root")
     environment_root = environment_root.resolve()
     source_root = source_root.resolve()
     c0_lock = validate_inputs(environment_root, source_root, planning_commit)
@@ -280,12 +301,16 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
         atomic_json(tests, temporary_dir / "test_results.json")
 
         source_hashes = {name: {"path": str(path), "sha256": sha256_file(path)} for name, path in SOURCE_FILES.items()}
-        template_sha256 = sha256_file(AUTHORIZATION_TEMPLATE_PATH)
-        shutil.copy2(AUTHORIZATION_TEMPLATE_PATH, temporary_dir / "stage_c_authorization.template.json")
+        template_source_sha256 = sha256_file(AUTHORIZATION_TEMPLATE_SOURCE_PATH)
+        template_snapshot = temporary_dir / "stage_c_authorization.template.json"
+        shutil.copy2(AUTHORIZATION_TEMPLATE_SOURCE_PATH, template_snapshot)
+        template_sha256 = sha256_file(template_snapshot)
+        if template_sha256 != template_source_sha256:
+            raise AssertionError("authorization template copy changed")
 
         access_ledger = {
-            "schema_version": 1,
-            "stage": "C1a_zero_candidate_contract_correction",
+            "schema_version": 2,
+            "stage": "C2_2_zero_candidate_contract_closure",
             "allowed_inputs": [
                 str(PREDECESSOR_RUN / "audit_manifest.json"),
                 str(PREDECESSOR_RUN / "verification.json"),
@@ -310,8 +335,8 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
         atomic_json(access_ledger, temporary_dir / "access_ledger.json")
 
         readiness_lock = {
-            "schema_version": 1,
-            "stage": "C1a_zero_candidate_contract_correction",
+            "schema_version": 2,
+            "stage": "C2_2_zero_candidate_contract_closure",
             "status": "ready_for_separate_stage_c_authorization",
             "run_id": run_id,
             "created_utc": utc_now(),
@@ -324,11 +349,13 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
             "immutable_primary_cruise_ids": PRIMARY_IDS,
             "environment_digest": environment_digest,
             "authorization_template_sha256": template_sha256,
-            "authorization_template_path": str(AUTHORIZATION_TEMPLATE_PATH),
+            "authorization_template_source_path": str(AUTHORIZATION_TEMPLATE_SOURCE_PATH),
+            "authorization_template_source_sha256": template_source_sha256,
+            "authorization_template_path": str(final_dir / "stage_c_authorization.template.json"),
             "receipt_report_template_sha256": template_sha256,
-            "receipt_report_template_path": str(AUTHORIZATION_TEMPLATE_PATH),
+            "receipt_report_template_path": str(final_dir / "stage_c_authorization.template.json"),
             "verifier_template_sha256": template_sha256,
-            "verifier_template_path": str(AUTHORIZATION_TEMPLATE_PATH),
+            "verifier_template_path": str(final_dir / "stage_c_authorization.template.json"),
             # Stage C production chain bound by this readiness manifest (requirement 9).
             "stage_c_processor_sha256": source_hashes["stage_c_processor"]["sha256"],
             "stage_c_authorizer_sha256": source_hashes["stage_c_authorizer"]["sha256"],
@@ -336,7 +363,15 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
             "stage_c_processing_helper_sha256": source_hashes["stage_c_processing_helper"]["sha256"],
             "stage_c_tests_sha256": source_hashes["stage_c_tests"]["sha256"],
             "stage_c_verifier_tests_sha256": source_hashes["stage_c_verifier_tests"]["sha256"],
+            "readiness_producer_sha256": source_hashes["c1a_readiness_producer"]["sha256"],
+            "readiness_verifier_sha256": source_hashes["c1a_readiness_verifier"]["sha256"],
+            "base_tests_sha256": source_hashes["base_tests"]["sha256"],
+            "c1a_tests_sha256": source_hashes["c1a_tests"]["sha256"],
             "stage_c2_1_contract_sha256": contract_records["stage-c2-1-contract.yaml"]["sha256"],
+            "stage_c2_2_contract_sha256": contract_records["stage-c2-2-contract.yaml"]["sha256"],
+            "output_schema_sha256": contract_records["stage-c01-output-schema.yaml"]["sha256"],
+            "qc_contract_sha256": contract_records["stage-c01-source-internal-qc.yaml"]["sha256"],
+            "verification_contract_sha256": contract_records["stage-c01-verification-contract.yaml"]["sha256"],
             "invalid_time_policy": "abort_source_object_atomically",
             "time_utc_nullable_in_emitted_soundings": False,
             "parser_ping_index_requires_valid_time": True,
@@ -376,7 +411,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
 
         audit_manifest = {
             "schema_version": 1,
-            "stage": "C1a_zero_candidate_contract_correction",
+            "stage": "C2_2_zero_candidate_contract_closure",
             "run_id": run_id,
             "created_utc": utc_now(),
             "planning_commit": planning_commit,

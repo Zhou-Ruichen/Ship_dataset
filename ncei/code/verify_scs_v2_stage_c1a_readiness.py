@@ -21,7 +21,7 @@ from ncei.code.prepare_scs_v2_stage_c1_readiness import (
     RUN_ID_RE,
 )
 from ncei.code.prepare_scs_v2_stage_c1a_readiness import (
-    AUTHORIZATION_TEMPLATE_PATH,
+    AUTHORIZATION_TEMPLATE_SOURCE_PATH,
     CONTRACT_SOURCES,
     CONTRACT_FILES,
     PREDECESSOR_MANIFEST_SHA256,
@@ -29,11 +29,37 @@ from ncei.code.prepare_scs_v2_stage_c1a_readiness import (
     PREDECESSOR_RUN_ID,
     PREDECESSOR_VERIFICATION_SHA256,
 )
+from ncei.code.scs_v2_stage_c_processing import (
+    STAGE_C2_2_READINESS_ROOT,
+    STAGE_C2_2_READINESS_RUN_ID,
+)
 from ncei.code.verify_scs_v2_stage_c1_readiness import (
     canonical_sha256,
     sha256_file,
     verify_environment,
     verify_fixture,
+)
+
+
+REQUIRED_READINESS_SHA_KEYS = frozenset(
+    {
+        "authorization_template_sha256",
+        "stage_c_processing_helper_sha256",
+        "stage_c_processor_sha256",
+        "stage_c_authorizer_sha256",
+        "stage_c_verifier_sha256",
+        "readiness_producer_sha256",
+        "readiness_verifier_sha256",
+        "stage_c_tests_sha256",
+        "stage_c_verifier_tests_sha256",
+        "base_tests_sha256",
+        "c1a_tests_sha256",
+        "stage_c2_1_contract_sha256",
+        "stage_c2_2_contract_sha256",
+        "output_schema_sha256",
+        "qc_contract_sha256",
+        "verification_contract_sha256",
+    }
 )
 
 
@@ -65,7 +91,7 @@ def verify_predecessor() -> int:
 
 
 def verify_manifest(run_dir: Path, manifest: dict[str, Any]) -> int:
-    require(manifest["stage"] == "C1a_zero_candidate_contract_correction", "manifest stage mismatch")
+    require(manifest["stage"] == "C2_2_zero_candidate_contract_closure", "manifest stage mismatch")
     require(manifest["run_id"] == run_dir.name, "manifest run ID mismatch")
     require(manifest["accepted_stage_c1"] == {
         "run_id": PREDECESSOR_RUN_ID,
@@ -143,8 +169,8 @@ def verify_contract_and_authorization(run_dir: Path, authorization: dict[str, An
     require(contract["atomicity"]["commit_outputs_only_after_both_U3_and_U0_streams_validate_and_join"] is True, "atomic commit disabled")
     require(contract["atomicity"]["partial_sounding_or_contributor_output_for_failed_object"] is False, "partial output allowed")
 
-    require(sha256_file(run_dir / "stage_c_authorization.template.json") == sha256_file(AUTHORIZATION_TEMPLATE_PATH), "readiness template SHA mismatch")
-    require(authorization == load_json(AUTHORIZATION_TEMPLATE_PATH), "readiness template content mismatch")
+    require(sha256_file(run_dir / "stage_c_authorization.template.json") == sha256_file(AUTHORIZATION_TEMPLATE_SOURCE_PATH), "readiness template SHA mismatch")
+    require(authorization == load_json(AUTHORIZATION_TEMPLATE_SOURCE_PATH), "readiness template content mismatch")
     require(authorization["schema_version"] == 1, "readiness authorization template schema mismatch")
     require(authorization["stage_c_authorized"] is False, "authorization template is active")
     require(authorization["authorized_by"] == "" and authorization["authorized_utc"] == "", "inactive authorization identity populated")
@@ -159,24 +185,21 @@ def verify_contract_and_authorization(run_dir: Path, authorization: dict[str, An
     return 16 + len(prohibited)
 
 
-def verify_stage_c_chain(readiness: dict[str, Any]) -> int:
-    """Verify the Stage C production chain SHA bindings (requirements 6, 9).
-
-    The readiness manifest binds one immutable authorization template and the
-    SHA of the processor, authorizer, production verifier, processing helper,
-    and the Stage C test module. Each recorded SHA must match the file on disk.
-    """
-    template_path = Path(readiness["authorization_template_path"])
+def verify_stage_c_chain(run_dir: Path, readiness: dict[str, Any]) -> int:
+    template_path = run_dir / "stage_c_authorization.template.json"
     require(template_path.is_file(), "stage C authorization template missing")
-    template_sha = sha256_file(AUTHORIZATION_TEMPLATE_PATH)
-    require(template_path.resolve() == AUTHORIZATION_TEMPLATE_PATH.resolve(), "stage C template path is not canonical")
+    template_sha = sha256_file(template_path)
+    require(Path(readiness["authorization_template_path"]).resolve() == template_path.resolve(), "stage C template path is not the readiness snapshot")
     require(template_sha == readiness["authorization_template_sha256"], "stage C authorization template SHA mismatch")
+    require(Path(readiness["authorization_template_source_path"]).resolve() == AUTHORIZATION_TEMPLATE_SOURCE_PATH.resolve(), "stage C template source path mismatch")
+    require(readiness["authorization_template_source_sha256"] == sha256_file(AUTHORIZATION_TEMPLATE_SOURCE_PATH) == template_sha, "stage C template source SHA mismatch")
     for path_key, sha_key in (
         ("receipt_report_template_path", "receipt_report_template_sha256"),
         ("verifier_template_path", "verifier_template_sha256"),
     ):
-        require(Path(readiness[path_key]).resolve() == AUTHORIZATION_TEMPLATE_PATH.resolve(), f"{path_key} is not canonical")
+        require(Path(readiness[path_key]).resolve() == template_path.resolve(), f"{path_key} is not the readiness snapshot")
         require(readiness[sha_key] == template_sha, f"{sha_key} mismatch")
+    require(REQUIRED_READINESS_SHA_KEYS <= set(readiness), "readiness SHA field set incomplete")
     chain = {
         "stage_c_processor_sha256": REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py",
         "stage_c_authorizer_sha256": REPO_ROOT / "ncei/code/authorize_scs_v2_stage_c.py",
@@ -184,12 +207,23 @@ def verify_stage_c_chain(readiness: dict[str, Any]) -> int:
         "stage_c_processing_helper_sha256": REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py",
         "stage_c_tests_sha256": REPO_ROOT / "_common/tests/test_scs_v2_stage_c_processing.py",
         "stage_c_verifier_tests_sha256": REPO_ROOT / "_common/tests/test_verify_scs_v2_stage_c_processing.py",
+        "readiness_producer_sha256": REPO_ROOT / "ncei/code/prepare_scs_v2_stage_c1a_readiness.py",
+        "readiness_verifier_sha256": REPO_ROOT / "ncei/code/verify_scs_v2_stage_c1a_readiness.py",
+        "base_tests_sha256": REPO_ROOT / "_common/tests/test_scs_v2_stage_c1_readiness.py",
+        "c1a_tests_sha256": REPO_ROOT / "_common/tests/test_scs_v2_stage_c1a_readiness.py",
     }
     for key, path in chain.items():
         require(path.is_file(), f"stage C chain file missing: {key}")
         require(sha256_file(path) == readiness[key], f"stage C chain SHA mismatch: {key}")
     require(readiness["stage_c2_1_contract_sha256"] == sha256_file(CONTRACT_SOURCES["stage-c2-1-contract.yaml"]), "C2.1 contract SHA mismatch")
-    return 2 + len(chain)
+    require(readiness["stage_c2_2_contract_sha256"] == sha256_file(CONTRACT_SOURCES["stage-c2-2-contract.yaml"]), "C2.2 contract SHA mismatch")
+    for key, filename in (
+        ("output_schema_sha256", "stage-c01-output-schema.yaml"),
+        ("qc_contract_sha256", "stage-c01-source-internal-qc.yaml"),
+        ("verification_contract_sha256", "stage-c01-verification-contract.yaml"),
+    ):
+        require(readiness[key] == sha256_file(CONTRACT_SOURCES[filename]), f"{filename} SHA mismatch")
+    return 8 + len(chain)
 
 
 def verify_zero_access(access: dict[str, Any], readiness: dict[str, Any], tests: dict[str, Any]) -> int:
@@ -221,8 +255,8 @@ def verify_zero_access(access: dict[str, Any], readiness: dict[str, Any], tests:
 
 def verify_run(run_dir: Path) -> dict[str, Any]:
     run_dir = run_dir.resolve()
-    require(run_dir.parent == READINESS_ROOT.resolve(), "run directory outside fixed readiness root")
-    require(RUN_ID_RE.fullmatch(run_dir.name) is not None, "unsafe readiness run ID")
+    require(run_dir == STAGE_C2_2_READINESS_ROOT.resolve(), "run directory is not the configured C2.2 readiness root")
+    require(run_dir.name == STAGE_C2_2_READINESS_RUN_ID and RUN_ID_RE.fullmatch(run_dir.name) is not None, "readiness run ID mismatch")
     verification_path = run_dir / "verification.json"
     if verification_path.exists():
         raise FileExistsError(f"immutable verification already exists: {verification_path}")
@@ -245,14 +279,14 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
     checks += verify_time_fixture(time_fixture)
     checks += verify_contract_and_authorization(run_dir, authorization, digest)
     checks += verify_zero_access(access, readiness, tests)
-    checks += verify_stage_c_chain(readiness)
+    checks += verify_stage_c_chain(run_dir, readiness)
     require(manifest["summary"] == readiness, "manifest/readiness summary mismatch")
     require(readiness["environment_digest"] == digest, "readiness environment digest mismatch")
     checks += 2
 
     result = {
-        "schema_version": 1,
-        "stage": "C1a_zero_candidate_contract_correction",
+        "schema_version": 2,
+        "stage": "C2_2_zero_candidate_contract_closure",
         "status": "pass",
         "run_id": run_dir.name,
         "run_dir": str(run_dir),
@@ -261,14 +295,7 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
         "accepted_stage_c1_readiness_manifest_sha256": PREDECESSOR_MANIFEST_SHA256,
         "accepted_stage_c1_readiness_verification_sha256": PREDECESSOR_VERIFICATION_SHA256,
         "environment_digest": digest,
-        "authorization_template_sha256": readiness["authorization_template_sha256"],
-        "stage_c_processor_sha256": readiness["stage_c_processor_sha256"],
-        "stage_c_authorizer_sha256": readiness["stage_c_authorizer_sha256"],
-        "stage_c_verifier_sha256": readiness["stage_c_verifier_sha256"],
-        "stage_c_processing_helper_sha256": readiness["stage_c_processing_helper_sha256"],
-        "stage_c_tests_sha256": readiness["stage_c_tests_sha256"],
-        "stage_c_verifier_tests_sha256": readiness["stage_c_verifier_tests_sha256"],
-        "stage_c2_1_contract_sha256": readiness["stage_c2_1_contract_sha256"],
+        **{key: readiness[key] for key in sorted(REQUIRED_READINESS_SHA_KEYS)},
         "receipt_report_template_sha256": readiness["receipt_report_template_sha256"],
         "verifier_template_sha256": readiness["verifier_template_sha256"],
         "offline_tests_run": tests["tests_run"],

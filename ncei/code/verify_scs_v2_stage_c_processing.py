@@ -23,20 +23,27 @@ import pyarrow.parquet as pq
 import yaml
 
 from ncei.code.scs_v2_stage_c_processing import (
-    STAGE_C2_1_READINESS_ROOT,
-    STAGE_C2_1_TEMPLATE_PATH,
-    find_placeholder_fields,
+    AUTHORIZATION_ADDED_KEYS as AUTHORIZE_ADDED_KEYS,
+    AUTHORIZATION_SCAFFOLD_REMOVED as AUTHORIZE_SCAFFOLD_REMOVED,
+    STAGE_C2_2_READINESS_ROOT,
+    STAGE_C2_2_READINESS_RUN_ID,
+    STAGE_C2_2_TEMPLATE_PATH,
+    canonical_authorization_receipt_sha256,
+    expected_authorization_keys as shared_expected_authorization_keys,
+    validate_authorization_receipt,
+    validate_readiness_bundle,
+    validate_receipt_readiness_bindings,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
-READINESS_ROOT = STAGE_C2_1_READINESS_ROOT
+READINESS_ROOT = STAGE_C2_2_READINESS_ROOT
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 PROCESSOR_PATH = REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py"
 HELPER_PATH = REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py"
 VERIFIER_PATH = REPO_ROOT / "ncei/code/verify_scs_v2_stage_c_processing.py"
-TEMPLATE_PATH = STAGE_C2_1_TEMPLATE_PATH
+TEMPLATE_PATH = STAGE_C2_2_TEMPLATE_PATH
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 ACQUISITION_RUN_ID = "20260805T230449Z"
 MANIFEST_SHA256 = "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94"
@@ -77,12 +84,6 @@ def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def canonical_authorization_receipt_sha256(value: dict[str, Any]) -> str:
-    payload = dict(value)
-    payload.pop("authorization_receipt_sha256", None)
-    return hashlib.sha256(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("ascii")).hexdigest()
 
 
 def arrow_type(type_name: str) -> pa.DataType:
@@ -316,10 +317,21 @@ def verify_soundings(run_dir: Path, objects: pd.DataFrame, expected_objects: dic
             require(row["native_quality_state"] in {"good", "flagged", "null"}, "invalid native quality state")
             lon = float(row["lon_deg"])
             lat = float(row["lat_deg"])
-            nav_ok = math.isfinite(lon) and -180.0 <= lon < 180.0 and math.isfinite(lat) and -90.0 <= lat <= 90.0
+            coordinate_range_ok = math.isfinite(lon) and -180.0 <= lon < 180.0 and math.isfinite(lat) and -90.0 <= lat <= 90.0
+            require(isinstance(row["navigation_valid"], bool), "navigation_valid is not boolean")
+            nav_ok = row["navigation_valid"]
+            require(not nav_ok or coordinate_range_ok, "valid navigation has invalid output coordinates")
             depth = row["depth_m_positive_down"]
             depth_ok = depth is not None and math.isfinite(float(depth)) and 0.0 < float(depth) <= 12_000.0
-            expected_hard = row["native_quality_state"] == "good" and nav_ok and depth_ok
+            expected_failure_codes: list[str] = []
+            if row["native_quality_state"] != "good":
+                expected_failure_codes.append("H02_NATIVE_NOT_GOOD")
+            if not nav_ok:
+                expected_failure_codes.append("H03_NAVIGATION_RANGE")
+            if not depth_ok:
+                expected_failure_codes.append("H04_DEPTH_RANGE")
+            require(row["qc_hard_failure_codes"] == expected_failure_codes, "hard QC failure codes mismatch")
+            expected_hard = not expected_failure_codes
             require(bool(row["qc_hard_pass"]) == expected_hard, "hard QC flag mismatch")
             require(bool(row["qc_eligible_for_cell"]) == expected_hard, "cell eligibility mismatch")
             if not nav_ok and row["native_quality_state"] == "good" and depth_ok:
@@ -432,33 +444,12 @@ def compare_aggregate_tables(run_dir: Path, contributors: pd.DataFrame, candidat
     return {"contributor_rows": len(contributors), "candidate_rows": len(candidates), "contributor_groups": len(contributor_stats), "candidate_groups": len(candidate_stats)}
 
 
-# Keys authorize fills at activation (not present on the inactive template) and
-# the single scaffold-only key it removes. Used for exact schema closure so the
-# active receipt can neither drop nor add fields relative to the template.
-AUTHORIZE_SCAFFOLD_REMOVED = frozenset({"producer_sha256"})
-AUTHORIZE_ADDED_KEYS = frozenset({
-    "authorization_receipt_sha256", "authorization_script_sha256", "authorization_template_sha256",
-    "confirmation_role_promotion_authorized", "cross_cruise_aggregation_authorized",
-    "datum_or_bias_fit_authorized", "gebco_or_product_comparison_authorized",
-    "model_comparison_authorized", "mrar_merge_authorized", "model_or_product_evaluation_authorized",
-    "stage_d_confirmation_evaluation_authorized", "parser_binary_sha256", "parser_help_snapshot_sha256",
-    "permitted_body_read_counts", "processing_helper_sha256", "processor_sha256",
-    "prohibited_external_inputs", "source_internal_only",
-    "stage_c1a_readiness_manifest_sha256", "stage_c1a_readiness_verification_sha256",
-    "time_fixture_verification_sha256", "format58_fixture_bytes_sha256",
-    "format58_fixture_oracle_sha256", "fixture_verification_sha256",
-    "stage_c0_planning_lock_sha256", "stage_c0_planning_commit",
-    "parser_environment_digest",
-})
-
-
-def expected_authorization_keys() -> set[str]:
+def expected_authorization_keys(template_path: Path = TEMPLATE_PATH) -> set[str]:
     """The exact key set an active receipt must have, derived from the template."""
-    template_keys = set(json.loads(TEMPLATE_PATH.read_text(encoding="utf-8")))
-    return (template_keys - AUTHORIZE_SCAFFOLD_REMOVED) | AUTHORIZE_ADDED_KEYS
+    return shared_expected_authorization_keys(template_path)
 
 
-def verify_authorization_receipt_schema(receipt: dict[str, Any]) -> None:
+def verify_authorization_receipt_schema(receipt: dict[str, Any], template_path: Path = TEMPLATE_PATH) -> None:
     """Pre-data rejection gate: placeholder, template binding, exact closure.
 
     Runs before any table/data check so a malformed receipt is rejected early.
@@ -466,17 +457,7 @@ def verify_authorization_receipt_schema(receipt: dict[str, Any]) -> None:
     four bad-receipt cases (placeholder / wrong template / missing / extra) are
     unit-testable without a sealed-format run directory.
     """
-    require(canonical_authorization_receipt_sha256(receipt) == receipt["authorization_receipt_sha256"], "authorization canonical hash mismatch")
-    leaked = find_placeholder_fields(receipt)
-    require(not leaked, f"authorization receipt has placeholder fields: {leaked}")
-    require(sha256_file(TEMPLATE_PATH) == receipt["authorization_template_sha256"], "authorization template SHA mismatch")
-    template_keys = set(json.loads(TEMPLATE_PATH.read_text(encoding="utf-8")))
-    active_keys = set(receipt)
-    expected_keys = (template_keys - AUTHORIZE_SCAFFOLD_REMOVED) | AUTHORIZE_ADDED_KEYS
-    missing = expected_keys - active_keys
-    extra = active_keys - expected_keys
-    require(not missing, f"authorization receipt missing keys: {sorted(missing)}")
-    require(not extra, f"authorization receipt has unexpected keys: {sorted(extra)}")
+    validate_authorization_receipt(receipt, template_path)
 
 
 def close_command_counts(command_lines: list[dict[str, Any]], expected_per_role: int) -> dict[str, Any]:
@@ -521,19 +502,12 @@ def verify_run(
     require(audit["status"] == "processed_pending_independent_verification", "producer run is not pending verification")
     require(audit["processing_run_id"] == run_dir.name and receipt["processing_run_id"] == run_dir.name, "run ID mismatch")
     require(receipt["stage_c_authorized"] is True and receipt["confirmation_role_eligible"] is False, "authorization role mismatch")
-    verify_authorization_receipt_schema(receipt)
-    require(sha256_file(PROCESSOR_PATH) == receipt["processor_sha256"], "processor hash binding mismatch")
-    require(sha256_file(HELPER_PATH) == receipt["processing_helper_sha256"], "helper hash binding mismatch")
-    require(sha256_file(VERIFIER_PATH) == receipt["verifier_sha256"], "verifier hash binding mismatch")
+    expected_readiness_run_id = STAGE_C2_2_READINESS_RUN_ID if readiness_root is None else expected_readiness_root.name
+    readiness = validate_readiness_bundle(expected_readiness_root, expected_readiness_run_id)
+    validate_receipt_readiness_bindings(receipt, readiness)
     require(receipt["fixed_output_root"] == str(expected_stage_c_root), "output root binding mismatch")
     require(receipt["acquisition_run_id"] == ACQUISITION_RUN_ID and receipt["immutable_primary_cruise_ids"] == PRIMARY_IDS, "input identity binding mismatch")
     require(receipt["sealed_archive_manifest_sha256"] == MANIFEST_SHA256 and receipt["stage_b_verification_sha256"] == STAGE_B_VERIFICATION_SHA256, "Stage B binding mismatch")
-    # C1a readiness binding is re-derived from the bound readiness run at verify
-    # time (the manifest binds the production-chain SHAs, so it cannot be a
-    # compile-time literal in the verifier). The receipt's recorded SHAs must
-    # match the run's on-disk audit_manifest.json and verification.json.
-    require(receipt["stage_c1a_readiness_manifest_sha256"] == sha256_file(expected_readiness_root / "audit_manifest.json"), "C1a manifest binding mismatch")
-    require(receipt["stage_c1a_readiness_verification_sha256"] == sha256_file(expected_readiness_root / "verification.json"), "C1a verification binding mismatch")
     for flag in ("gebco_or_product_comparison_authorized", "model_comparison_authorized", "mrar_merge_authorized", "cross_cruise_aggregation_authorized", "datum_or_bias_fit_authorized", "confirmation_role_promotion_authorized"):
         require(receipt.get(flag) is False, f"prohibited authorization flag enabled: {flag}")
     manifest, _stage_b_verification, _stage_b_access = manifest_bundle or verify_manifest_metadata()

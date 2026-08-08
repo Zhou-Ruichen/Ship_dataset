@@ -29,7 +29,6 @@ from ncei.code.scs_v2_stage_c_processing import (
     TIME_FAILURE_STATUS,
     ParquetAppender,
     aggregate_stats,
-    canonical_authorization_receipt_sha256,
     canonical_sha256,
     datetime_from_us,
     load_output_schemas,
@@ -40,9 +39,11 @@ from ncei.code.scs_v2_stage_c_processing import (
     source_field_ledger,
     source_object_id,
     source_processing_row,
-    STAGE_C2_1_READINESS_ROOT,
-    STAGE_C2_1_TEMPLATE_PATH,
+    STAGE_C2_2_READINESS_ROOT,
+    STAGE_C2_2_READINESS_RUN_ID,
     sounding_batch_table,
+    validate_readiness_bundle,
+    validate_receipt_readiness_bindings,
     _raw_from_object,
 )
 
@@ -50,7 +51,7 @@ from ncei.code.scs_v2_stage_c_processing import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
-READINESS_ROOT = STAGE_C2_1_READINESS_ROOT
+READINESS_ROOT = STAGE_C2_2_READINESS_ROOT
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 PROCESSING_FORMATS = {".mb58.gz"}
 SIDECAR_FORMATS = {".fnv", ".inf", ".fbt"}
@@ -79,19 +80,25 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def validate_active_authorization(receipt_path: Path, processing_run_id: str) -> dict[str, Any]:
+def validate_active_authorization(
+    receipt_path: Path,
+    processing_run_id: str,
+    *,
+    readiness_root: Path = READINESS_ROOT,
+    expected_readiness_run_id: str = STAGE_C2_2_READINESS_RUN_ID,
+    stage_c_root: Path = STAGE_C_ROOT,
+) -> dict[str, Any]:
     receipt = load_json(receipt_path)
+    readiness = validate_readiness_bundle(readiness_root, expected_readiness_run_id)
+    validate_receipt_readiness_bindings(receipt, readiness)
     require(receipt["stage_c_authorized"] is True, "Stage C authorization is inactive")
     require(receipt["processing_run_id"] == processing_run_id, "processing run ID mismatch")
     require(receipt["acquisition_run_id"] == ACQUISITION_RUN_ID, "acquisition run mismatch")
     require(receipt["immutable_primary_cruise_ids"] == PRIMARY_IDS, "cruise order mismatch")
-    require(receipt["fixed_output_root"] == str(STAGE_C_ROOT.resolve()), "fixed output root mismatch")
+    require(receipt["fixed_output_root"] == str(stage_c_root.resolve()), "fixed output root mismatch")
     require(receipt["sealed_archive_manifest_sha256"] == "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94", "Stage B manifest binding mismatch")
     require(receipt["stage_b_verification_sha256"] == "d0d868f560c628bd24d1d52d399c7ed9d03af337be72967a874a5c26db7c2e86", "Stage B verification binding mismatch")
-    require(receipt["stage_c1a_readiness_manifest_sha256"] == sha256_file(READINESS_ROOT / "audit_manifest.json"), "C1a manifest binding mismatch")
-    require(receipt["stage_c1a_readiness_verification_sha256"] == sha256_file(READINESS_ROOT / "verification.json"), "C1a verification binding mismatch")
-    require(receipt["authorization_template_sha256"] == sha256_file(STAGE_C2_1_TEMPLATE_PATH), "C2.1 authorization template mismatch")
-    require(receipt["parser_environment_digest"] == load_json(READINESS_ROOT / "environment_lock.json")["environment_digest"], "environment digest mismatch")
+    require(receipt["parser_environment_digest"] == load_json(readiness_root / "environment_lock.json")["environment_digest"], "environment digest mismatch")
     for key in (
         "gebco_or_product_comparison_authorized",
         "model_comparison_authorized",
@@ -102,10 +109,6 @@ def validate_active_authorization(receipt_path: Path, processing_run_id: str) ->
         "confirmation_role_eligible",
     ):
         require(receipt.get(key) is False, f"authorization enables prohibited action: {key}")
-    require(sha256_file(REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py") == receipt["processor_sha256"], "processor hash mismatch")
-    require(sha256_file(REPO_ROOT / "ncei/code/verify_scs_v2_stage_c_processing.py") == receipt["verifier_sha256"], "verifier hash mismatch")
-    require(sha256_file(REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py") == receipt["processing_helper_sha256"], "processing helper hash mismatch")
-    require(canonical_authorization_receipt_sha256(receipt) == receipt["authorization_receipt_sha256"], "authorization receipt canonical hash mismatch")
     return receipt
 
 

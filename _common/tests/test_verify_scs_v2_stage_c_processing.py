@@ -23,6 +23,7 @@ from ncei.code.process_scs_v2_stage_c_source_internal import (
     aggregate_outputs,
     empty_aggregation_db,
     update_counts_from_batch,
+    validate_active_authorization,
 )
 from ncei.code.scs_v2_stage_c_processing import (
     ParquetAppender,
@@ -48,6 +49,158 @@ TEMPLATE_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-interna
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 
 
+def write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def synthetic_readiness(
+    root: Path,
+    *,
+    code_bindings: dict[str, tuple[str, Path]] | None = None,
+    contract_bindings: dict[str, tuple[str, Path]] | None = None,
+) -> dict[str, object]:
+    """Build the minimum frozen readiness tree needed by the production gate."""
+    run_id = root.name
+    live = root.parent / "live"
+    live.mkdir(parents=True, exist_ok=True)
+    if code_bindings is None:
+        code_bindings = {}
+        for summary_key, manifest_name in (
+            ("stage_c_processing_helper_sha256", "stage_c_processing_helper"),
+            ("stage_c_processor_sha256", "stage_c_processor"),
+            ("stage_c_authorizer_sha256", "stage_c_authorizer"),
+            ("stage_c_verifier_sha256", "stage_c_verifier"),
+        ):
+            path = live / f"{manifest_name}.py"
+            path.write_text(f"# {manifest_name}\n", encoding="utf-8")
+            code_bindings[summary_key] = (manifest_name, path)
+
+    if contract_bindings is None:
+        contract_bindings = {}
+        for receipt_key, filename in (
+            ("output_schema_sha256", "stage-c01-output-schema.yaml"),
+            ("qc_contract_sha256", "stage-c01-source-internal-qc.yaml"),
+            ("verification_contract_sha256", "stage-c01-verification-contract.yaml"),
+        ):
+            path = live / filename
+            path.write_text(f"name: {filename}\n", encoding="utf-8")
+            contract_bindings[receipt_key] = (filename, path)
+
+    root.mkdir(parents=True)
+    template_path = root / "stage_c_authorization.template.json"
+    template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
+    template["fixed_output_root"] = str((root.parent / "stage_c").resolve())
+    write_json(template_path, template)
+
+    source_code = {
+        manifest_name: {"path": str(path.resolve()), "sha256": sha256_file(path)}
+        for manifest_name, path in code_bindings.values()
+    }
+    contracts: dict[str, dict[str, object]] = {}
+    outputs: dict[str, dict[str, object]] = {
+        "stage_c_authorization.template.json": {
+            "path": str(template_path.resolve()),
+            "bytes": template_path.stat().st_size,
+            "sha256": sha256_file(template_path),
+        }
+    }
+    contracts_dir = root / "contracts"
+    contracts_dir.mkdir()
+    for filename, source in contract_bindings.values():
+        frozen = contracts_dir / filename
+        frozen.write_bytes(source.read_bytes())
+        digest = sha256_file(source)
+        contracts[filename] = {
+            "source_path": str(source.resolve()),
+            "bytes": frozen.stat().st_size,
+            "sha256": digest,
+        }
+        outputs[f"contracts/{filename}"] = {
+            "path": str(frozen.resolve()),
+            "bytes": frozen.stat().st_size,
+            "sha256": digest,
+        }
+
+    summary: dict[str, object] = {
+        "run_id": run_id,
+        "status": "ready_for_separate_stage_c_authorization",
+        "stage_c_authorized": False,
+        "confirmation_role_eligible": False,
+        "sealed_object_body_read_count": 0,
+        "archive_decompression_count": 0,
+        "candidate_sounding_row_count": 0,
+        "candidate_cell_row_count": 0,
+        "authorization_template_path": str(template_path.resolve()),
+        "authorization_template_sha256": sha256_file(template_path),
+        "receipt_report_template_path": str(template_path.resolve()),
+        "receipt_report_template_sha256": sha256_file(template_path),
+        "verifier_template_path": str(template_path.resolve()),
+        "verifier_template_sha256": sha256_file(template_path),
+    }
+    for summary_key, (_manifest_name, path) in code_bindings.items():
+        summary[summary_key] = sha256_file(path)
+    for receipt_key, (_filename, path) in contract_bindings.items():
+        summary[receipt_key] = sha256_file(path)
+    write_json(root / "readiness_lock.json", summary)
+
+    manifest = {
+        "run_id": run_id,
+        "source_code": source_code,
+        "contracts": contracts,
+        "outputs": outputs,
+        "summary": summary,
+    }
+    write_json(root / "audit_manifest.json", manifest)
+    verification = {
+        "run_id": run_id,
+        "run_dir": str(root.resolve()),
+        "status": "pass",
+        "stage_c_authorized": False,
+        "confirmation_role_eligible": False,
+        "sealed_object_body_read_count": 0,
+        "archive_decompression_count": 0,
+        "candidate_sounding_row_count": 0,
+        "candidate_cell_row_count": 0,
+        "audit_manifest_sha256": sha256_file(root / "audit_manifest.json"),
+        **{
+            key: summary[key]
+            for key in (
+                "authorization_template_sha256",
+                "receipt_report_template_sha256",
+                "verifier_template_sha256",
+                *code_bindings.keys(),
+                *contract_bindings.keys(),
+            )
+        },
+    }
+    write_json(root / "verification.json", verification)
+    write_json(
+        root / "environment_lock.json",
+        {
+            "environment_digest": "8" * 64,
+            "material": {
+                "binaries": {
+                    name: {"sha256": character * 64, "version_or_help_sha256": character.upper() * 64}
+                    for name, character in (("mblist", "9"), ("mbinfo", "a"), ("gzip", "b"))
+                }
+            },
+        },
+    )
+    write_json(
+        root / "fixture_verification.json",
+        {"fixture": {"sha256": "3" * 64}, "oracle": {"sha256": "4" * 64}},
+    )
+    write_json(root / "time_contract_fixture_verification.json", {"status": "pass"})
+    return {
+        "run_id": run_id,
+        "root": root,
+        "template_path": template_path,
+        "code_bindings": code_bindings,
+        "contract_bindings": contract_bindings,
+    }
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -56,14 +209,14 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _valid_active_receipt() -> dict:
+def _valid_active_receipt(template_path: Path = TEMPLATE_PATH) -> dict:
     """Build an active receipt that passes the schema gate.
 
     Starts from the real template (so the template SHA is genuine), drops the
     scaffold-only key authorize removes, and fills every authorize-added key
     with a non-placeholder value. No value contains ``<REQUIRED``.
     """
-    template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
+    template = json.loads(template_path.read_text(encoding="utf-8"))
     receipt = {k: v for k, v in template.items() if k not in AUTHORIZE_SCAFFOLD_REMOVED}
     # Replace any template placeholder string with a concrete non-placeholder.
     for key, value in list(receipt.items()):
@@ -75,7 +228,7 @@ def _valid_active_receipt() -> dict:
             "stage_c_authorized": True,
             "authorized_by": "tester",
             "authorized_utc": "2026-08-09T00:00:00Z",
-            "authorization_template_sha256": sha256_file(TEMPLATE_PATH),
+            "authorization_template_sha256": sha256_file(template_path),
             "authorization_script_sha256": "a" * 64,
             "authorization_receipt_sha256": "b" * 64,
             "processor_sha256": "c" * 64,
@@ -84,6 +237,7 @@ def _valid_active_receipt() -> dict:
             "permitted_body_read_counts": {".mb58.gz": 192, ".fnv": 0, ".inf": 0, ".fbt": 0},
             "prohibited_external_inputs": ["GEBCO"],
             "source_internal_only": True,
+            "stage_c_readiness_run_id": "readiness-run",
             "stage_c1a_readiness_manifest_sha256": "f" * 64,
             "stage_c1a_readiness_verification_sha256": "1" * 64,
             "time_fixture_verification_sha256": "2" * 64,
@@ -113,19 +267,221 @@ def _valid_active_receipt() -> dict:
     return receipt
 
 
+def bound_active_receipt(bundle: dict[str, object]) -> tuple[dict[str, object], dict]:
+    from ncei.code.scs_v2_stage_c_processing import (
+        canonical_authorization_receipt_sha256,
+        validate_readiness_bundle,
+    )
+
+    readiness = validate_readiness_bundle(
+        bundle["root"],
+        bundle["run_id"],
+        code_bindings=bundle["code_bindings"],
+        contract_bindings=bundle["contract_bindings"],
+    )
+    receipt = _valid_active_receipt(bundle["template_path"])
+    receipt.update(
+        {
+            "stage_c_readiness_run_id": readiness["run_id"],
+            "stage_c1a_readiness_manifest_sha256": readiness["manifest_sha256"],
+            "stage_c1a_readiness_verification_sha256": readiness["verification_sha256"],
+            "authorization_script_sha256": readiness["code_hashes"]["stage_c_authorizer_sha256"],
+            "processor_sha256": readiness["code_hashes"]["stage_c_processor_sha256"],
+            "processing_helper_sha256": readiness["code_hashes"]["stage_c_processing_helper_sha256"],
+            "verifier_sha256": readiness["code_hashes"]["stage_c_verifier_sha256"],
+            **readiness["contract_hashes"],
+        }
+    )
+    receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
+    return readiness, receipt
+
+
 class VerifySCSV2StageCProcessingTest(unittest.TestCase):
     def setUp(self):
         self.receipt = _valid_active_receipt()
         # Sanity: the builder itself must produce a schema-valid receipt.
-        verify_authorization_receipt_schema(self.receipt)
+        verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
 
     def test_valid_active_receipt_passes_gate(self):
         # Baseline: a properly filled receipt is accepted.
-        verify_authorization_receipt_schema(self.receipt)
+        verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
+
+    def test_shared_receipt_gate_accepts_valid_receipt(self):
+        from ncei.code.scs_v2_stage_c_processing import validate_authorization_receipt
+
+        validate_authorization_receipt(self.receipt, TEMPLATE_PATH)
+
+    def test_readiness_rejects_wrong_run_id(self):
+        from ncei.code.scs_v2_stage_c_processing import validate_readiness_bundle
+
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "expected-run")
+            with self.assertRaisesRegex(AssertionError, "run ID"):
+                validate_readiness_bundle(
+                    bundle["root"],
+                    "different-run",
+                    code_bindings=bundle["code_bindings"],
+                    contract_bindings=bundle["contract_bindings"],
+                )
+
+    def test_valid_readiness_bundle_passes_frozen_bindings(self):
+        from ncei.code.scs_v2_stage_c_processing import validate_readiness_bundle
+
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            result = validate_readiness_bundle(
+                bundle["root"],
+                bundle["run_id"],
+                code_bindings=bundle["code_bindings"],
+                contract_bindings=bundle["contract_bindings"],
+            )
+            self.assertEqual(result["run_id"], "readiness-run")
+            self.assertEqual(result["template_path"], bundle["template_path"].resolve())
+
+    def test_readiness_rejects_missing_verification(self):
+        from ncei.code.scs_v2_stage_c_processing import validate_readiness_bundle
+
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            (bundle["root"] / "verification.json").unlink()
+            with self.assertRaisesRegex(AssertionError, "verification.json"):
+                validate_readiness_bundle(
+                    bundle["root"],
+                    bundle["run_id"],
+                    code_bindings=bundle["code_bindings"],
+                    contract_bindings=bundle["contract_bindings"],
+                )
+
+    def test_readiness_rejects_each_frozen_file_drift(self):
+        from ncei.code.scs_v2_stage_c_processing import validate_readiness_bundle
+
+        target_keys = (
+            "template",
+            "stage_c_processing_helper_sha256",
+            "stage_c_processor_sha256",
+            "stage_c_authorizer_sha256",
+            "stage_c_verifier_sha256",
+            "output_schema_sha256",
+            "qc_contract_sha256",
+            "verification_contract_sha256",
+        )
+        for target_key in target_keys:
+            with self.subTest(target_key=target_key), TemporaryDirectory() as directory:
+                bundle = synthetic_readiness(Path(directory) / "readiness-run")
+                if target_key == "template":
+                    target = bundle["template_path"]
+                elif target_key in bundle["code_bindings"]:
+                    target = bundle["code_bindings"][target_key][1]
+                else:
+                    target = bundle["contract_bindings"][target_key][1]
+                target.write_text(target.read_text(encoding="utf-8") + "# drift\n", encoding="utf-8")
+                with self.assertRaisesRegex(AssertionError, "mismatch"):
+                    validate_readiness_bundle(
+                        bundle["root"],
+                        bundle["run_id"],
+                        code_bindings=bundle["code_bindings"],
+                        contract_bindings=bundle["contract_bindings"],
+                    )
+
+    def test_receipt_binding_rejects_wrong_readiness_id(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            canonical_authorization_receipt_sha256,
+            validate_receipt_readiness_bindings,
+        )
+
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            readiness, receipt = bound_active_receipt(bundle)
+            validate_receipt_readiness_bindings(receipt, readiness)
+            receipt["stage_c_readiness_run_id"] = "wrong-run"
+            receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
+            with self.assertRaisesRegex(AssertionError, "run ID"):
+                validate_receipt_readiness_bindings(receipt, readiness)
+
+    def test_receipt_rejects_each_frozen_sha_drift(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            canonical_authorization_receipt_sha256,
+            validate_receipt_readiness_bindings,
+        )
+
+        fields = (
+            "authorization_template_sha256",
+            "processing_helper_sha256",
+            "processor_sha256",
+            "authorization_script_sha256",
+            "verifier_sha256",
+            "output_schema_sha256",
+            "qc_contract_sha256",
+            "verification_contract_sha256",
+            "stage_c1a_readiness_manifest_sha256",
+            "stage_c1a_readiness_verification_sha256",
+        )
+        for field in fields:
+            with self.subTest(field=field), TemporaryDirectory() as directory:
+                bundle = synthetic_readiness(Path(directory) / "readiness-run")
+                readiness, receipt = bound_active_receipt(bundle)
+                receipt[field] = "0" * 64
+                receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
+                with self.assertRaisesRegex(AssertionError, "mismatch"):
+                    validate_receipt_readiness_bindings(receipt, readiness)
+
+    def test_receipt_rejects_prohibited_authorization_flag(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            canonical_authorization_receipt_sha256,
+            validate_receipt_readiness_bindings,
+        )
+
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            readiness, receipt = bound_active_receipt(bundle)
+            receipt["stage_d_confirmation_evaluation_authorized"] = True
+            receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
+            with self.assertRaisesRegex(AssertionError, "prohibited"):
+                validate_receipt_readiness_bindings(receipt, readiness)
+
+    def test_real_authorizer_generates_synthetic_active_receipt(self):
+        from ncei.code.authorize_scs_v2_stage_c import PLANNING_LOCK_PATH, materialize_authorization
+        from ncei.code.scs_v2_stage_c_processing import (
+            validate_readiness_bundle,
+            validate_receipt_readiness_bindings,
+        )
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle = synthetic_readiness(root / "readiness-run")
+            paths = bundle["code_bindings"]
+            contracts = bundle["contract_bindings"]
+            output = root / "active-receipt.json"
+            receipt = materialize_authorization(
+                template_path=bundle["template_path"],
+                processing_run_id="synthetic-stage-c",
+                authorized_by="synthetic-test",
+                authorized_utc="2026-08-09T00:00:00Z",
+                output_path=output,
+                processor_path=paths["stage_c_processor_sha256"][1],
+                verifier_path=paths["stage_c_verifier_sha256"][1],
+                processing_helper_path=paths["stage_c_processing_helper_sha256"][1],
+                authorization_script_path=paths["stage_c_authorizer_sha256"][1],
+                output_schema_path=contracts["output_schema_sha256"][1],
+                qc_contract_path=contracts["qc_contract_sha256"][1],
+                verification_contract_path=contracts["verification_contract_sha256"][1],
+                readiness_root=bundle["root"],
+                expected_readiness_run_id=bundle["run_id"],
+                stage_c_root=root / "stage_c",
+                planning_lock_path=PLANNING_LOCK_PATH,
+            )
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), receipt)
+            readiness = validate_readiness_bundle(
+                bundle["root"],
+                bundle["run_id"],
+                code_bindings=bundle["code_bindings"],
+                contract_bindings=bundle["contract_bindings"],
+            )
+            validate_receipt_readiness_bindings(receipt, readiness)
 
     def test_expected_keys_match_added_plus_template_minus_scaffold(self):
         template_keys = set(json.loads(TEMPLATE_PATH.read_text(encoding="utf-8")))
-        self.assertEqual(expected_authorization_keys(), (template_keys - AUTHORIZE_SCAFFOLD_REMOVED) | AUTHORIZE_ADDED_KEYS)
+        self.assertEqual(expected_authorization_keys(TEMPLATE_PATH), (template_keys - AUTHORIZE_SCAFFOLD_REMOVED) | AUTHORIZE_ADDED_KEYS)
 
     def test_gate_rejects_top_level_placeholder(self):
         from ncei.code.scs_v2_stage_c_processing import canonical_authorization_receipt_sha256
@@ -135,7 +491,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         # placeholder check is the one that fires.
         self.receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(self.receipt)
         with self.assertRaises(AssertionError) as ctx:
-            verify_authorization_receipt_schema(self.receipt)
+            verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
         self.assertIn("placeholder", str(ctx.exception).lower())
 
     def test_gate_rejects_nested_placeholder_recursively(self):
@@ -146,7 +502,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         self.receipt["permitted_body_read_counts"] = {".mb58.gz": "<REQUIRED_COUNT>", ".fnv": 0, ".inf": 0, ".fbt": 0}
         self.receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(self.receipt)
         with self.assertRaises(AssertionError) as ctx:
-            verify_authorization_receipt_schema(self.receipt)
+            verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
         self.assertIn("permitted_body_read_counts", str(ctx.exception))
 
     def test_gate_rejects_wrong_template_sha(self):
@@ -155,7 +511,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
 
         self.receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(self.receipt)
         with self.assertRaises(AssertionError) as ctx:
-            verify_authorization_receipt_schema(self.receipt)
+            verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
         self.assertIn("template", str(ctx.exception).lower())
 
     def test_gate_rejects_missing_field(self):
@@ -164,7 +520,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
 
         self.receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(self.receipt)
         with self.assertRaises(AssertionError) as ctx:
-            verify_authorization_receipt_schema(self.receipt)
+            verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
         self.assertIn("missing", str(ctx.exception).lower())
 
     def test_gate_rejects_extra_field(self):
@@ -173,7 +529,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
 
         self.receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(self.receipt)
         with self.assertRaises(AssertionError) as ctx:
-            verify_authorization_receipt_schema(self.receipt)
+            verify_authorization_receipt_schema(self.receipt, TEMPLATE_PATH)
         self.assertIn("unexpected", str(ctx.exception).lower())
 
     def test_command_count_closure_768_576_0(self):
@@ -205,26 +561,29 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
             close_command_counts(lines, expected_per_role=192)
         self.assertIn("role set", str(ctx.exception).lower())
 
-    def test_production_chain_consumes_single_template(self):
-        # Requirement 6 (approach B): the production authorizer and the production
-        # verifier both consume ONE authorization template -- the research v1
-        # file -- and the active receipt's authorization_template_sha256 must be
-        # the SHA of that exact file. The verifier binds the template via its
-        # module-level TEMPLATE_PATH constant; the authorizer binds it via the
-        # --template CLI arg. Assert they resolve to the same file and that the
-        # receipt SHA the gate enforces is that file's on-disk SHA.
+    def test_production_chain_uses_shared_readiness_snapshot(self):
+        import ncei.code.authorize_scs_v2_stage_c as authorizer_module
         import ncei.code.verify_scs_v2_stage_c_processing as verifier_module
+        from ncei.code.prepare_scs_v2_stage_c1a_readiness import AUTHORIZATION_TEMPLATE_SOURCE_PATH
+        from ncei.code.scs_v2_stage_c_processing import (
+            STAGE_C2_2_READINESS_ROOT,
+            STAGE_C2_2_READINESS_RUN_ID,
+            STAGE_C2_2_TEMPLATE_PATH,
+        )
 
-        # (1) The verifier's template constant resolves to the research template.
-        self.assertEqual(verifier_module.TEMPLATE_PATH.resolve(), TEMPLATE_PATH.resolve())
-        # (2) The active receipt (built like authorize fills it) binds the same SHA.
-        self.assertEqual(self.receipt["authorization_template_sha256"], sha256_file(TEMPLATE_PATH))
-        # (3) The readiness producer binds the SAME production template path, so the
-        # readiness manifest and the production chain reference one file/SHA.
-        from ncei.code.prepare_scs_v2_stage_c1a_readiness import AUTHORIZATION_TEMPLATE_PATH
-
-        self.assertEqual(AUTHORIZATION_TEMPLATE_PATH.resolve(), TEMPLATE_PATH.resolve())
-        self.assertTrue(TEMPLATE_PATH.is_file())
+        self.assertEqual(AUTHORIZATION_TEMPLATE_SOURCE_PATH.resolve(), TEMPLATE_PATH.resolve())
+        self.assertEqual(authorizer_module.READINESS_ROOT.resolve(), STAGE_C2_2_READINESS_ROOT.resolve())
+        self.assertEqual(verifier_module.READINESS_ROOT.resolve(), STAGE_C2_2_READINESS_ROOT.resolve())
+        self.assertEqual(verifier_module.TEMPLATE_PATH.resolve(), STAGE_C2_2_TEMPLATE_PATH.resolve())
+        if STAGE_C2_2_TEMPLATE_PATH.is_file():
+            verification_path = STAGE_C2_2_READINESS_ROOT / "verification.json"
+            self.assertTrue(verification_path.is_file())
+            manifest = json.loads((STAGE_C2_2_READINESS_ROOT / "audit_manifest.json").read_text(encoding="utf-8"))
+            verification = json.loads(verification_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                {STAGE_C2_2_READINESS_ROOT.name, manifest["run_id"], verification["run_id"]},
+                {STAGE_C2_2_READINESS_RUN_ID},
+            )
 
     def test_synthetic_producer_output_passes_production_verifier(self):
         """Run the real verifier over producer-built synthetic tables.
@@ -235,7 +594,11 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         The tables themselves are assembled through the same helper, QC and
         aggregation functions used by the production processor.
         """
-        from ncei.code.scs_v2_stage_c_processing import canonical_authorization_receipt_sha256
+        from ncei.code.authorize_scs_v2_stage_c import materialize_authorization
+        from ncei.code.scs_v2_stage_c_processing import (
+            STAGE_C_PRODUCTION_CODE_BINDINGS,
+            STAGE_C_PRODUCTION_CONTRACT_BINDINGS,
+        )
 
         run_id = "synthetic-production-verifier"
         relative = "objects/TN352/synthetic.mb58.gz"
@@ -252,21 +615,50 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         u3_text = (
             "1700000000.000000\t1\t2\t120\t10\t250\t90\n"
             "1700000001.000000\t1\t3\tnan\t10\t250\t90\n"
+            "1700000002.000000\t1\t4\t120\t10\t250\t90\n"
         )
         u0_text = (
             "1700000000.000000\t1\t2\t120\t10\t250\t90\n"
             "1700000001.000000\t1\t3\t120\t10\t250\t90\n"
+            "1700000002.000000\t1\t4\tnan\t10\t250\t90\n"
         )
 
         with TemporaryDirectory() as directory:
             root = Path(directory)
             stage_root = root / "stage_c"
             run_dir = stage_root / run_id
+            bundle = synthetic_readiness(
+                root / "readiness-run",
+                code_bindings=dict(STAGE_C_PRODUCTION_CODE_BINDINGS),
+                contract_bindings=dict(STAGE_C_PRODUCTION_CONTRACT_BINDINGS),
+            )
+            readiness_root = bundle["root"]
+            generated_receipt = root / "generated-authorization-receipt.json"
+            materialize_authorization(
+                template_path=bundle["template_path"],
+                processing_run_id=run_id,
+                authorized_by="synthetic-test",
+                authorized_utc="2026-08-09T00:00:00Z",
+                output_path=generated_receipt,
+                processor_path=verifier_module.PROCESSOR_PATH,
+                verifier_path=verifier_module.VERIFIER_PATH,
+                processing_helper_path=verifier_module.HELPER_PATH,
+                authorization_script_path=REPO_ROOT / "ncei/code/authorize_scs_v2_stage_c.py",
+                output_schema_path=STAGE_C_PRODUCTION_CONTRACT_BINDINGS["output_schema_sha256"][1],
+                qc_contract_path=STAGE_C_PRODUCTION_CONTRACT_BINDINGS["qc_contract_sha256"][1],
+                verification_contract_path=STAGE_C_PRODUCTION_CONTRACT_BINDINGS["verification_contract_sha256"][1],
+                readiness_root=readiness_root,
+                expected_readiness_run_id=bundle["run_id"],
+                stage_c_root=stage_root,
+            )
+            validate_active_authorization(
+                generated_receipt,
+                run_id,
+                readiness_root=readiness_root,
+                expected_readiness_run_id=bundle["run_id"],
+                stage_c_root=stage_root,
+            )
             run_dir.mkdir(parents=True)
-            readiness_root = root / "readiness"
-            readiness_root.mkdir()
-            (readiness_root / "audit_manifest.json").write_text("{}\n", encoding="utf-8")
-            (readiness_root / "verification.json").write_text("{}\n", encoding="utf-8")
 
             u3_path = root / "u3.tsv"
             u0_path = root / "u0.tsv"
@@ -295,6 +687,13 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
                 review,
                 schemas["sounding_lineage.parquet"],
             )
+            soundings = sounding_table.to_pylist()
+            self.assertEqual([row["qc_eligible_for_cell"] for row in soundings], [True, False, False])
+            for row in soundings[1:]:
+                self.assertFalse(row["navigation_valid"])
+                self.assertEqual(row["native_quality_state"], "good")
+                self.assertEqual(row["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+                self.assertIsNone(row["cell_id"])
             sounding_path = run_dir / "sounding_lineage.parquet"
             pq.write_table(sounding_table, sounding_path)
 
@@ -313,7 +712,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
                 command_sha256="c" * 64,
                 decompressed_sha256="d" * 64,
                 parse_status="pass",
-                parsed_row_count=2,
+                parsed_row_count=3,
                 error_code=None,
                 error_detail=None,
             )
@@ -357,6 +756,14 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
             )
             database.commit()
             database.close()
+            contributors = pd.read_parquet(run_dir / "cell_cruise_contributors.parquet")
+            candidates = pd.read_parquet(run_dir / "cell_cruise_candidates.parquet")
+            self.assertEqual(len(contributors), 1)
+            self.assertEqual(len(candidates), 1)
+            self.assertEqual(int(contributors.iloc[0]["n_soundings_all"]), 1)
+            self.assertEqual(int(contributors.iloc[0]["n_qc_eligible"]), 1)
+            self.assertEqual(int(candidates.iloc[0]["n_soundings_all"]), 1)
+            self.assertEqual(int(candidates.iloc[0]["n_qc_eligible"]), 1)
 
             closure_schema = pa.schema(
                 [
@@ -396,24 +803,11 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
             }
             pq.write_table(pa.Table.from_pylist([closure], schema=closure_schema), run_dir / "object_access_closure.parquet")
 
-            receipt = _valid_active_receipt()
-            receipt.update(
-                {
-                    "processing_run_id": run_id,
-                    "fixed_output_root": str(stage_root.resolve()),
-                    "processor_sha256": sha256_file(verifier_module.PROCESSOR_PATH),
-                    "verifier_sha256": sha256_file(verifier_module.VERIFIER_PATH),
-                    "processing_helper_sha256": sha256_file(verifier_module.HELPER_PATH),
-                    "stage_c1a_readiness_manifest_sha256": sha256_file(readiness_root / "audit_manifest.json"),
-                    "stage_c1a_readiness_verification_sha256": sha256_file(readiness_root / "verification.json"),
-                }
-            )
-            receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
-            (run_dir / "authorization_receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            (run_dir / "authorization_receipt.json").write_bytes(generated_receipt.read_bytes())
 
             (run_dir / "environment.json").write_text("{}\n", encoding="utf-8")
             (run_dir / "fixture_verification.json").write_text("{}\n", encoding="utf-8")
-            (run_dir / "qc_summary.tsv").write_text("metric\tvalue\nsounding_rows\t2\n", encoding="utf-8")
+            (run_dir / "qc_summary.tsv").write_text("metric\tvalue\nsounding_rows\t3\n", encoding="utf-8")
             (run_dir / "audit_report.md").write_text("# Synthetic Stage C fixture\n", encoding="utf-8")
             command_lines = [
                 {"object_id": object_id, "role": role}
@@ -430,7 +824,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
                 "fnv_body_read_count": 0,
                 "inf_body_read_count": 0,
                 "fbt_body_read_count": 0,
-                "candidate_sounding_row_count": 2,
+                "candidate_sounding_row_count": 3,
                 "candidate_cell_cruise_contributor_row_count": len(pd.read_parquet(run_dir / "cell_cruise_contributors.parquet")),
                 "candidate_cell_row_count": len(pd.read_parquet(run_dir / "cell_cruise_candidates.parquet")),
                 "external_product_or_model_reference_count": 0,
@@ -485,7 +879,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
                 manifest_bundle=(manifest, {}, {}),
             )
             self.assertEqual(result["status"], "pass")
-            self.assertEqual(result["sounding_row_count"], 2)
+            self.assertEqual(result["sounding_row_count"], 3)
             self.assertEqual(result["eligible_sounding_row_count"], 1)
             self.assertEqual(result["processing_command_invocation_count"], 4)
             self.assertEqual(result["processing_parser_invocation_count"], 3)

@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 stage: C1_zero_candidate_readiness_and_future_C_verification
 accepted_stage_c0_lock:
   path: .trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json
@@ -47,6 +47,9 @@ future_stage_c_post_processing_checks:
   - line_native_ping_and_native_beam_ids_not_inferred_from_filename
   - vertical_datum_direct_evidence_only
   - positive_down_and_elevation_identity
+  - u3_nonfinite_navigation_is_h03_only_and_has_no_cell
+  - present_u0_nonfinite_navigation_is_h03_only_and_has_no_cell
+  - dual_nonfinite_navigation_is_h03_only_and_has_no_cell
   - exact_cell_grid_recomputation
   - exact_cell_cruise_aggregation
   - no_cross_cruise_pooling
