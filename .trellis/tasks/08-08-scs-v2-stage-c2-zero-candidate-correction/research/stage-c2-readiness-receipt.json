@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "stage": "C2_zero_candidate_contract_correction",
+  "status": "pass",
+  "authoritative_run": {
+    "run_id": "20260809T000001Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260809T000001Z",
+    "audit_manifest_sha256": "ac6d21360e2e7384a334056cdb0b547e33bac631dbd6d13285908ec8d917aa9b",
+    "verification_sha256": "fb53bfe7dde9b0471248c714d431b75e344009efa8dd50abe464459430e94a07",
+    "readiness_lock_sha256": "5c974a1ff2c3c7015a2bd4b564714f861e909025ae73ea91f8d1bebfbc62f27f",
+    "environment_lock_sha256": "e57f0c171805de639f2fcbd1f8fc3b94ae1033b6d4e1a9718a07bec13275f5d9",
+    "time_fixture_verification_sha256": "2b1606484ba440116116761fe7c02c3daaa103aab08debca04077671c91fa5b0",
+    "fixture_verification_sha256": "132b8e425d3505b4d03d4e463942d01860b315a7ee6d3730d8ac1751ec258202",
+    "test_results_sha256": "a9306ee15e5b763cdc8c1f1dfecec2bb62a5e85259ea223c850675d86d8f729d",
+    "authorization_template_sha256": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4"
+  },
+  "planning_commit": "26476549a1e75cf578fe60621fb35a7667115154",
+  "accepted_predecessor": {
+    "run_id": "20260806T090504Z",
+    "audit_manifest_sha256": "e822e795d90ebee83459d4c13fb2a3a8ad8879f0b54362bb71fc992ee4074789",
+    "verification_sha256": "443e864009c87ffb315c784c1edaad4a5f5bad209374c4a3816e93ed63ebfb9e"
+  },
+  "verification": {
+    "status": "pass",
+    "checks_passed": 421,
+    "offline_tests_run": 31,
+    "h03_demotion_test": "test_xy_nan_row_is_demoted_not_aborted",
+    "sealed_object_body_read_count": 0,
+    "archive_decompression_count": 0,
+    "candidate_sounding_row_count": 0,
+    "candidate_cell_row_count": 0,
+    "stage_b_objects_root_opened": false
+  },
+  "contracts_bound": {
+    "stage-c1a-fixture-contract.yaml": "2f555309c857330785d05f77970667e8f945b569a4931015fb498b40b26841dc",
+    "stage-c1a-time-and-output-contract.yaml": "d3eed2bc10c961dd30649f8048643bf406fcc25d1c3a5e39dae378f079881f6",
+    "stage-c1a-verification-contract.yaml": "739c3fae04d79243e7da0263554846e6173c6c285dd4dca04efdab630a72419f",
+    "stage-c01-output-schema.yaml": "3e6f6b79e8db8650590972099df5007867592af5b751e3fe27d493b6ef7e37e5",
+    "stage-c01-source-internal-qc.yaml": "ed9f9724f9773defdc7a43f659e4a6d02a708543e240e0dbe27c876d95803653",
+    "stage-c01-verification-contract.yaml": "625a45fd3bc00760b3ca3289f3116559fb534c78363f55df73eb39121e537cfa"
+  },
+  "authorization": {
+    "stage_c_authorized": false,
+    "gebco_or_product_comparison_authorized": false,
+    "model_comparison_authorized": false,
+    "mrar_merge_authorized": false,
+    "cross_cruise_aggregation_authorized": false,
+    "datum_or_bias_fit_authorized": false,
+    "confirmation_role_promotion_authorized": false,
+    "confirmation_role_eligible": false
+  },
+  "scope_stop": "Zero-candidate readiness only. Stage C rerun, sealed body access, Stage D confirmation evaluation, and confirmation role promotion remain unauthorized."
+}
