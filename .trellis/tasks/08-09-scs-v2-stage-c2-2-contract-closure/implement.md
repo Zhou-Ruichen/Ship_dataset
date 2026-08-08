@@ -32,9 +32,11 @@
 
 - [x] Run focused and readiness unit tests, compilation, diff checks, and
       Trellis validation.
-- [ ] Commit code, tests, rules, and task records before producing readiness.
-- [ ] Create and independently verify `20260809T030000Z` with zero candidate
+- [x] Commit code, tests, rules, and task records before producing readiness.
+- [x] Create and independently verify `20260809T030000Z` with zero candidate
       access/output counters.
-- [ ] Record old-run status and immutable hashes, verify no Stage C directory
+- [x] Record old-run status and immutable hashes, verify no Stage C directory
       was added, and commit evidence records.
-- [ ] Leave C.2, C.2.1, and C.2.2 `in_progress` pending a separate reviewer.
+- [x] Leave C.2, C.2.1, and C.2.2 `in_progress` pending a separate reviewer.
+- [ ] Obtain a decision from a separate reviewer. This is outside the
+      implementation agent's authority.

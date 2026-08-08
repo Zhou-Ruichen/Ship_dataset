@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "task": "SCS v2 Stage C.2.2 contract closure",
+  "implementation_commit": "3131f729fb5f9c5ca26943128af38c0b2151186f",
+  "readiness": {
+    "run_id": "20260809T030000Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260809T030000Z",
+    "status": "pass",
+    "checks_passed": 458,
+    "offline_tests_run": 66,
+    "stage_c_authorized": false,
+    "confirmation_role_eligible": false
+  },
+  "artifact_sha256": {
+    "audit_manifest.json": "8448c84c1b8ed03b9c93294f78685e3deb68a622280031b4a983ad435524abc8",
+    "readiness_lock.json": "73c4d5033fa4099fa86e45071b11ff10b43ec320244978582ec18e4f07fd1c7f",
+    "stage_c_authorization.template.json": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+    "test_results.json": "f2196f1e7c4ee7974a8d108f7d1f4035471a06367c743ca6b48c2b907f0d35cd",
+    "verification.json": "ab75894dc8215bbea6a6e52d96c68524e4592b5b001d53891033549f8897bfb9"
+  },
+  "production_code_sha256": {
+    "authorize_scs_v2_stage_c.py": "563b95b7f4b05be1d1326f4b1f764c71bb0086b5fd722bf9a301425685bf9503",
+    "prepare_scs_v2_stage_c1a_readiness.py": "ff73cab0a42185152d12e99c1cbc2cffe2bad925569b699232f9fd45899ab46f",
+    "process_scs_v2_stage_c_source_internal.py": "1adadd1ccea4fe290a8cbde3db961b5e28e5ea04736679dcc13556cc2f6dbf0b",
+    "scs_v2_stage_c_processing.py": "35a155fd573ce23d44b65bbfc46f21e66b9ee563539dc34e7ba5792da834202b",
+    "verify_scs_v2_stage_c1a_readiness.py": "180ba45b52195fe720675790093dda6e12f6c8d03ebb4fcc93afd69b8e19ae34",
+    "verify_scs_v2_stage_c_processing.py": "833fa7b33ca89d3e3b10884a20679e8dc64f56156fe445da18f43a980106776a"
+  },
+  "contract_sha256": {
+    "stage-c01-output-schema.yaml": "7026dfec6cb4c2a3ca886aaabc91ca89e9cf660d417cd37214a11efaa4afce1b",
+    "stage-c01-source-internal-qc.yaml": "6c7622a608a913b8a0d34ecc6de723d351b2bc6907e8cbc5314ad6f28e75cf58",
+    "stage-c01-verification-contract.yaml": "930d5cfd6b750fd469bebd0450b56175a4916c5d300932d440340dd65d7a25cf",
+    "stage-c2-1-contract.yaml": "382ec1236548687997714303396522cd74ed51016625945c0eb48aaa6327e2be",
+    "stage-c2-2-contract.yaml": "1a4e9e6113d4f7eea2625fc28bbf60be0356a2e5ebe232bd8fcd5263f8e04a46"
+  },
+  "test_sha256": {
+    "test_scs_v2_stage_c1_readiness.py": "989d4774fdd6c896f8caf3dc32fe174258c624a97bc20cefa8b87ecab69ee014",
+    "test_scs_v2_stage_c1a_readiness.py": "b6130327104e63266298a558b27890e67393df78f9de9089abacea1618032f44",
+    "test_scs_v2_stage_c_processing.py": "3eaa697e4f7e87489a82ddc93db97a54fa18726074498052bbbf16e952ef9e45",
+    "test_verify_scs_v2_stage_c_processing.py": "c9ee9b72058c6197065540b7227e5a738f7f732d83df8d71b133d0b0d6c4b6f8"
+  },
+  "zero_access": {
+    "sealed_object_body_read_count": 0,
+    "archive_decompression_count": 0,
+    "candidate_sounding_row_count": 0,
+    "candidate_cell_row_count": 0,
+    "stage_b_objects_root_opened": false
+  },
+  "old_run_invariance": {
+    "hash_check_status": "pass",
+    "runs": {
+      "20260807T090000Z": {
+        "classification": "immutable_stage_c_reference",
+        "hashes_unchanged": true
+      },
+      "20260809T000001Z": {
+        "classification": "immutable_superseded_readiness",
+        "hashes_unchanged": true
+      },
+      "20260809T020000Z": {
+        "classification": "incomplete_failed_readiness",
+        "hashes_unchanged": true
+      },
+      "20260809T020001Z": {
+        "classification": "superseded_not_authorizable",
+        "hashes_unchanged": true
+      }
+    }
+  },
+  "stage_c_processing_directories": {
+    "before": [
+      "20260806T102715Z.failed",
+      "20260806T105036Z.failed",
+      "20260806T110939Z",
+      "20260807T090000Z"
+    ],
+    "after": [
+      "20260806T102715Z.failed",
+      "20260806T105036Z.failed",
+      "20260806T110939Z",
+      "20260807T090000Z"
+    ],
+    "unchanged": true
+  },
+  "stage_c_rerun_performed": false,
+  "stage_c_hold": true,
+  "separate_reviewer_required": true,
+  "implementation_agent_approval": false
+}
