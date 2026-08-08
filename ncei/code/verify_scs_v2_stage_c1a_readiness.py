@@ -151,13 +151,8 @@ def verify_contract_and_authorization(run_dir: Path, authorization: dict[str, An
     require(authorization["processing_run_id"] == "<REQUIRED_SAFE_SINGLE_SEGMENT_ID>", "processing run placeholder mismatch")
     require(authorization["immutable_primary_cruise_ids"] == PRIMARY_IDS, "authorization cruise order mismatch")
     prohibited = (
-        "gebco_or_product_comparison_authorized",
-        "model_comparison_authorized",
-        "mrar_merge_authorized",
-        "cross_cruise_aggregation_authorized",
-        "datum_or_bias_fit_authorized",
-        "confirmation_role_promotion_authorized",
-        "confirmation_role_eligible",
+        "model_or_product_evaluation_authorized",
+        "stage_d_confirmation_evaluation_authorized",
     )
     for key in prohibited:
         require(authorization[key] is False, f"authorization enables prohibited action: {key}")
