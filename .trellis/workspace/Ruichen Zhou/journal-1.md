@@ -350,7 +350,7 @@ Produced and independently verified source-internal Stage C candidate outputs fo
 - sounding_row_count: 59,201,424
 - eligible_sounding_row_count: 51,217,692
 - contributor_row_count: 5,266 (contributor_groups 4,997)
-- candidate_row_count: 3,593 (candidate_groups 3,593)
+- candidate_row_count: 3,539 (candidate_groups 3,539)
 - reviewed_sounding_row_count: 18,745,232
 - failed_invalid_time_object_count: 0
 - failed_parser_contract_object_count: 1 (TN352 em302 0168, isolated not fatal)
