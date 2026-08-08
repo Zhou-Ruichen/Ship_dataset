@@ -30,6 +30,16 @@ from ncei.code.scs_v2_stage_c1_contract import (
 )
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+STAGE_C2_1_READINESS_RUN_ID = "20260809T020000Z"
+STAGE_C2_1_READINESS_ROOT = (
+    REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness" / STAGE_C2_1_READINESS_RUN_ID
+)
+STAGE_C2_1_TEMPLATE_PATH = (
+    REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c-authorization.template.json"
+)
+
+
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 FIVE_LEVEL_STATUS = {
     "known",
@@ -77,6 +87,32 @@ def canonical_authorization_receipt_sha256(value: dict[str, Any]) -> str:
     payload = dict(value)
     payload.pop("authorization_receipt_sha256", None)
     return canonical_sha256(payload)
+
+
+def find_placeholder_fields(value: Any, *, marker: str = "<REQUIRED") -> list[str]:
+    """Recursively collect JSON paths that still hold a template placeholder.
+
+    Scans dict values and list items at every depth, not just top-level string
+    values, so a placeholder nested inside ``permitted_body_read_counts`` or a
+    list cannot slip through. Each hit is reported as a dotted path
+    (``"a.b[2].c"``); the caller fails loudly when the list is non-empty.
+    """
+    hits: list[str] = []
+
+    def walk(node: Any, prefix: str) -> None:
+        if isinstance(node, str):
+            if marker in node:
+                hits.append(prefix)
+        elif isinstance(node, dict):
+            for key, item in node.items():
+                walk(item, f"{prefix}.{key}" if prefix else str(key))
+        elif isinstance(node, list):
+            for index, item in enumerate(node):
+                walk(item, f"{prefix}[{index}]")
+
+    walk(value, "")
+    return hits
+
 
 
 def safe_processing_run_id(value: str) -> str:
@@ -157,7 +193,11 @@ def iter_mblist_rows(path: Path, *, check_mode: int) -> Iterator[tuple[MblistRow
                 depth = math.nan
             else:
                 depth = _parse_finite(depth_text, "z")
-            allow_nonfinite_xy = check_mode == 3
+            # Both U3 (check_mode 3) and U0 (check_mode 0) tolerate non-finite
+            # X/Y: a non-finite navigation value demotes that single sounding at
+            # per-sounding QC (H03) rather than aborting the whole object. The M
+            # (time) and z (depth, for U0) parses stay strict below.
+            allow_nonfinite_xy = check_mode in (0, 3)
             lon = _parse_finite(fields[3], "X", allow_nan=allow_nonfinite_xy)
             lat = _parse_finite(fields[4], "Y", allow_nan=allow_nonfinite_xy)
             heading = _parse_finite(fields[6], "H")
@@ -430,7 +470,7 @@ def _raw_from_object_impl(
         appender = ParquetAppender(raw_path, RAW_SCHEMA)
         row_batch: list[dict[str, Any]] = []
         joined = database.execute(
-            "SELECT u3.row_order,u3.epoch_us,u3.native_ping,u3.beam,u3.lon,u3.lat,u3.depth,u3.depth_is_nan,u3.heading,u0.lon,u0.lat,u0.depth,u0.heading FROM u3 LEFT JOIN u0 ON u0.epoch_us=u3.epoch_us AND u0.native_ping=u3.native_ping AND u0.beam=u3.beam ORDER BY u3.row_order"
+            "SELECT u3.row_order,u3.epoch_us,u3.native_ping,u3.beam,u3.lon,u3.lat,u3.depth,u3.depth_is_nan,u3.heading,u0.lon,u0.lat,u0.depth,u0.heading,u0.rowid AS u0_rowid FROM u3 LEFT JOIN u0 ON u0.epoch_us=u3.epoch_us AND u0.native_ping=u3.native_ping AND u0.beam=u3.beam ORDER BY u3.row_order"
         )
         seen_u0 = 0
         for (
@@ -447,27 +487,39 @@ def _raw_from_object_impl(
             good_lat,
             good_depth,
             good_heading,
+            u0_rowid,
         ) in joined:
             u3_lon = None if lon is None else float(lon)
             u3_lat = None if lat is None else float(lat)
             u3_nav_ok = u3_lon is not None and math.isfinite(u3_lon) and u3_lat is not None and math.isfinite(u3_lat)
-            if good_lon is None:
+            # Branch on key presence, not on good_lon: a U0 row with non-finite
+            # navigation is stored with NULL lon/lat in the REAL column, so
+            # good_lon is None both for a missing key and for a present key whose
+            # nav is NaN. u0_rowid distinguishes the two (NULL only when the key
+            # is truly absent from u0).
+            if u0_rowid is None:
                 quality = "null" if depth_is_nan else "flagged"
                 depth = None
             else:
+                # Key present: native_quality_state stays "good" even when the
+                # U0 or U3 navigation is non-finite (requirement 2). A
+                # non-finite navigation is surfaced only as H03 at per-sounding
+                # QC, never as a native-quality demotion here.
+                u0_lon = None if good_lon is None else float(good_lon)
+                u0_lat = None if good_lat is None else float(good_lat)
+                u0_nav_ok = u0_lon is not None and math.isfinite(u0_lon) and u0_lat is not None and math.isfinite(u0_lat)
                 if any(
                     left is not None and right is not None and abs(left - right) > tolerance
                     for left, right, tolerance in (
-                        (u3_lon if u3_nav_ok else None, good_lon, 1.0e-10),
-                        (u3_lat if u3_nav_ok else None, good_lat, 1.0e-10),
-                        (float(parser_depth), good_depth, 1.0e-4),
-                        (float(heading), good_heading, 1.0e-3),
+                        (u3_lon if u3_nav_ok else None, u0_lon if u0_nav_ok else None, 1.0e-10),
+                        (u3_lat if u3_nav_ok else None, u0_lat if u0_nav_ok else None, 1.0e-10),
+                        (float(parser_depth), float(good_depth), 1.0e-4),
+                        (float(heading), float(good_heading), 1.0e-3),
                     )
                 ):
                     raise ValueError(f"U0/U3 value mismatch for key {(epoch_us, native_ping, beam)}")
                 seen_u0 += 1
-                u0_nav_ok = good_lon is not None and math.isfinite(good_lon) and good_lat is not None and math.isfinite(good_lat)
-                quality = "good" if (u3_nav_ok and u0_nav_ok) else "flagged"
+                quality = "good"
                 depth = float(good_depth)
             row_batch.append(
                 _raw_row_dict(

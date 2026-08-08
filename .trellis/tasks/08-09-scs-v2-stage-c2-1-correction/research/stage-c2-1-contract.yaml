@@ -1,0 +1,30 @@
+schema_version: 1
+stage: C2.1
+scope:
+  sealed_body_read: false
+  stage_c_rerun: false
+  stage_d_evaluation: false
+  candidate_sounding_row_count: 0
+  candidate_cell_row_count: 0
+parsing:
+  nonfinite_xy: per_sounding_demotion
+  nonfinite_xy_failure_code: H03_NAVIGATION_RANGE
+  invalid_or_missing_time: abort_source_object_atomically
+  duplicate_or_structural_key_failure: abort_source_object_atomically
+join:
+  present_u0_key_native_quality_state: good
+  present_u0_key_detection: u0_rowid
+qc:
+  nonfinite_navigation_qc_eligible_for_cell: false
+  nonfinite_navigation_cell_fields: null
+  valid_depth_retained_for_nonfinite_navigation: true
+template:
+  single_canonical_file: true
+  exact_schema_closure: true
+  recursive_placeholder_scan: true
+verification:
+  production_verifier_synthetic_fixture: required
+  command_counts:
+    processing_command_invocation_count: 768
+    processing_parser_invocation_count: 576
+    independent_verifier_parser_invocation_count: 0

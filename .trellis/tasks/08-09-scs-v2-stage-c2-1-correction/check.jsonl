@@ -1,0 +1,4 @@
+{"file":".trellis/tasks/08-09-scs-v2-stage-c2-1-correction/prd.md","reason":"C2.1 correction scope and explicit no-rerun/no-sealed-body gates"}
+{"file":".trellis/tasks/08-09-scs-v2-stage-c2-1-correction/design.md","reason":"Readiness, receipt, verifier, and synthetic production verification design"}
+{"file":".trellis/tasks/08-09-scs-v2-stage-c2-1-correction/research/stage-c2-1-contract.yaml","reason":"Frozen C2.1 behavioral and evidence contract"}
+{"file":".trellis/spec/backend/scs-v2-sealed-confirmation.md","reason":"Stage C sealed-confirmation package rules and evidence boundaries"}

@@ -39,6 +39,10 @@ from ncei.code.scs_v2_stage_c1a_contract import (
     TIME_FAILURE_STATUS,
     parse_source_streams_atomically,
 )
+from ncei.code.scs_v2_stage_c_processing import (
+    STAGE_C2_1_READINESS_ROOT,
+    STAGE_C2_1_TEMPLATE_PATH,
+)
 
 
 PREDECESSOR_RUN_ID = "20260806T090504Z"
@@ -50,7 +54,14 @@ C1A_CONTRACT_FILES = [
     "stage-c1a-fixture-contract.yaml",
     "stage-c1a-verification-contract.yaml",
 ]
-CONTRACT_FILES = [*C1_CONTRACT_FILES, *C1A_CONTRACT_FILES]
+CONTRACT_FILES = [*C1_CONTRACT_FILES, *C1A_CONTRACT_FILES, "stage-c2-1-contract.yaml"]
+C2_1_TASK_ROOT = REPO_ROOT / ".trellis/tasks/08-09-scs-v2-stage-c2-1-correction"
+CONTRACT_SOURCES = {
+    **{name: RESEARCH_ROOT / name for name in [*C1_CONTRACT_FILES, *C1A_CONTRACT_FILES]},
+    "stage-c2-1-contract.yaml": C2_1_TASK_ROOT / "research/stage-c2-1-contract.yaml",
+}
+AUTHORIZATION_TEMPLATE_PATH = STAGE_C2_1_TEMPLATE_PATH
+READINESS_ROOT = STAGE_C2_1_READINESS_ROOT.parent
 FIXTURE_ROOT = REPO_ROOT / "_common/tests/fixtures"
 C1_FIXTURE_ROOT = FIXTURE_ROOT / "scs_v2_stage_c1"
 C1A_FIXTURE_ROOT = FIXTURE_ROOT / "scs_v2_stage_c1a"
@@ -65,6 +76,15 @@ SOURCE_FILES = {
     "c1a_readiness_verifier": REPO_ROOT / "ncei/code/verify_scs_v2_stage_c1a_readiness.py",
     "base_tests": REPO_ROOT / "_common/tests/test_scs_v2_stage_c1_readiness.py",
     "c1a_tests": REPO_ROOT / "_common/tests/test_scs_v2_stage_c1a_readiness.py",
+    # Stage C production chain (C.2.1): the readiness manifest binds the SHA of
+    # the processor, authorizer, production verifier, processing helper, and the
+    # C.2.1 test module so one manifest closes the whole authorization chain.
+    "stage_c_processor": REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py",
+    "stage_c_authorizer": REPO_ROOT / "ncei/code/authorize_scs_v2_stage_c.py",
+    "stage_c_verifier": REPO_ROOT / "ncei/code/verify_scs_v2_stage_c_processing.py",
+    "stage_c_processing_helper": REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py",
+    "stage_c_tests": REPO_ROOT / "_common/tests/test_scs_v2_stage_c_processing.py",
+    "stage_c_verifier_tests": REPO_ROOT / "_common/tests/test_verify_scs_v2_stage_c_processing.py",
 }
 TIME_FIXTURES = {
     "missing_time_in_u3": C1A_FIXTURE_ROOT / "synthetic_missing_time_u3.tsv",
@@ -108,7 +128,8 @@ def validate_inputs(environment_root: Path, source_root: Path, planning_commit: 
         raise AssertionError("accepted C1 readiness is not a zero-access pass")
     for path in [
         *SOURCE_FILES.values(),
-        *(RESEARCH_ROOT / name for name in CONTRACT_FILES),
+        *CONTRACT_SOURCES.values(),
+        AUTHORIZATION_TEMPLATE_PATH,
         *TIME_FIXTURES.values(),
         C1_FIXTURE_ROOT / "synthetic_all_u3.tsv",
         C1_FIXTURE_ROOT / "synthetic_good_u0.tsv",
@@ -181,6 +202,7 @@ def run_tests() -> dict[str, Any]:
         "_common.tests.test_scs_v2_stage_c1_readiness",
         "_common.tests.test_scs_v2_stage_c1a_readiness",
         "_common.tests.test_scs_v2_stage_c_processing",
+        "_common.tests.test_verify_scs_v2_stage_c_processing",
     ]
     completed = subprocess.run(command, cwd=REPO_ROOT, text=True, capture_output=True, check=False)
     combined = completed.stdout + completed.stderr
@@ -193,6 +215,9 @@ def run_tests() -> dict[str, Any]:
         "test_independent_verifier_accepts_atomic_failure_evidence",
         "test_independent_verifier_rejects_failed_object_sounding",
         "test_xy_nan_row_is_demoted_not_aborted",
+        "test_synthetic_producer_output_passes_production_verifier",
+        "test_gate_rejects_nested_placeholder_recursively",
+        "test_command_count_closure_768_576_0",
     )
     if completed.returncode != 0 or count < 16 or any(name not in combined for name in required_names):
         raise RuntimeError(f"Stage C.1a tests failed:\n{combined}")
@@ -226,7 +251,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
         contracts_dir.mkdir()
         contract_records: dict[str, Any] = {}
         for name in CONTRACT_FILES:
-            source = RESEARCH_ROOT / name
+            source = CONTRACT_SOURCES[name]
             target = contracts_dir / name
             shutil.copy2(source, target)
             contract_records[name] = {
@@ -255,43 +280,8 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
         atomic_json(tests, temporary_dir / "test_results.json")
 
         source_hashes = {name: {"path": str(path), "sha256": sha256_file(path)} for name, path in SOURCE_FILES.items()}
-        authorization = {
-            "schema_version": 3,
-            "stage_c_authorized": False,
-            "authorized_by": "",
-            "authorized_utc": "",
-            "processing_run_id": "<REQUIRED_SAFE_SINGLE_SEGMENT_ID>",
-            "fixed_output_root": str((REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c").resolve()),
-            "acquisition_run_id": ACQUISITION_RUN_ID,
-            "immutable_primary_cruise_ids": PRIMARY_IDS,
-            "sealed_archive_manifest_sha256": c0_lock["acquisition_run"]["sealed_archive_manifest_sha256"],
-            "stage_b_verification_sha256": c0_lock["acquisition_run"]["verification_sha256"],
-            "stage_b_access_lock_sha256": c0_lock["acquisition_run"]["access_lock_sha256"],
-            "accepted_stage_c0_planning_lock_sha256": ACCEPTED_C0_LOCK_SHA256,
-            "accepted_stage_c1_readiness_run_id": PREDECESSOR_RUN_ID,
-            "accepted_stage_c1_readiness_manifest_sha256": PREDECESSOR_MANIFEST_SHA256,
-            "accepted_stage_c1_readiness_verification_sha256": PREDECESSOR_VERIFICATION_SHA256,
-            "stage_c1a_planning_commit": planning_commit,
-            "stage_c1a_readiness_run_id": run_id,
-            "stage_c1a_readiness_manifest_sha256": "<REQUIRED_PASS_C1A_MANIFEST_SHA256>",
-            "stage_c1a_readiness_verification_sha256": "<REQUIRED_PASS_C1A_VERIFICATION_SHA256>",
-            "parser_name": "MB-System",
-            "parser_version": MBSYSTEM_TAG,
-            "parser_source_commit": MBSYSTEM_COMMIT,
-            "parser_environment_digest": environment_digest,
-            "contract_sha256": {name: record["sha256"] for name, record in contract_records.items()},
-            "c1a_adapter_sha256": source_hashes["c1a_adapter"]["sha256"],
-            "c1a_future_verifier_sha256": source_hashes["c1a_future_verifier"]["sha256"],
-            "c1a_readiness_verifier_sha256": source_hashes["c1a_readiness_verifier"]["sha256"],
-            "gebco_or_product_comparison_authorized": False,
-            "model_comparison_authorized": False,
-            "mrar_merge_authorized": False,
-            "cross_cruise_aggregation_authorized": False,
-            "datum_or_bias_fit_authorized": False,
-            "confirmation_role_promotion_authorized": False,
-            "confirmation_role_eligible": False,
-        }
-        atomic_json(authorization, temporary_dir / "stage_c_authorization.template.json")
+        template_sha256 = sha256_file(AUTHORIZATION_TEMPLATE_PATH)
+        shutil.copy2(AUTHORIZATION_TEMPLATE_PATH, temporary_dir / "stage_c_authorization.template.json")
 
         access_ledger = {
             "schema_version": 1,
@@ -302,7 +292,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
                 str(environment_root),
                 str(source_root),
                 str(GOLDEN_FIXTURE),
-                *[str(RESEARCH_ROOT / name) for name in CONTRACT_FILES],
+                *[str(path) for path in CONTRACT_SOURCES.values()],
                 *[str(path) for path in SOURCE_FILES.values()],
                 *[str(path) for path in TIME_FIXTURES.values()],
             ],
@@ -333,6 +323,20 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
             "acquisition_run_id": ACQUISITION_RUN_ID,
             "immutable_primary_cruise_ids": PRIMARY_IDS,
             "environment_digest": environment_digest,
+            "authorization_template_sha256": template_sha256,
+            "authorization_template_path": str(AUTHORIZATION_TEMPLATE_PATH),
+            "receipt_report_template_sha256": template_sha256,
+            "receipt_report_template_path": str(AUTHORIZATION_TEMPLATE_PATH),
+            "verifier_template_sha256": template_sha256,
+            "verifier_template_path": str(AUTHORIZATION_TEMPLATE_PATH),
+            # Stage C production chain bound by this readiness manifest (requirement 9).
+            "stage_c_processor_sha256": source_hashes["stage_c_processor"]["sha256"],
+            "stage_c_authorizer_sha256": source_hashes["stage_c_authorizer"]["sha256"],
+            "stage_c_verifier_sha256": source_hashes["stage_c_verifier"]["sha256"],
+            "stage_c_processing_helper_sha256": source_hashes["stage_c_processing_helper"]["sha256"],
+            "stage_c_tests_sha256": source_hashes["stage_c_tests"]["sha256"],
+            "stage_c_verifier_tests_sha256": source_hashes["stage_c_verifier_tests"]["sha256"],
+            "stage_c2_1_contract_sha256": contract_records["stage-c2-1-contract.yaml"]["sha256"],
             "invalid_time_policy": "abort_source_object_atomically",
             "time_utc_nullable_in_emitted_soundings": False,
             "parser_ping_index_requires_valid_time": True,

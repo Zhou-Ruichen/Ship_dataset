@@ -1,0 +1,4 @@
+{"file":".trellis/tasks/08-09-scs-v2-stage-c2-1-correction/prd.md","reason":"Implementation acceptance criteria and protected historical runs"}
+{"file":".trellis/tasks/08-09-scs-v2-stage-c2-1-correction/design.md","reason":"Implementation choices for the shared template and full verifier fixture"}
+{"file":".trellis/tasks/08-09-scs-v2-stage-c2-1-correction/research/stage-c2-1-contract.yaml","reason":"Behavioral test and readiness binding requirements"}
+{"file":".trellis/spec/backend/scs-v2-sealed-confirmation.md","reason":"Backend evidence and Stage C execution restrictions"}

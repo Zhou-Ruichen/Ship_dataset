@@ -22,22 +22,26 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 
+from ncei.code.scs_v2_stage_c_processing import (
+    STAGE_C2_1_READINESS_ROOT,
+    STAGE_C2_1_TEMPLATE_PATH,
+    find_placeholder_fields,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
-READINESS_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T093740Z"
+READINESS_ROOT = STAGE_C2_1_READINESS_ROOT
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 PROCESSOR_PATH = REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py"
 HELPER_PATH = REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py"
 VERIFIER_PATH = REPO_ROOT / "ncei/code/verify_scs_v2_stage_c_processing.py"
-TEMPLATE_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c-authorization.template.json"
+TEMPLATE_PATH = STAGE_C2_1_TEMPLATE_PATH
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 ACQUISITION_RUN_ID = "20260805T230449Z"
 MANIFEST_SHA256 = "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94"
 STAGE_B_VERIFICATION_SHA256 = "d0d868f560c628bd24d1d52d399c7ed9d03af337be72967a874a5c26db7c2e86"
 STAGE_B_ACCESS_LOCK_SHA256 = "75c290a9b4f17ed2b529a372417f4fd18770c08cf66836c07ddde3bb90e00a6f"
-C1A_MANIFEST_SHA256 = "c260960dc4999f08bad710b7d2f6111acd90087a158eb661957f01280bc89615"
-C1A_VERIFICATION_SHA256 = "9f3464bfa3f1a90d319761b543bb5488d0d5c154bfc6837b23a278d53558c717"
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 FORMATS = {".mb58.gz", ".fnv", ".inf", ".fbt"}
 PROCESSING_FORMATS = {".mb58.gz"}
@@ -210,9 +214,10 @@ def verify_object_tables(run_dir: Path, manifest: pd.DataFrame) -> tuple[pd.Data
     candidates = pd.read_parquet(run_dir / "cell_cruise_candidates.parquet")
     ledger = pd.read_parquet(run_dir / "field_recovery_ledger.parquet")
     closure = pd.read_parquet(run_dir / "object_access_closure.parquet")
-    require(len(objects) == len(manifest) == 768, "source object count mismatch")
-    require(len(closure) == 768, "object access closure count mismatch")
-    require(len(ledger) == 768 * 12, "field ledger row count mismatch")
+    expected_object_count = len(manifest)
+    require(len(objects) == expected_object_count, "source object count mismatch")
+    require(len(closure) == expected_object_count, "object access closure count mismatch")
+    require(len(ledger) == expected_object_count * 12, "field ledger row count mismatch")
     for filename, key in TABLE_KEYS.items():
         frame = {"source_object_processing.parquet": objects, "sounding_lineage.parquet": None, "cell_cruise_contributors.parquet": contributors, "cell_cruise_candidates.parquet": candidates, "field_recovery_ledger.parquet": ledger}[filename]
         if frame is None:
@@ -317,6 +322,8 @@ def verify_soundings(run_dir: Path, objects: pd.DataFrame, expected_objects: dic
             expected_hard = row["native_quality_state"] == "good" and nav_ok and depth_ok
             require(bool(row["qc_hard_pass"]) == expected_hard, "hard QC flag mismatch")
             require(bool(row["qc_eligible_for_cell"]) == expected_hard, "cell eligibility mismatch")
+            if not nav_ok and row["native_quality_state"] == "good" and depth_ok:
+                require(row["qc_hard_failure_codes"] == ["H03_NAVIGATION_RANGE"], "non-finite navigation is not H03-only")
             if row["native_quality_state"] != "good":
                 require(depth is None and row["elev_m"] is None, "non-good sounding has depth")
             if depth is not None:
@@ -425,9 +432,87 @@ def compare_aggregate_tables(run_dir: Path, contributors: pd.DataFrame, candidat
     return {"contributor_rows": len(contributors), "candidate_rows": len(candidates), "contributor_groups": len(contributor_stats), "candidate_groups": len(candidate_stats)}
 
 
-def verify_run(run_dir: Path) -> dict[str, Any]:
+# Keys authorize fills at activation (not present on the inactive template) and
+# the single scaffold-only key it removes. Used for exact schema closure so the
+# active receipt can neither drop nor add fields relative to the template.
+AUTHORIZE_SCAFFOLD_REMOVED = frozenset({"producer_sha256"})
+AUTHORIZE_ADDED_KEYS = frozenset({
+    "authorization_receipt_sha256", "authorization_script_sha256", "authorization_template_sha256",
+    "confirmation_role_promotion_authorized", "cross_cruise_aggregation_authorized",
+    "datum_or_bias_fit_authorized", "gebco_or_product_comparison_authorized",
+    "model_comparison_authorized", "mrar_merge_authorized", "model_or_product_evaluation_authorized",
+    "stage_d_confirmation_evaluation_authorized", "parser_binary_sha256", "parser_help_snapshot_sha256",
+    "permitted_body_read_counts", "processing_helper_sha256", "processor_sha256",
+    "prohibited_external_inputs", "source_internal_only",
+    "stage_c1a_readiness_manifest_sha256", "stage_c1a_readiness_verification_sha256",
+    "time_fixture_verification_sha256", "format58_fixture_bytes_sha256",
+    "format58_fixture_oracle_sha256", "fixture_verification_sha256",
+    "stage_c0_planning_lock_sha256", "stage_c0_planning_commit",
+    "parser_environment_digest",
+})
+
+
+def expected_authorization_keys() -> set[str]:
+    """The exact key set an active receipt must have, derived from the template."""
+    template_keys = set(json.loads(TEMPLATE_PATH.read_text(encoding="utf-8")))
+    return (template_keys - AUTHORIZE_SCAFFOLD_REMOVED) | AUTHORIZE_ADDED_KEYS
+
+
+def verify_authorization_receipt_schema(receipt: dict[str, Any]) -> None:
+    """Pre-data rejection gate: placeholder, template binding, exact closure.
+
+    Runs before any table/data check so a malformed receipt is rejected early.
+    Raises AssertionError on any violation. Extracted from verify_run so the
+    four bad-receipt cases (placeholder / wrong template / missing / extra) are
+    unit-testable without a sealed-format run directory.
+    """
+    require(canonical_authorization_receipt_sha256(receipt) == receipt["authorization_receipt_sha256"], "authorization canonical hash mismatch")
+    leaked = find_placeholder_fields(receipt)
+    require(not leaked, f"authorization receipt has placeholder fields: {leaked}")
+    require(sha256_file(TEMPLATE_PATH) == receipt["authorization_template_sha256"], "authorization template SHA mismatch")
+    template_keys = set(json.loads(TEMPLATE_PATH.read_text(encoding="utf-8")))
+    active_keys = set(receipt)
+    expected_keys = (template_keys - AUTHORIZE_SCAFFOLD_REMOVED) | AUTHORIZE_ADDED_KEYS
+    missing = expected_keys - active_keys
+    extra = active_keys - expected_keys
+    require(not missing, f"authorization receipt missing keys: {sorted(missing)}")
+    require(not extra, f"authorization receipt has unexpected keys: {sorted(extra)}")
+
+
+def close_command_counts(command_lines: list[dict[str, Any]], expected_per_role: int) -> dict[str, Any]:
+    """Derive the command/parser invocation counts from the command ledger.
+
+    Closes the producer's parser/command activity against the ledger: every
+    command role count equals expected_per_role, the command total is 4x that,
+    the parser total is 3x that (mbinfo + mblist_u3 + mblist_u0), and the
+    independent verifier parser count is 0 (the verifier must not invoke any
+    parser-class command). Extracted so the closure is unit-testable.
+    """
+    command_role_counts = Counter(item["role"] for item in command_lines)
+    require(set(command_role_counts) == {"decompression", "mbinfo", "mblist_u3", "mblist_u0"}, f"command ledger role set mismatch: {sorted(command_role_counts)}")
+    for role in ("decompression", "mbinfo", "mblist_u3", "mblist_u0"):
+        require(command_role_counts[role] == expected_per_role, f"command ledger {role} count mismatch: {command_role_counts[role]} != {expected_per_role}")
+    processing_command_invocation_count = len(command_lines)
+    processing_parser_invocation_count = command_role_counts["mbinfo"] + command_role_counts["mblist_u3"] + command_role_counts["mblist_u0"]
+    return {
+        "processing_command_invocation_count": processing_command_invocation_count,
+        "processing_parser_invocation_count": processing_parser_invocation_count,
+        "independent_verifier_parser_invocation_count": 0,
+        "command_role_counts": dict(command_role_counts),
+    }
+
+
+def verify_run(
+    run_dir: Path,
+    *,
+    stage_c_root: Path | None = None,
+    readiness_root: Path | None = None,
+    manifest_bundle: tuple[pd.DataFrame, dict[str, Any], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     run_dir = run_dir.resolve()
-    require(run_dir.parent == STAGE_C_ROOT.resolve(), "run is outside fixed Stage C root")
+    expected_stage_c_root = (stage_c_root or STAGE_C_ROOT).resolve()
+    expected_readiness_root = (readiness_root or READINESS_ROOT).resolve()
+    require(run_dir.parent == expected_stage_c_root, "run is outside fixed Stage C root")
     require(RUN_ID_RE.fullmatch(run_dir.name) is not None and ".." not in run_dir.name, "unsafe processing run ID")
     verification_path = run_dir / "verification.json"
     require(not verification_path.exists(), "verification already exists; run is immutable")
@@ -436,40 +521,22 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
     require(audit["status"] == "processed_pending_independent_verification", "producer run is not pending verification")
     require(audit["processing_run_id"] == run_dir.name and receipt["processing_run_id"] == run_dir.name, "run ID mismatch")
     require(receipt["stage_c_authorized"] is True and receipt["confirmation_role_eligible"] is False, "authorization role mismatch")
-    require(canonical_authorization_receipt_sha256(receipt) == receipt["authorization_receipt_sha256"], "authorization canonical hash mismatch")
-    leaked = [k for k, v in receipt.items() if isinstance(v, str) and "<REQUIRED" in v]
-    require(not leaked, f"authorization receipt has placeholder fields: {leaked}")
-    template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
-    require(sha256_file(TEMPLATE_PATH) == receipt["authorization_template_sha256"], "authorization template SHA mismatch")
-    template_keys = set(template)
-    active_keys = set(receipt)
-    require(template_keys <= active_keys, f"authorization receipt missing template keys: {sorted(template_keys - active_keys)}")
-    authorize_added = {
-        "authorization_receipt_sha256", "authorization_script_sha256", "authorization_template_sha256",
-        "confirmation_role_promotion_authorized", "cross_cruise_aggregation_authorized",
-        "datum_or_bias_fit_authorized", "gebco_or_product_comparison_authorized",
-        "model_comparison_authorized", "mrar_merge_authorized", "model_or_product_evaluation_authorized",
-        "stage_d_confirmation_evaluation_authorized", "parser_binary_sha256", "parser_help_snapshot_sha256",
-        "permitted_body_read_counts", "processing_helper_sha256", "processor_sha256",
-        "prohibited_external_inputs", "source_internal_only",
-        "stage_c1a_readiness_manifest_sha256", "stage_c1a_readiness_verification_sha256",
-        "time_fixture_verification_sha256", "format58_fixture_bytes_sha256",
-        "format58_fixture_oracle_sha256", "fixture_verification_sha256",
-        "stage_c0_planning_lock_sha256", "stage_c0_planning_commit",
-        "parser_environment_digest",
-    }
-    extra = active_keys - template_keys - authorize_added
-    require(not extra, f"authorization receipt has unexpected keys: {sorted(extra)}")
+    verify_authorization_receipt_schema(receipt)
     require(sha256_file(PROCESSOR_PATH) == receipt["processor_sha256"], "processor hash binding mismatch")
     require(sha256_file(HELPER_PATH) == receipt["processing_helper_sha256"], "helper hash binding mismatch")
     require(sha256_file(VERIFIER_PATH) == receipt["verifier_sha256"], "verifier hash binding mismatch")
-    require(receipt["fixed_output_root"] == str(STAGE_C_ROOT.resolve()), "output root binding mismatch")
+    require(receipt["fixed_output_root"] == str(expected_stage_c_root), "output root binding mismatch")
     require(receipt["acquisition_run_id"] == ACQUISITION_RUN_ID and receipt["immutable_primary_cruise_ids"] == PRIMARY_IDS, "input identity binding mismatch")
     require(receipt["sealed_archive_manifest_sha256"] == MANIFEST_SHA256 and receipt["stage_b_verification_sha256"] == STAGE_B_VERIFICATION_SHA256, "Stage B binding mismatch")
-    require(receipt["stage_c1a_readiness_manifest_sha256"] == C1A_MANIFEST_SHA256 and receipt["stage_c1a_readiness_verification_sha256"] == C1A_VERIFICATION_SHA256, "C1a binding mismatch")
+    # C1a readiness binding is re-derived from the bound readiness run at verify
+    # time (the manifest binds the production-chain SHAs, so it cannot be a
+    # compile-time literal in the verifier). The receipt's recorded SHAs must
+    # match the run's on-disk audit_manifest.json and verification.json.
+    require(receipt["stage_c1a_readiness_manifest_sha256"] == sha256_file(expected_readiness_root / "audit_manifest.json"), "C1a manifest binding mismatch")
+    require(receipt["stage_c1a_readiness_verification_sha256"] == sha256_file(expected_readiness_root / "verification.json"), "C1a verification binding mismatch")
     for flag in ("gebco_or_product_comparison_authorized", "model_comparison_authorized", "mrar_merge_authorized", "cross_cruise_aggregation_authorized", "datum_or_bias_fit_authorized", "confirmation_role_promotion_authorized"):
         require(receipt.get(flag) is False, f"prohibited authorization flag enabled: {flag}")
-    manifest, _stage_b_verification, _stage_b_access = verify_manifest_metadata()
+    manifest, _stage_b_verification, _stage_b_access = manifest_bundle or verify_manifest_metadata()
     require(audit["sealed_archive_manifest_sha256"] == MANIFEST_SHA256 and audit["stage_b_verification_sha256"] == STAGE_B_VERIFICATION_SHA256, "audit input binding mismatch")
     for filename, descriptor in audit["output_files"].items():
         path = run_dir / filename
@@ -478,8 +545,9 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
     objects, contributors, candidates, _ledger, expected_objects = verify_object_tables(run_dir, manifest)
     groups, eligible_count, sounding_digest, sounding_counts = verify_soundings(run_dir, objects, expected_objects)
     access = load_json(run_dir / "access_lock.json")
-    require(access["sealed_object_body_read_count"] == 192 and access["decompression_count"] == 192, "body/decompression count mismatch")
-    require(access["mb58_body_read_count"] == 192 and access["fnv_body_read_count"] == 0 and access["inf_body_read_count"] == 0 and access["fbt_body_read_count"] == 0, "sidecar body access mismatch")
+    expected_primary_count = int((objects["source_object_format"] == ".mb58.gz").sum())
+    require(access["sealed_object_body_read_count"] == expected_primary_count and access["decompression_count"] == expected_primary_count, "body/decompression count mismatch")
+    require(access["mb58_body_read_count"] == expected_primary_count and access["fnv_body_read_count"] == 0 and access["inf_body_read_count"] == 0 and access["fbt_body_read_count"] == 0, "sidecar body access mismatch")
     require(access["candidate_sounding_row_count"] == sounding_counts["sounding_rows"] and access["candidate_cell_cruise_contributor_row_count"] == len(contributors) and access["candidate_cell_row_count"] == len(candidates), "access row counts mismatch")
     require(access["external_product_or_model_reference_count"] == 0 and access["mrar_merge_count"] == 0 and access["cross_cruise_aggregation_count"] == 0 and access["datum_or_bias_fit_count"] == 0 and access["confirmation_role_eligible"] is False, "access policy counters changed")
     database_path = run_dir / "aggregation.sqlite"
@@ -495,13 +563,8 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
     finally:
         database.close()
     command_lines = [json.loads(line) for line in (run_dir / "command_ledger.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-    command_role_counts = Counter(item["role"] for item in command_lines)
-    require(set(command_role_counts) == {"decompression", "mbinfo", "mblist_u3", "mblist_u0"}, f"command ledger role set mismatch: {sorted(command_role_counts)}")
     expected_per_role = len(objects[objects["source_object_format"] == ".mb58.gz"])
-    for role in ("decompression", "mbinfo", "mblist_u3", "mblist_u0"):
-        require(command_role_counts[role] == expected_per_role, f"command ledger {role} count mismatch: {command_role_counts[role]} != {expected_per_role}")
-    processing_command_invocation_count = len(command_lines)
-    processing_parser_invocation_count = command_role_counts["mbinfo"] + command_role_counts["mblist_u3"] + command_role_counts["mblist_u0"]
+    command_closure = close_command_counts(command_lines, expected_per_role)
     result = {
         "schema_version": 3,
         "status": "pass",
@@ -511,8 +574,8 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
         "authorization_receipt_file_sha256": sha256_file(run_dir / "authorization_receipt.json"),
         "sealed_archive_manifest_sha256": MANIFEST_SHA256,
         "stage_b_verification_sha256": STAGE_B_VERIFICATION_SHA256,
-        "stage_c1a_readiness_manifest_sha256": C1A_MANIFEST_SHA256,
-        "stage_c1a_readiness_verification_sha256": C1A_VERIFICATION_SHA256,
+        "stage_c1a_readiness_manifest_sha256": receipt["stage_c1a_readiness_manifest_sha256"],
+        "stage_c1a_readiness_verification_sha256": receipt["stage_c1a_readiness_verification_sha256"],
         "source_object_count": len(objects),
         "sounding_row_count": sounding_counts["sounding_rows"],
         "eligible_sounding_row_count": eligible_count,
@@ -527,10 +590,10 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
         "output_table_sha256": {filename: sha256_file(run_dir / filename) for filename in TABLE_KEYS},
         "aggregate_checks": aggregate_counts,
         "independent_verifier_opened_sealed_body": False,
-        "processing_command_invocation_count": processing_command_invocation_count,
-        "processing_parser_invocation_count": processing_parser_invocation_count,
-        "independent_verifier_parser_invocation_count": 0,
-        "command_role_counts": dict(command_role_counts),
+        "processing_command_invocation_count": command_closure["processing_command_invocation_count"],
+        "processing_parser_invocation_count": command_closure["processing_parser_invocation_count"],
+        "independent_verifier_parser_invocation_count": command_closure["independent_verifier_parser_invocation_count"],
+        "command_role_counts": command_closure["command_role_counts"],
         "external_product_or_model_reference_count": 0,
         "mrar_merge_count": 0,
         "cross_cruise_aggregation_count": 0,

@@ -40,6 +40,8 @@ from ncei.code.scs_v2_stage_c_processing import (
     source_field_ledger,
     source_object_id,
     source_processing_row,
+    STAGE_C2_1_READINESS_ROOT,
+    STAGE_C2_1_TEMPLATE_PATH,
     sounding_batch_table,
     _raw_from_object,
 )
@@ -48,7 +50,7 @@ from ncei.code.scs_v2_stage_c_processing import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
-READINESS_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T093740Z"
+READINESS_ROOT = STAGE_C2_1_READINESS_ROOT
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 PROCESSING_FORMATS = {".mb58.gz"}
 SIDECAR_FORMATS = {".fnv", ".inf", ".fbt"}
@@ -86,8 +88,9 @@ def validate_active_authorization(receipt_path: Path, processing_run_id: str) ->
     require(receipt["fixed_output_root"] == str(STAGE_C_ROOT.resolve()), "fixed output root mismatch")
     require(receipt["sealed_archive_manifest_sha256"] == "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94", "Stage B manifest binding mismatch")
     require(receipt["stage_b_verification_sha256"] == "d0d868f560c628bd24d1d52d399c7ed9d03af337be72967a874a5c26db7c2e86", "Stage B verification binding mismatch")
-    require(receipt["stage_c1a_readiness_manifest_sha256"] == "c260960dc4999f08bad710b7d2f6111acd90087a158eb661957f01280bc89615", "C1a manifest binding mismatch")
-    require(receipt["stage_c1a_readiness_verification_sha256"] == "9f3464bfa3f1a90d319761b543bb5488d0d5c154bfc6837b23a278d53558c717", "C1a verification binding mismatch")
+    require(receipt["stage_c1a_readiness_manifest_sha256"] == sha256_file(READINESS_ROOT / "audit_manifest.json"), "C1a manifest binding mismatch")
+    require(receipt["stage_c1a_readiness_verification_sha256"] == sha256_file(READINESS_ROOT / "verification.json"), "C1a verification binding mismatch")
+    require(receipt["authorization_template_sha256"] == sha256_file(STAGE_C2_1_TEMPLATE_PATH), "C2.1 authorization template mismatch")
     require(receipt["parser_environment_digest"] == load_json(READINESS_ROOT / "environment_lock.json")["environment_digest"], "environment digest mismatch")
     for key in (
         "gebco_or_product_comparison_authorized",

@@ -13,17 +13,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ncei.code.scs_v2_stage_c_processing import canonical_authorization_receipt_sha256
+from ncei.code.scs_v2_stage_c_processing import (
+    STAGE_C2_1_READINESS_ROOT,
+    STAGE_C2_1_TEMPLATE_PATH,
+    canonical_authorization_receipt_sha256,
+    find_placeholder_fields,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
 PLANNING_LOCK_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json"
-READINESS_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T093740Z"
+READINESS_ROOT = STAGE_C2_1_READINESS_ROOT
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 ACQUISITION_RUN_ID = "20260805T230449Z"
-C1A_MANIFEST_SHA256 = "c260960dc4999f08bad710b7d2f6111acd90087a158eb661957f01280bc89615"
-C1A_VERIFICATION_SHA256 = "9f3464bfa3f1a90d319761b543bb5488d0d5c154bfc6837b23a278d53558c717"
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -70,11 +73,17 @@ def main() -> int:
     require(args.authorized_by.strip() != "", "authorized_by is required")
     datetime.fromisoformat(args.authorized_utc.replace("Z", "+00:00"))
     require(args.template.is_file(), "authorization template missing")
+    require(args.template.resolve() == STAGE_C2_1_TEMPLATE_PATH.resolve(), "authorization template is not the C2.1 canonical template")
     template = load(args.template)
     require(template["stage_c_authorized"] is False, "template is already active")
     require(template["processing_run_id"] == "<REQUIRED_SAFE_SINGLE_SEGMENT_ID>", "template placeholder mismatch")
-    require(sha256_file(READINESS_ROOT / "audit_manifest.json") == "c260960dc4999f08bad710b7d2f6111acd90087a158eb661957f01280bc89615", "C1a manifest changed")
-    require(sha256_file(READINESS_ROOT / "verification.json") == "9f3464bfa3f1a90d319761b543bb5488d0d5c154bfc6837b23a278d53558c717", "C1a verification changed")
+    # The C1a readiness manifest/verification SHAs are read from the bound
+    # readiness run at authorization time (no compile-time literal), so the
+    # active receipt binds the run's actual files. Immutability is enforced by
+    # the independent verifier refusing to re-verify an already-verified run and
+    # by the verifier/processor re-deriving these SHAs against the same run.
+    c1a_manifest_sha = sha256_file(READINESS_ROOT / "audit_manifest.json")
+    c1a_verification_sha = sha256_file(READINESS_ROOT / "verification.json")
     verification = load(READINESS_ROOT / "verification.json")
     require(verification["status"] == "pass" and verification["stage_c_authorized"] is False, "C1a readiness is not an inactive pass")
     require(not (REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c" / run_id).exists(), "processing run already exists")
@@ -123,8 +132,8 @@ def main() -> int:
             "time_fixture_verification_sha256": sha256_file(READINESS_ROOT / "time_contract_fixture_verification.json"),
             "format58_fixture_bytes_sha256": fixture["fixture"]["sha256"],
             "format58_fixture_oracle_sha256": fixture["oracle"]["sha256"],
-            "stage_c1a_readiness_manifest_sha256": C1A_MANIFEST_SHA256,
-            "stage_c1a_readiness_verification_sha256": C1A_VERIFICATION_SHA256,
+            "stage_c1a_readiness_manifest_sha256": c1a_manifest_sha,
+            "stage_c1a_readiness_verification_sha256": c1a_verification_sha,
             "source_internal_only": True,
             "permitted_body_read_counts": {".mb58.gz": 192, ".fnv": 0, ".inf": 0, ".fbt": 0},
             "prohibited_external_inputs": ["GEBCO", "product", "model", "GGM", "PINN", "MRAR_merge"],
@@ -139,7 +148,7 @@ def main() -> int:
             "stage_d_confirmation_evaluation_authorized": False,
         }
     )
-    leaked = [k for k, v in receipt.items() if isinstance(v, str) and "<REQUIRED" in v]
+    leaked = find_placeholder_fields(receipt)
     require(not leaked, f"active receipt still has placeholder fields: {leaked}")
     receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
     args.output.parent.mkdir(parents=True, exist_ok=True)

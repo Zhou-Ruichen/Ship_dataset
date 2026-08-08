@@ -8,6 +8,7 @@ import pyarrow.parquet as pq
 
 from ncei.code.scs_v2_stage_c_processing import (
     canonical_authorization_receipt_sha256,
+    find_placeholder_fields,
     iter_mblist_rows,
     load_output_schemas,
     ping_review_codes,
@@ -273,6 +274,116 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
         self.assertEqual(len(eligible), 1)
         self.assertIsNotNone(eligible[0]["cell_id"])
 
+    # --- C.2.1: U0 X/Y non-finite demotion (C.2 only relaxed U3) ---
+
+    def test_u0_xy_nan_row_is_demoted_not_aborted(self):
+        # U0 X=NaN (the case C.2 left aborting the whole object). The U0 key is
+        # present, so native_quality_state must stay "good" and there must be no
+        # H02 (requirement 2). The sounding's own lon/lat come from U3, which is
+        # finite here, so the row's own navigation is valid and it stays
+        # cell-eligible -- U0 NaN is not a native-quality demotion.
+        u3 = self._VALID + "1700000001.000000\t1\t7\t120\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t7\tnan\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2], f"object should not abort: {result}")
+        rows = self._sounding_rows(directory, raw)
+        nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
+        self.assertEqual(nan_row["native_quality_state"], "good")
+        self.assertNotIn("H02_NATIVE_NOT_GOOD", nan_row["qc_hard_failure_codes"])
+        self.assertNotIn("H03_NAVIGATION_RANGE", nan_row["qc_hard_failure_codes"])
+        self.assertTrue(nan_row["qc_hard_pass"])
+        self.assertTrue(nan_row["qc_eligible_for_cell"])
+        self.assertIsNotNone(nan_row["cell_id"])
+
+    def test_u0_y_nan_row_is_demoted_not_aborted(self):
+        u3 = self._VALID + "1700000001.000000\t1\t8\t120\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t8\t120\tnan\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        rows = self._sounding_rows(directory, raw)
+        nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
+        self.assertEqual(nan_row["native_quality_state"], "good")
+        self.assertNotIn("H02_NATIVE_NOT_GOOD", nan_row["qc_hard_failure_codes"])
+        self.assertTrue(nan_row["qc_eligible_for_cell"])
+
+    def test_u0_xy_inf_row_is_demoted_not_aborted(self):
+        # Inf in U0 also no longer aborts the object; sqlite reads inf back as
+        # inf (not None). native stays good, no H02.
+        u3 = self._VALID + "1700000001.000000\t1\t9\t120\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t9\tinf\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        rows = self._sounding_rows(directory, raw)
+        bad_row = next(r for r in rows if r["parser_ping_index"] == 1)
+        self.assertEqual(bad_row["native_quality_state"], "good")
+        self.assertNotIn("H02_NATIVE_NOT_GOOD", bad_row["qc_hard_failure_codes"])
+
+    def test_u0_nan_prefix_then_valid_keeps_valid(self):
+        # Valid prefix retained and eligible when a later U0 NaN row appears.
+        u3 = self._VALID + "1700000001.000000\t1\t10\t120\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t10\tnan\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        rows = self._sounding_rows(directory, raw)
+        valid = next(r for r in rows if r["parser_ping_index"] == 0)
+        self.assertTrue(valid["qc_eligible_for_cell"])
+        self.assertIsNotNone(valid["cell_id"])
+
+    def test_u3_nan_nav_with_present_u0_keeps_native_good_and_h03_only(self):
+        # Requirement 3 core case: the sounding's own navigation is non-finite
+        # (U3 X=NaN), U0 key present with finite nav. native_quality_state must
+        # stay "good" and the ONLY failure is H03 (no H02); valid depth retained
+        # but qc_eligible_for_cell=False with empty cell fields.
+        u3 = self._VALID + "1700000001.000000\t1\t11\tnan\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t11\t120\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        rows = self._sounding_rows(directory, raw)
+        nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
+        self.assertEqual(nan_row["native_quality_state"], "good")
+        self.assertEqual(nan_row["qc_hard_failure_codes"], ["H03_NAVIGATION_RANGE"])
+        self.assertNotIn("H02_NATIVE_NOT_GOOD", nan_row["qc_hard_failure_codes"])
+        self.assertIsNotNone(nan_row["depth_m_positive_down"])
+        self.assertAlmostEqual(nan_row["depth_m_positive_down"], 250.0)
+        self.assertFalse(nan_row["qc_eligible_for_cell"])
+        self.assertIsNone(nan_row["lon_bin"])
+        self.assertIsNone(nan_row["lat_bin"])
+        self.assertIsNone(nan_row["cell_id"])
+
+    def test_u0_finite_nav_mismatch_still_aborts_object(self):
+        # A genuine finite-value lon mismatch still raises and aborts the object.
+        u3 = self._VALID + "1700000001.000000\t1\t12\t120\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t12\t130\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertEqual(result[2], "PARSER_CONTRACT_FAILURE")
+        self.assertFalse(raw.exists())
+
+    def test_u0_join_count_closes_with_mixed_nan_nav(self):
+        # seen_u0 == u0_count must hold even with present NaN-nav keys: the
+        # second row joins (u0_rowid present) so it counts, and both rows were
+        # scanned. The result tuple returns (u3_count, seen_u0, error, detail).
+        u3 = self._VALID + "1700000001.000000\t1\t13\t120\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t13\tnan\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        # u3_count == 2, seen_u0 == 2 (both U0 keys present, one NaN-nav).
+        self.assertEqual(result[0], 2)
+        self.assertEqual(result[1], 2)
+
+    # --- C.2.1: recursive placeholder scanning ---
+
+    def test_find_placeholder_fields_is_recursive(self):
+        clean = {"a": "x", "permitted_body_read_counts": {".mb58.gz": 192}, "list": ["a", "b"]}
+        self.assertEqual(find_placeholder_fields(clean), [])
+        nested = {
+            "permitted_body_read_counts": {".mb58.gz": "<REQUIRED_COUNT>"},
+            "roles": ["ok", {"hidden": "<REQUIRED_SHA256>"}],
+            "top": "<REQUIRED_ID>",
+        }
+        hits = find_placeholder_fields(nested)
+        self.assertIn("top", hits)
+        self.assertIn("permitted_body_read_counts..mb58.gz", hits)
+        self.assertIn("roles[1].hidden", hits)
+        self.assertEqual(len(hits), 3)
 
 
 if __name__ == "__main__":
