@@ -19,7 +19,8 @@
   "pr_url": null,
   "subtasks": [],
   "children": [
-    "08-06-scs-v2-stage-c-source-internal-processing"
+    "08-06-scs-v2-stage-c-source-internal-processing",
+    "08-08-scs-v2-stage-c2-zero-candidate-correction"
   ],
   "parent": null,
   "relatedFiles": [

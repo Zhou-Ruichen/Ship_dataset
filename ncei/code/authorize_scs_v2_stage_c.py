@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from ncei.code.scs_v2_stage_c_processing import canonical_authorization_receipt_
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
+PLANNING_LOCK_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json"
 READINESS_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260806T093740Z"
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 ACQUISITION_RUN_ID = "20260805T230449Z"
@@ -82,7 +84,15 @@ def main() -> int:
     environment = load(READINESS_ROOT / "environment_lock.json")
     fixture = load(READINESS_ROOT / "fixture_verification.json")
     template_sha = sha256_file(args.template)
+    require(PLANNING_LOCK_PATH.is_file(), "stage C0 planning lock missing")
+    planning_lock_sha = sha256_file(PLANNING_LOCK_PATH)
+    planning_commit = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "log", "-1", "--format=%H", "--", str(PLANNING_LOCK_PATH)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    require(re.fullmatch(r"[0-9a-f]{40}", planning_commit) is not None, "planning commit not resolved")
     receipt = dict(template)
+    receipt.pop("producer_sha256", None)
     receipt.update(
         {
             "schema_version": 4,
@@ -98,6 +108,8 @@ def main() -> int:
             "output_schema_sha256": sha256_file(args.output_schema),
             "qc_contract_sha256": sha256_file(args.qc_contract),
             "verification_contract_sha256": sha256_file(args.verification_contract),
+            "stage_c0_planning_lock_sha256": planning_lock_sha,
+            "stage_c0_planning_commit": planning_commit,
             "parser_environment_digest": environment["environment_digest"],
             "parser_binary_sha256": {
                 name: environment["material"]["binaries"][name]["sha256"]
@@ -127,6 +139,8 @@ def main() -> int:
             "stage_d_confirmation_evaluation_authorized": False,
         }
     )
+    leaked = [k for k, v in receipt.items() if isinstance(v, str) and "<REQUIRED" in v]
+    require(not leaked, f"active receipt still has placeholder fields: {leaked}")
     receipt["authorization_receipt_sha256"] = canonical_authorization_receipt_sha256(receipt)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():

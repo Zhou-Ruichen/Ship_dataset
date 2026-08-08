@@ -180,6 +180,7 @@ def run_tests() -> dict[str, Any]:
         "-v",
         "_common.tests.test_scs_v2_stage_c1_readiness",
         "_common.tests.test_scs_v2_stage_c1a_readiness",
+        "_common.tests.test_scs_v2_stage_c_processing",
     ]
     completed = subprocess.run(command, cwd=REPO_ROOT, text=True, capture_output=True, check=False)
     combined = completed.stdout + completed.stderr
@@ -191,6 +192,7 @@ def run_tests() -> dict[str, Any]:
         "test_invalid_time_in_u0_aborts_without_partial_output",
         "test_independent_verifier_accepts_atomic_failure_evidence",
         "test_independent_verifier_rejects_failed_object_sounding",
+        "test_xy_nan_row_is_demoted_not_aborted",
     )
     if completed.returncode != 0 or count < 16 or any(name not in combined for name in required_names):
         raise RuntimeError(f"Stage C.1a tests failed:\n{combined}")

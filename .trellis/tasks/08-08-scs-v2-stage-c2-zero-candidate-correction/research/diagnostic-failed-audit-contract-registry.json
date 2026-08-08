@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "classification": "diagnostic_failed_audit_contract",
+  "classified_at": "2026-08-09T00:00:00Z",
+  "classified_by": "scs-v2-stage-c2-zero-candidate-correction",
+  "run": {
+    "run_id": "20260807T090000Z",
+    "path": "ncei/derived/scs_v2_sealed_confirmation/stage_c/20260807T090000Z",
+    "acquisition_run_id": "20260805T230449Z",
+    "verification_status_at_classification": "pass",
+    "note": "verification.json reported status=pass at the time of production, but the run is reclassified because the authorization chain, command accounting, and H03 semantics it relied on were defective. The pass is not a candidate-ready pass."
+  },
+  "bound_hashes": {
+    "verification_json_sha256": "9b768fa5eaa59ba67d20fab707b324cbb5c10e95f3a550738d279f2c07e2d0c8",
+    "audit_manifest_json_sha256": "53fd36868f36447daa7025bbe1a6efefcc29713767698107744817343fbd2067",
+    "authorization_receipt_json_sha256": "0c4a8313d7306dcf0c75cba24663dd6cffac9847cf24771e6f43febf1209e412"
+  },
+  "counts_at_classification": {
+    "candidate_row_count": 3539,
+    "contributor_row_count": 5266,
+    "sounding_row_count": 59201424,
+    "eligible_sounding_row_count": 51217692,
+    "failed_parser_contract_object_count": 1,
+    "failed_invalid_time_object_count": 0
+  },
+  "disqualifying_findings": [
+    {
+      "id": "F2",
+      "summary": "active authorization_receipt.json carried literal placeholders",
+      "fields": ["producer_sha256", "stage_c0_planning_commit", "stage_c0_planning_lock_sha256"],
+      "evidence": "all three fields held <REQUIRED_*> literals in the active receipt"
+    },
+    {
+      "id": "F3",
+      "summary": "authorization template binding not enforced",
+      "evidence": "receipt bound authorization_template_sha256=483b6981...; C1a readiness recorded inactive_authorization_template_sha256=40772949... (different schema); verifier did not reject template/placeholder/field-set drift"
+    },
+    {
+      "id": "F4",
+      "summary": "non-finite X/Y aborted whole object instead of demoting one sounding",
+      "evidence": "TN352 objects/TN352/em302/0168_20180501_164920_TGT.all.mb58.gz aborted with error_detail 'X is not finite' and parsed_row_count=0, violating H03 per-sounding demotion"
+    },
+    {
+      "id": "F5",
+      "summary": "command ledger not closed by verifier",
+      "evidence": "command_ledger.jsonl had 768 lines (192 each of decompression/mbinfo/mblist_u3/mblist_u0) but verification.json recorded parser_invocation_count=0"
+    }
+  ],
+  "retention": {
+    "original_run_must_remain_byte_identical": true,
+    "bound_hashes_must_match_on_disk": true,
+    "do_not_overwrite": true,
+    "do_not_delete": true,
+    "do_not_reclassify_as_candidate": true
+  }
+}

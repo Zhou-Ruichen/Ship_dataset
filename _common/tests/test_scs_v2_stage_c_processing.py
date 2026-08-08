@@ -23,6 +23,13 @@ SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-
 
 
 class SCSV2StageCProcessingTest(unittest.TestCase):
+    def setUp(self):
+        self._tmpdirs = []
+
+    def tearDown(self):
+        for d in self._tmpdirs:
+            d.cleanup()
+
     def test_column_batch_matches_row_contract_on_golden_fixture(self):
         fixture = REPO_ROOT / "_common/tests/fixtures/scs_v2_stage_c1"
         object_record = {
@@ -166,6 +173,106 @@ class SCSV2StageCProcessingTest(unittest.TestCase):
             result = _raw_from_object("object", u3, u0, directory / "u0.sqlite", raw)
             self.assertEqual(result[2], "PARSER_CONTRACT_FAILURE")
             self.assertFalse(raw.exists())
+
+    def _object_record(self):
+        return {
+            "relative_path": "objects/TN352/example.mb58.gz",
+            "sha256": hashlib.sha256(b"example").hexdigest(),
+            "official_cruise_id": "TN352",
+        }
+
+    def _process(self, u3_text, u0_text):
+        self._tmpdirs.append(TemporaryDirectory())
+        directory = Path(self._tmpdirs[-1].name)
+        (directory / "u3.tsv").write_text(u3_text, encoding="ascii")
+        (directory / "u0.tsv").write_text(u0_text, encoding="ascii")
+        raw = directory / "raw.parquet"
+        result = _raw_from_object(
+            "20260805T230449Z/objects/TN352/example.mb58.gz",
+            directory / "u3.tsv",
+            directory / "u0.tsv",
+            directory / "u0.sqlite",
+            raw,
+        )
+        return directory, raw, result
+
+    def _sounding_rows(self, directory, raw):
+        review = ping_review_codes(raw)
+        rows = [
+            sounding_row(
+                r,
+                "run",
+                "20260805T230449Z",
+                self._object_record(),
+                "env",
+                "cmd",
+                review.get(int(r["parser_ping_index"]), set()),
+            )
+            for r in pq.ParquetFile(raw).read().to_pylist()
+        ]
+        return rows
+
+    _VALID = "1700000000.000000\t1\t2\t120\t10\t250\t90\n"
+
+    def test_xy_nan_row_is_demoted_not_aborted(self):
+        # U3 X=NaN (0168-like); U0 keeps finite X/Y (U0 is the strict crosscheck).
+        u3 = self._VALID + "1700000001.000000\t1\t3\tnan\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t3\t120\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2], f"object should not abort: {result}")
+        rows = self._sounding_rows(directory, raw)
+        nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
+        self.assertIn("H03_NAVIGATION_RANGE", nan_row["qc_hard_failure_codes"])
+        self.assertFalse(nan_row["qc_hard_pass"])
+        self.assertFalse(nan_row["qc_eligible_for_cell"])
+        self.assertIsNone(nan_row["lon_bin"])
+        self.assertIsNone(nan_row["lat_bin"])
+        self.assertIsNone(nan_row["cell_id"])
+
+    def test_y_nan_row_is_demoted_not_aborted(self):
+        u3 = self._VALID + "1700000001.000000\t1\t4\t120\tnan\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t4\t120\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        rows = self._sounding_rows(directory, raw)
+        nan_row = next(r for r in rows if r["parser_ping_index"] == 1)
+        self.assertIn("H03_NAVIGATION_RANGE", nan_row["qc_hard_failure_codes"])
+        self.assertFalse(nan_row["qc_eligible_for_cell"])
+        self.assertIsNone(nan_row["cell_id"])
+
+    def test_valid_prefix_then_xy_nan_keeps_prefix(self):
+        u3 = self._VALID + "1700000001.000000\t1\t5\tnan\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t5\t120\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        self.assertIsNone(result[2])
+        rows = self._sounding_rows(directory, raw)
+        valid = next(r for r in rows if r["parser_ping_index"] == 0)
+        self.assertTrue(valid["qc_eligible_for_cell"])
+        self.assertIsNotNone(valid["cell_id"])
+
+    def test_time_nan_still_aborts_object(self):
+        # U3 M=NaN must still abort the whole object (frozen time contract).
+        u3 = "nan\t1\t2\t120\t10\t250\t90\n"
+        u0 = self._VALID
+        directory, raw, result = self._process(u3, u0)
+        self.assertEqual(result[2], "TIME_UTC_INVALID")
+        self.assertFalse(raw.exists())
+
+    def test_duplicate_key_still_aborts_object(self):
+        line = self._VALID
+        directory, raw, result = self._process(line, line + line)
+        self.assertEqual(result[2], "PARSER_CONTRACT_FAILURE")
+        self.assertFalse(raw.exists())
+
+    def test_ineligible_sounding_excluded_from_aggregation(self):
+        u3 = self._VALID + "1700000001.000000\t1\t6\tnan\t10\t250\t90\n"
+        u0 = self._VALID + "1700000001.000000\t1\t6\t120\t10\t250\t90\n"
+        directory, raw, result = self._process(u3, u0)
+        rows = self._sounding_rows(directory, raw)
+        eligible = [r for r in rows if r["qc_eligible_for_cell"]]
+        self.assertEqual(len(eligible), 1)
+        self.assertIsNotNone(eligible[0]["cell_id"])
+
 
 
 if __name__ == "__main__":

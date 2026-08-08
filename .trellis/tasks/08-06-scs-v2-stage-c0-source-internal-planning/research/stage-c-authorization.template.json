@@ -31,7 +31,6 @@
     "processing_sidecar/.inf": "format_count_metadata_direct_datum_evidence_only"
   },
   "processing_run_id": "<REQUIRED_SAFE_SINGLE_SEGMENT_ID>",
-  "producer_sha256": "<REQUIRED_SHA256>",
   "qc_contract_sha256": "94bded81e0719829dd1815de8620f3949d9bb0db32033f38031888a2e778adfa",
   "schema_version": 1,
   "sealed_archive_manifest_sha256": "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94",

@@ -11,7 +11,7 @@ import os
 import re
 import sqlite3
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -30,6 +30,7 @@ SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-
 PROCESSOR_PATH = REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py"
 HELPER_PATH = REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py"
 VERIFIER_PATH = REPO_ROOT / "ncei/code/verify_scs_v2_stage_c_processing.py"
+TEMPLATE_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c-authorization.template.json"
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 ACQUISITION_RUN_ID = "20260805T230449Z"
 MANIFEST_SHA256 = "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94"
@@ -436,6 +437,29 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
     require(audit["processing_run_id"] == run_dir.name and receipt["processing_run_id"] == run_dir.name, "run ID mismatch")
     require(receipt["stage_c_authorized"] is True and receipt["confirmation_role_eligible"] is False, "authorization role mismatch")
     require(canonical_authorization_receipt_sha256(receipt) == receipt["authorization_receipt_sha256"], "authorization canonical hash mismatch")
+    leaked = [k for k, v in receipt.items() if isinstance(v, str) and "<REQUIRED" in v]
+    require(not leaked, f"authorization receipt has placeholder fields: {leaked}")
+    template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
+    require(sha256_file(TEMPLATE_PATH) == receipt["authorization_template_sha256"], "authorization template SHA mismatch")
+    template_keys = set(template)
+    active_keys = set(receipt)
+    require(template_keys <= active_keys, f"authorization receipt missing template keys: {sorted(template_keys - active_keys)}")
+    authorize_added = {
+        "authorization_receipt_sha256", "authorization_script_sha256", "authorization_template_sha256",
+        "confirmation_role_promotion_authorized", "cross_cruise_aggregation_authorized",
+        "datum_or_bias_fit_authorized", "gebco_or_product_comparison_authorized",
+        "model_comparison_authorized", "mrar_merge_authorized", "model_or_product_evaluation_authorized",
+        "stage_d_confirmation_evaluation_authorized", "parser_binary_sha256", "parser_help_snapshot_sha256",
+        "permitted_body_read_counts", "processing_helper_sha256", "processor_sha256",
+        "prohibited_external_inputs", "source_internal_only",
+        "stage_c1a_readiness_manifest_sha256", "stage_c1a_readiness_verification_sha256",
+        "time_fixture_verification_sha256", "format58_fixture_bytes_sha256",
+        "format58_fixture_oracle_sha256", "fixture_verification_sha256",
+        "stage_c0_planning_lock_sha256", "stage_c0_planning_commit",
+        "parser_environment_digest",
+    }
+    extra = active_keys - template_keys - authorize_added
+    require(not extra, f"authorization receipt has unexpected keys: {sorted(extra)}")
     require(sha256_file(PROCESSOR_PATH) == receipt["processor_sha256"], "processor hash binding mismatch")
     require(sha256_file(HELPER_PATH) == receipt["processing_helper_sha256"], "helper hash binding mismatch")
     require(sha256_file(VERIFIER_PATH) == receipt["verifier_sha256"], "verifier hash binding mismatch")
@@ -471,8 +495,13 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
     finally:
         database.close()
     command_lines = [json.loads(line) for line in (run_dir / "command_ledger.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-    require(len(command_lines) == 192 * 4, "command ledger count mismatch")
-    require(set(item["role"] for item in command_lines) == {"decompression", "mbinfo", "mblist_u3", "mblist_u0"}, "command ledger role set mismatch")
+    command_role_counts = Counter(item["role"] for item in command_lines)
+    require(set(command_role_counts) == {"decompression", "mbinfo", "mblist_u3", "mblist_u0"}, f"command ledger role set mismatch: {sorted(command_role_counts)}")
+    expected_per_role = len(objects[objects["source_object_format"] == ".mb58.gz"])
+    for role in ("decompression", "mbinfo", "mblist_u3", "mblist_u0"):
+        require(command_role_counts[role] == expected_per_role, f"command ledger {role} count mismatch: {command_role_counts[role]} != {expected_per_role}")
+    processing_command_invocation_count = len(command_lines)
+    processing_parser_invocation_count = command_role_counts["mbinfo"] + command_role_counts["mblist_u3"] + command_role_counts["mblist_u0"]
     result = {
         "schema_version": 3,
         "status": "pass",
@@ -498,7 +527,10 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
         "output_table_sha256": {filename: sha256_file(run_dir / filename) for filename in TABLE_KEYS},
         "aggregate_checks": aggregate_counts,
         "independent_verifier_opened_sealed_body": False,
-        "parser_invocation_count": 0,
+        "processing_command_invocation_count": processing_command_invocation_count,
+        "processing_parser_invocation_count": processing_parser_invocation_count,
+        "independent_verifier_parser_invocation_count": 0,
+        "command_role_counts": dict(command_role_counts),
         "external_product_or_model_reference_count": 0,
         "mrar_merge_count": 0,
         "cross_cruise_aggregation_count": 0,

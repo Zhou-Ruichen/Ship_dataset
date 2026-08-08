@@ -113,7 +113,7 @@ def _parse_finite(value: str, field: str, *, allow_nan: bool = False) -> float:
         parsed = float(value.strip())
     except ValueError as error:
         raise ValueError(f"{field} is not numeric: {value!r}") from error
-    if math.isnan(parsed) and allow_nan:
+    if allow_nan and not math.isfinite(parsed):
         return parsed
     if not math.isfinite(parsed):
         raise ValueError(f"{field} is not finite: {value!r}")
@@ -157,8 +157,9 @@ def iter_mblist_rows(path: Path, *, check_mode: int) -> Iterator[tuple[MblistRow
                 depth = math.nan
             else:
                 depth = _parse_finite(depth_text, "z")
-            lon = _parse_finite(fields[3], "X")
-            lat = _parse_finite(fields[4], "Y")
+            allow_nonfinite_xy = check_mode == 3
+            lon = _parse_finite(fields[3], "X", allow_nan=allow_nonfinite_xy)
+            lat = _parse_finite(fields[4], "Y", allow_nan=allow_nonfinite_xy)
             heading = _parse_finite(fields[6], "H")
             yield (
                 MblistRow(
@@ -447,22 +448,26 @@ def _raw_from_object_impl(
             good_depth,
             good_heading,
         ) in joined:
+            u3_lon = None if lon is None else float(lon)
+            u3_lat = None if lat is None else float(lat)
+            u3_nav_ok = u3_lon is not None and math.isfinite(u3_lon) and u3_lat is not None and math.isfinite(u3_lat)
             if good_lon is None:
                 quality = "null" if depth_is_nan else "flagged"
                 depth = None
             else:
                 if any(
-                    abs(left - right) > tolerance
+                    left is not None and right is not None and abs(left - right) > tolerance
                     for left, right, tolerance in (
-                        (lon, good_lon, 1.0e-10),
-                        (lat, good_lat, 1.0e-10),
-                        (parser_depth, good_depth, 1.0e-4),
-                        (heading, good_heading, 1.0e-3),
+                        (u3_lon if u3_nav_ok else None, good_lon, 1.0e-10),
+                        (u3_lat if u3_nav_ok else None, good_lat, 1.0e-10),
+                        (float(parser_depth), good_depth, 1.0e-4),
+                        (float(heading), good_heading, 1.0e-3),
                     )
                 ):
                     raise ValueError(f"U0/U3 value mismatch for key {(epoch_us, native_ping, beam)}")
                 seen_u0 += 1
-                quality = "good"
+                u0_nav_ok = good_lon is not None and math.isfinite(good_lon) and good_lat is not None and math.isfinite(good_lat)
+                quality = "good" if (u3_nav_ok and u0_nav_ok) else "flagged"
                 depth = float(good_depth)
             row_batch.append(
                 _raw_row_dict(
@@ -472,8 +477,8 @@ def _raw_from_object_impl(
                         native_ping_counter=int(native_ping),
                         beam_index=int(beam),
                         epoch_us=int(epoch_us),
-                        lon_deg=normalize_longitude(float(lon)),
-                        lat_deg=float(lat),
+                        lon_deg=normalize_longitude(u3_lon) if u3_nav_ok else math.nan,
+                        lat_deg=u3_lat if u3_nav_ok else math.nan,
                         parser_depth_value=math.nan if depth_is_nan else float(parser_depth),
                         depth_m_positive_down=depth,
                         heading_deg=float(heading),
