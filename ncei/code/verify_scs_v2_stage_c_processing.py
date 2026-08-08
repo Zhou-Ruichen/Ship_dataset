@@ -25,9 +25,9 @@ import yaml
 from ncei.code.scs_v2_stage_c_processing import (
     AUTHORIZATION_ADDED_KEYS as AUTHORIZE_ADDED_KEYS,
     AUTHORIZATION_SCAFFOLD_REMOVED as AUTHORIZE_SCAFFOLD_REMOVED,
-    STAGE_C2_2_READINESS_ROOT,
-    STAGE_C2_2_READINESS_RUN_ID,
-    STAGE_C2_2_TEMPLATE_PATH,
+    STAGE_C2_3_READINESS_ROOT,
+    STAGE_C2_3_READINESS_RUN_ID,
+    STAGE_C2_3_TEMPLATE_PATH,
     canonical_authorization_receipt_sha256,
     expected_authorization_keys as shared_expected_authorization_keys,
     validate_authorization_receipt,
@@ -38,12 +38,12 @@ from ncei.code.scs_v2_stage_c_processing import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
-READINESS_ROOT = STAGE_C2_2_READINESS_ROOT
+READINESS_ROOT = STAGE_C2_3_READINESS_ROOT
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 PROCESSOR_PATH = REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py"
 HELPER_PATH = REPO_ROOT / "ncei/code/scs_v2_stage_c_processing.py"
 VERIFIER_PATH = REPO_ROOT / "ncei/code/verify_scs_v2_stage_c_processing.py"
-TEMPLATE_PATH = STAGE_C2_2_TEMPLATE_PATH
+TEMPLATE_PATH = STAGE_C2_3_TEMPLATE_PATH
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 ACQUISITION_RUN_ID = "20260805T230449Z"
 MANIFEST_SHA256 = "9fafb163a6fe2818d96a0c9bb0ed49afc98a8b0850979d5783b1882139702f94"
@@ -318,9 +318,23 @@ def verify_soundings(run_dir: Path, objects: pd.DataFrame, expected_objects: dic
             lon = float(row["lon_deg"])
             lat = float(row["lat_deg"])
             coordinate_range_ok = math.isfinite(lon) and -180.0 <= lon < 180.0 and math.isfinite(lat) and -90.0 <= lat <= 90.0
+            require(isinstance(row["u3_navigation_finite"], bool), "U3 navigation evidence is not boolean")
+            require(
+                row["u0_navigation_finite"] is None
+                or isinstance(row["u0_navigation_finite"], bool),
+                "U0 navigation evidence is not nullable boolean",
+            )
+            expected_nav_ok = (
+                row["u3_navigation_finite"]
+                and (
+                    row["u0_navigation_finite"] is None
+                    or row["u0_navigation_finite"]
+                )
+                and coordinate_range_ok
+            )
             require(isinstance(row["navigation_valid"], bool), "navigation_valid is not boolean")
             nav_ok = row["navigation_valid"]
-            require(not nav_ok or coordinate_range_ok, "valid navigation has invalid output coordinates")
+            require(nav_ok == expected_nav_ok, "navigation evidence does not reproduce navigation_valid")
             depth = row["depth_m_positive_down"]
             depth_ok = depth is not None and math.isfinite(float(depth)) and 0.0 < float(depth) <= 12_000.0
             expected_failure_codes: list[str] = []
@@ -502,7 +516,7 @@ def verify_run(
     require(audit["status"] == "processed_pending_independent_verification", "producer run is not pending verification")
     require(audit["processing_run_id"] == run_dir.name and receipt["processing_run_id"] == run_dir.name, "run ID mismatch")
     require(receipt["stage_c_authorized"] is True and receipt["confirmation_role_eligible"] is False, "authorization role mismatch")
-    expected_readiness_run_id = STAGE_C2_2_READINESS_RUN_ID if readiness_root is None else expected_readiness_root.name
+    expected_readiness_run_id = STAGE_C2_3_READINESS_RUN_ID if readiness_root is None else expected_readiness_root.name
     readiness = validate_readiness_bundle(expected_readiness_root, expected_readiness_run_id)
     validate_receipt_readiness_bindings(receipt, readiness)
     require(receipt["fixed_output_root"] == str(expected_stage_c_root), "output root binding mismatch")

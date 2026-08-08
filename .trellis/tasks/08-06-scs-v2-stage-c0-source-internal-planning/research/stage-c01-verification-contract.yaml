@@ -1,4 +1,4 @@
-schema_version: 3
+schema_version: 4
 stage: C1_zero_candidate_readiness_and_future_C_verification
 accepted_stage_c0_lock:
   path: .trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json
@@ -24,6 +24,9 @@ readiness_checks:
   - authorization_template_inactive
 future_stage_c_pre_body_checks:
   - exact_authorization_schema_no_extra_or_missing_keys
+  - every_authorization_template_field_classified_exactly_once
+  - every_active_receipt_fixed_field_matches_template_or_readiness_evidence
+  - stage_c0_planning_lock_sha_and_commit_exact
   - stage_c_authorized_true
   - authorized_by_and_utc_nonempty
   - safe_single_segment_processing_run_id
@@ -50,6 +53,8 @@ future_stage_c_post_processing_checks:
   - u3_nonfinite_navigation_is_h03_only_and_has_no_cell
   - present_u0_nonfinite_navigation_is_h03_only_and_has_no_cell
   - dual_nonfinite_navigation_is_h03_only_and_has_no_cell
+  - navigation_valid_recomputed_from_persisted_source_states
+  - forged_navigation_or_source_state_is_rejected
   - exact_cell_grid_recomputation
   - exact_cell_cruise_aggregation
   - no_cross_cruise_pooling

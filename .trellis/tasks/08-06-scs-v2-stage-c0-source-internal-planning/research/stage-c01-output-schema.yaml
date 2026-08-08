@@ -1,4 +1,4 @@
-schema_version: 3
+schema_version: 4
 stage: C_source_internal_candidate_processing
 supersedes_for_future_stage_c:
   path: research/output-schema.yaml
@@ -82,6 +82,8 @@ tables:
       - {name: lon_deg_status, type: string, nullable: false}
       - {name: lat_deg, type: float64, nullable: false}
       - {name: lat_deg_status, type: string, nullable: false}
+      - {name: u3_navigation_finite, type: bool, nullable: false}
+      - {name: u0_navigation_finite, type: bool, nullable: true}
       - {name: navigation_valid, type: bool, nullable: false}
       - {name: horizontal_datum, type: string, nullable: true}
       - {name: horizontal_datum_status, type: string, nullable: false}

@@ -8,6 +8,7 @@ injects only its metadata manifest and temporary roots.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import unittest
@@ -105,6 +106,32 @@ def synthetic_readiness(
             "sha256": sha256_file(template_path),
         }
     }
+    environment = {
+        "environment_digest": "8" * 64,
+        "material": {
+            "binaries": {
+                name: {
+                    "sha256": character * 64,
+                    "version_or_help_sha256": character.upper() * 64,
+                }
+                for name, character in (("mblist", "9"), ("mbinfo", "a"), ("gzip", "b"))
+            }
+        },
+    }
+    fixture = {"fixture": {"sha256": "3" * 64}, "oracle": {"sha256": "4" * 64}}
+    auxiliary_outputs = {
+        "environment_lock.json": environment,
+        "fixture_verification.json": fixture,
+        "time_contract_fixture_verification.json": {"status": "pass"},
+    }
+    for filename, value in auxiliary_outputs.items():
+        path = root / filename
+        write_json(path, value)
+        outputs[filename] = {
+            "path": str(path.resolve()),
+            "bytes": path.stat().st_size,
+            "sha256": sha256_file(path),
+        }
     contracts_dir = root / "contracts"
     contracts_dir.mkdir()
     for filename, source in contract_bindings.values():
@@ -137,6 +164,8 @@ def synthetic_readiness(
         "receipt_report_template_sha256": sha256_file(template_path),
         "verifier_template_path": str(template_path.resolve()),
         "verifier_template_sha256": sha256_file(template_path),
+        "environment_digest": environment["environment_digest"],
+        "accepted_stage_c0_planning_lock_sha256": "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e",
     }
     for summary_key, (_manifest_name, path) in code_bindings.items():
         summary[summary_key] = sha256_file(path)
@@ -163,6 +192,9 @@ def synthetic_readiness(
         "candidate_sounding_row_count": 0,
         "candidate_cell_row_count": 0,
         "audit_manifest_sha256": sha256_file(root / "audit_manifest.json"),
+        "environment_digest": environment["environment_digest"],
+        "stage_c0_planning_lock_sha256": "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e",
+        "stage_c0_planning_commit": "0aadea0d5f94783d138fdf6b4479e6f51b0d35db",
         **{
             key: summary[key]
             for key in (
@@ -175,23 +207,6 @@ def synthetic_readiness(
         },
     }
     write_json(root / "verification.json", verification)
-    write_json(
-        root / "environment_lock.json",
-        {
-            "environment_digest": "8" * 64,
-            "material": {
-                "binaries": {
-                    name: {"sha256": character * 64, "version_or_help_sha256": character.upper() * 64}
-                    for name, character in (("mblist", "9"), ("mbinfo", "a"), ("gzip", "b"))
-                }
-            },
-        },
-    )
-    write_json(
-        root / "fixture_verification.json",
-        {"fixture": {"sha256": "3" * 64}, "oracle": {"sha256": "4" * 64}},
-    )
-    write_json(root / "time_contract_fixture_verification.json", {"status": "pass"})
     return {
         "run_id": run_id,
         "root": root,
@@ -280,8 +295,15 @@ def bound_active_receipt(bundle: dict[str, object]) -> tuple[dict[str, object], 
         contract_bindings=bundle["contract_bindings"],
     )
     receipt = _valid_active_receipt(bundle["template_path"])
+    environment = json.loads(
+        (bundle["root"] / "environment_lock.json").read_text(encoding="utf-8")
+    )
+    fixture = json.loads(
+        (bundle["root"] / "fixture_verification.json").read_text(encoding="utf-8")
+    )
     receipt.update(
         {
+            "schema_version": 6,
             "stage_c_readiness_run_id": readiness["run_id"],
             "stage_c1a_readiness_manifest_sha256": readiness["manifest_sha256"],
             "stage_c1a_readiness_verification_sha256": readiness["verification_sha256"],
@@ -289,6 +311,33 @@ def bound_active_receipt(bundle: dict[str, object]) -> tuple[dict[str, object], 
             "processor_sha256": readiness["code_hashes"]["stage_c_processor_sha256"],
             "processing_helper_sha256": readiness["code_hashes"]["stage_c_processing_helper_sha256"],
             "verifier_sha256": readiness["code_hashes"]["stage_c_verifier_sha256"],
+            "stage_c0_planning_lock_sha256": "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e",
+            "stage_c0_planning_commit": "0aadea0d5f94783d138fdf6b4479e6f51b0d35db",
+            "parser_environment_digest": environment["environment_digest"],
+            "parser_binary_sha256": {
+                name: environment["material"]["binaries"][name]["sha256"]
+                for name in ("mblist", "mbinfo", "gzip")
+            },
+            "parser_help_snapshot_sha256": {
+                name: environment["material"]["binaries"][name]["version_or_help_sha256"]
+                for name in ("mblist", "mbinfo", "gzip")
+            },
+            "prohibited_external_inputs": [
+                "GEBCO",
+                "product",
+                "model",
+                "GGM",
+                "PINN",
+                "MRAR_merge",
+            ],
+            "fixture_verification_sha256": sha256_file(
+                bundle["root"] / "fixture_verification.json"
+            ),
+            "time_fixture_verification_sha256": sha256_file(
+                bundle["root"] / "time_contract_fixture_verification.json"
+            ),
+            "format58_fixture_bytes_sha256": fixture["fixture"]["sha256"],
+            "format58_fixture_oracle_sha256": fixture["oracle"]["sha256"],
             **readiness["contract_hashes"],
         }
     )
@@ -310,6 +359,188 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         from ncei.code.scs_v2_stage_c_processing import validate_authorization_receipt
 
         validate_authorization_receipt(self.receipt, TEMPLATE_PATH)
+
+    def test_template_field_classification_is_disjoint_and_complete(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            authorization_template_field_classification,
+        )
+
+        classification = authorization_template_field_classification(TEMPLATE_PATH)
+        self.assertEqual(
+            set(classification),
+            {"template_fixed", "readiness_evidence_filled", "activation_controlled"},
+        )
+        classified: set[str] = set()
+        for fields in classification.values():
+            self.assertTrue(classified.isdisjoint(fields))
+            classified.update(fields)
+        self.assertEqual(classified, set(json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))))
+        self.assertEqual(
+            {name: len(fields) for name, fields in classification.items()},
+            {
+                "template_fixed": 17,
+                "readiness_evidence_filled": 11,
+                "activation_controlled": 5,
+            },
+        )
+
+    def test_receipt_rejects_every_exact_field_drift_after_rehash(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            canonical_authorization_receipt_sha256,
+            validate_receipt_readiness_bindings,
+        )
+
+        variable_activation_fields = {
+            "authorized_by",
+            "authorized_utc",
+            "processing_run_id",
+            "authorization_receipt_sha256",
+        }
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            readiness, receipt = bound_active_receipt(bundle)
+            exact_fields = expected_authorization_keys(bundle["template_path"]) - variable_activation_fields
+            self.assertEqual(len(exact_fields), 48)
+            for field in sorted(exact_fields):
+                with self.subTest(field=field):
+                    tampered = copy.deepcopy(receipt)
+                    value = tampered[field]
+                    if isinstance(value, bool):
+                        tampered[field] = not value
+                    elif isinstance(value, int):
+                        tampered[field] = value + 1
+                    elif isinstance(value, str):
+                        tampered[field] = value + "-tampered"
+                    elif isinstance(value, list):
+                        tampered[field] = [*value, "tampered"]
+                    elif isinstance(value, dict):
+                        tampered[field] = {**value, "tampered": "value"}
+                    else:
+                        self.fail(f"unsupported receipt field type: {field}={type(value)}")
+                    tampered["authorization_receipt_sha256"] = (
+                        canonical_authorization_receipt_sha256(tampered)
+                    )
+                    with self.assertRaises(AssertionError):
+                        validate_receipt_readiness_bindings(tampered, readiness)
+
+    def test_receipt_rejects_invalid_activation_values_after_rehash(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            canonical_authorization_receipt_sha256,
+            validate_receipt_readiness_bindings,
+        )
+
+        invalid_values = (
+            ("authorized_by_empty", "authorized_by", ""),
+            ("authorized_by_type", "authorized_by", 123),
+            ("authorized_utc_value", "authorized_utc", "not-a-time"),
+            ("authorized_utc_type", "authorized_utc", 123),
+            ("processing_run_id_value", "processing_run_id", "../unsafe"),
+            ("processing_run_id_type", "processing_run_id", 123),
+        )
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            readiness, receipt = bound_active_receipt(bundle)
+            for name, field, value in invalid_values:
+                with self.subTest(name=name):
+                    tampered = copy.deepcopy(receipt)
+                    tampered[field] = value
+                    tampered["authorization_receipt_sha256"] = (
+                        canonical_authorization_receipt_sha256(tampered)
+                    )
+                    with self.assertRaises(AssertionError):
+                        validate_receipt_readiness_bindings(tampered, readiness)
+
+    def test_receipt_rejects_json_number_type_drift_after_rehash(self):
+        from ncei.code.scs_v2_stage_c_processing import (
+            canonical_authorization_receipt_sha256,
+            validate_receipt_readiness_bindings,
+        )
+
+        with TemporaryDirectory() as directory:
+            bundle = synthetic_readiness(Path(directory) / "readiness-run")
+            readiness, receipt = bound_active_receipt(bundle)
+            tampered = copy.deepcopy(receipt)
+            tampered["object_count"] = float(tampered["object_count"])
+            tampered["authorization_receipt_sha256"] = (
+                canonical_authorization_receipt_sha256(tampered)
+            )
+            with self.assertRaisesRegex(AssertionError, "object_count"):
+                validate_receipt_readiness_bindings(tampered, readiness)
+
+    def test_production_verifier_recomputes_navigation_from_source_states(self):
+        object_record = {
+            "relative_path": "objects/TN352/example.mb58.gz",
+            "sha256": hashlib.sha256(b"example").hexdigest(),
+            "official_cruise_id": "TN352",
+        }
+        object_id = "20260805T230449Z/objects/TN352/example.mb58.gz"
+        objects = pd.DataFrame(
+            [
+                {
+                    "source_object_id": object_id,
+                    "source_object_relative_path": object_record["relative_path"],
+                    "source_object_sha256": object_record["sha256"],
+                    "official_cruise_id": object_record["official_cruise_id"],
+                    "parsed_row_count": 1,
+                    "parse_status": "pass",
+                }
+            ]
+        )
+        from ncei.code.scs_v2_stage_c_processing import sounding_row
+
+        base_raw = {
+            "source_object_id": object_id,
+            "parser_ping_index": 0,
+            "native_ping_counter": 1,
+            "beam_index": 2,
+            "epoch_us": 1_700_000_000_000_000,
+            "lon_deg": 120.0,
+            "lat_deg": 10.0,
+            "u3_navigation_finite": True,
+            "u0_navigation_finite": True,
+            "parser_depth_value": 250.0,
+            "depth_m_positive_down": 250.0,
+            "heading_deg": 90.0,
+            "native_quality_state": "good",
+        }
+        valid = sounding_row(
+            base_raw,
+            "forged-navigation",
+            "20260805T230449Z",
+            object_record,
+            "environment",
+            "command",
+            set(),
+        )
+        valid["u3_navigation_finite"] = True
+        valid["u0_navigation_finite"] = True
+        forged_final = copy.deepcopy(valid)
+        forged_final.update(
+            {
+                "navigation_valid": False,
+                "qc_hard_pass": False,
+                "qc_hard_failure_codes": ["H03_NAVIGATION_RANGE"],
+                "qc_eligible_for_cell": False,
+                "lon_bin": None,
+                "lat_bin": None,
+                "cell_id": None,
+            }
+        )
+        forged_source = copy.deepcopy(valid)
+        forged_source["u0_navigation_finite"] = False
+        for name, row in (
+            ("forged_final", forged_final),
+            ("forged_source", forged_source),
+        ):
+            with self.subTest(name=name), TemporaryDirectory() as directory:
+                run_dir = Path(directory) / "forged-navigation"
+                run_dir.mkdir()
+                pq.write_table(
+                    pa.Table.from_pylist([row]),
+                    run_dir / "sounding_lineage.parquet",
+                )
+                with self.assertRaisesRegex(AssertionError, "navigation evidence"):
+                    verifier_module.verify_soundings(run_dir, objects, {})
 
     def test_readiness_rejects_wrong_run_id(self):
         from ncei.code.scs_v2_stage_c_processing import validate_readiness_bundle
@@ -566,23 +797,23 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         import ncei.code.verify_scs_v2_stage_c_processing as verifier_module
         from ncei.code.prepare_scs_v2_stage_c1a_readiness import AUTHORIZATION_TEMPLATE_SOURCE_PATH
         from ncei.code.scs_v2_stage_c_processing import (
-            STAGE_C2_2_READINESS_ROOT,
-            STAGE_C2_2_READINESS_RUN_ID,
-            STAGE_C2_2_TEMPLATE_PATH,
+            STAGE_C2_3_READINESS_ROOT,
+            STAGE_C2_3_READINESS_RUN_ID,
+            STAGE_C2_3_TEMPLATE_PATH,
         )
 
         self.assertEqual(AUTHORIZATION_TEMPLATE_SOURCE_PATH.resolve(), TEMPLATE_PATH.resolve())
-        self.assertEqual(authorizer_module.READINESS_ROOT.resolve(), STAGE_C2_2_READINESS_ROOT.resolve())
-        self.assertEqual(verifier_module.READINESS_ROOT.resolve(), STAGE_C2_2_READINESS_ROOT.resolve())
-        self.assertEqual(verifier_module.TEMPLATE_PATH.resolve(), STAGE_C2_2_TEMPLATE_PATH.resolve())
-        if STAGE_C2_2_TEMPLATE_PATH.is_file():
-            verification_path = STAGE_C2_2_READINESS_ROOT / "verification.json"
+        self.assertEqual(authorizer_module.READINESS_ROOT.resolve(), STAGE_C2_3_READINESS_ROOT.resolve())
+        self.assertEqual(verifier_module.READINESS_ROOT.resolve(), STAGE_C2_3_READINESS_ROOT.resolve())
+        self.assertEqual(verifier_module.TEMPLATE_PATH.resolve(), STAGE_C2_3_TEMPLATE_PATH.resolve())
+        if STAGE_C2_3_TEMPLATE_PATH.is_file():
+            verification_path = STAGE_C2_3_READINESS_ROOT / "verification.json"
             self.assertTrue(verification_path.is_file())
-            manifest = json.loads((STAGE_C2_2_READINESS_ROOT / "audit_manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads((STAGE_C2_3_READINESS_ROOT / "audit_manifest.json").read_text(encoding="utf-8"))
             verification = json.loads(verification_path.read_text(encoding="utf-8"))
             self.assertEqual(
-                {STAGE_C2_2_READINESS_ROOT.name, manifest["run_id"], verification["run_id"]},
-                {STAGE_C2_2_READINESS_RUN_ID},
+                {STAGE_C2_3_READINESS_ROOT.name, manifest["run_id"], verification["run_id"]},
+                {STAGE_C2_3_READINESS_RUN_ID},
             )
 
     def test_synthetic_producer_output_passes_production_verifier(self):
@@ -598,6 +829,7 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
         from ncei.code.scs_v2_stage_c_processing import (
             STAGE_C_PRODUCTION_CODE_BINDINGS,
             STAGE_C_PRODUCTION_CONTRACT_BINDINGS,
+            canonical_authorization_receipt_sha256,
         )
 
         run_id = "synthetic-production-verifier"
@@ -658,6 +890,22 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
                 expected_readiness_run_id=bundle["run_id"],
                 stage_c_root=stage_root,
             )
+            valid_receipt_bytes = generated_receipt.read_bytes()
+            tampered_receipt = json.loads(valid_receipt_bytes)
+            tampered_receipt["object_count"] += 1
+            tampered_receipt["authorization_receipt_sha256"] = (
+                canonical_authorization_receipt_sha256(tampered_receipt)
+            )
+            write_json(generated_receipt, tampered_receipt)
+            with self.assertRaisesRegex(AssertionError, "object_count"):
+                validate_active_authorization(
+                    generated_receipt,
+                    run_id,
+                    readiness_root=readiness_root,
+                    expected_readiness_run_id=bundle["run_id"],
+                    stage_c_root=stage_root,
+                )
+            generated_receipt.write_bytes(valid_receipt_bytes)
             run_dir.mkdir(parents=True)
 
             u3_path = root / "u3.tsv"
@@ -872,6 +1120,21 @@ class VerifySCSV2StageCProcessingTest(unittest.TestCase):
             )
 
             manifest = pd.DataFrame([object_record])
+            valid_run_receipt_bytes = (run_dir / "authorization_receipt.json").read_bytes()
+            tampered_receipt = json.loads(valid_run_receipt_bytes)
+            tampered_receipt["object_count"] += 1
+            tampered_receipt["authorization_receipt_sha256"] = (
+                canonical_authorization_receipt_sha256(tampered_receipt)
+            )
+            write_json(run_dir / "authorization_receipt.json", tampered_receipt)
+            with self.assertRaisesRegex(AssertionError, "object_count"):
+                verifier_module.verify_run(
+                    run_dir,
+                    stage_c_root=stage_root,
+                    readiness_root=readiness_root,
+                    manifest_bundle=(manifest, {}, {}),
+                )
+            (run_dir / "authorization_receipt.json").write_bytes(valid_run_receipt_bytes)
             result = verifier_module.verify_run(
                 run_dir,
                 stage_c_root=stage_root,

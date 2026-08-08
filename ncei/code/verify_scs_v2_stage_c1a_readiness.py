@@ -30,8 +30,10 @@ from ncei.code.prepare_scs_v2_stage_c1a_readiness import (
     PREDECESSOR_VERIFICATION_SHA256,
 )
 from ncei.code.scs_v2_stage_c_processing import (
-    STAGE_C2_2_READINESS_ROOT,
-    STAGE_C2_2_READINESS_RUN_ID,
+    STAGE_C0_PLANNING_COMMIT,
+    STAGE_C0_PLANNING_LOCK_SHA256,
+    STAGE_C2_3_READINESS_ROOT,
+    STAGE_C2_3_READINESS_RUN_ID,
 )
 from ncei.code.verify_scs_v2_stage_c1_readiness import (
     canonical_sha256,
@@ -56,11 +58,14 @@ REQUIRED_READINESS_SHA_KEYS = frozenset(
         "c1a_tests_sha256",
         "stage_c2_1_contract_sha256",
         "stage_c2_2_contract_sha256",
+        "stage_c2_3_contract_sha256",
+        "stage_c0_planning_lock_sha256",
         "output_schema_sha256",
         "qc_contract_sha256",
         "verification_contract_sha256",
     }
 )
+REQUIRED_READINESS_EVIDENCE_KEYS = frozenset({"stage_c0_planning_commit"})
 
 
 def atomic_json(value: Any, path: Path) -> None:
@@ -91,7 +96,7 @@ def verify_predecessor() -> int:
 
 
 def verify_manifest(run_dir: Path, manifest: dict[str, Any]) -> int:
-    require(manifest["stage"] == "C2_2_zero_candidate_contract_closure", "manifest stage mismatch")
+    require(manifest["stage"] == "C2_3_zero_candidate_receipt_navigation_evidence", "manifest stage mismatch")
     require(manifest["run_id"] == run_dir.name, "manifest run ID mismatch")
     require(manifest["accepted_stage_c1"] == {
         "run_id": PREDECESSOR_RUN_ID,
@@ -200,6 +205,7 @@ def verify_stage_c_chain(run_dir: Path, readiness: dict[str, Any]) -> int:
         require(Path(readiness[path_key]).resolve() == template_path.resolve(), f"{path_key} is not the readiness snapshot")
         require(readiness[sha_key] == template_sha, f"{sha_key} mismatch")
     require(REQUIRED_READINESS_SHA_KEYS <= set(readiness), "readiness SHA field set incomplete")
+    require(REQUIRED_READINESS_EVIDENCE_KEYS <= set(readiness), "readiness evidence field set incomplete")
     chain = {
         "stage_c_processor_sha256": REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py",
         "stage_c_authorizer_sha256": REPO_ROOT / "ncei/code/authorize_scs_v2_stage_c.py",
@@ -217,13 +223,16 @@ def verify_stage_c_chain(run_dir: Path, readiness: dict[str, Any]) -> int:
         require(sha256_file(path) == readiness[key], f"stage C chain SHA mismatch: {key}")
     require(readiness["stage_c2_1_contract_sha256"] == sha256_file(CONTRACT_SOURCES["stage-c2-1-contract.yaml"]), "C2.1 contract SHA mismatch")
     require(readiness["stage_c2_2_contract_sha256"] == sha256_file(CONTRACT_SOURCES["stage-c2-2-contract.yaml"]), "C2.2 contract SHA mismatch")
+    require(readiness["stage_c2_3_contract_sha256"] == sha256_file(CONTRACT_SOURCES["stage-c2-3-contract.yaml"]), "C2.3 contract SHA mismatch")
+    require(readiness["stage_c0_planning_lock_sha256"] == STAGE_C0_PLANNING_LOCK_SHA256, "Stage C0 planning lock SHA mismatch")
+    require(readiness["stage_c0_planning_commit"] == STAGE_C0_PLANNING_COMMIT, "Stage C0 planning commit mismatch")
     for key, filename in (
         ("output_schema_sha256", "stage-c01-output-schema.yaml"),
         ("qc_contract_sha256", "stage-c01-source-internal-qc.yaml"),
         ("verification_contract_sha256", "stage-c01-verification-contract.yaml"),
     ):
         require(readiness[key] == sha256_file(CONTRACT_SOURCES[filename]), f"{filename} SHA mismatch")
-    return 8 + len(chain)
+    return 12 + len(chain)
 
 
 def verify_zero_access(access: dict[str, Any], readiness: dict[str, Any], tests: dict[str, Any]) -> int:
@@ -255,8 +264,8 @@ def verify_zero_access(access: dict[str, Any], readiness: dict[str, Any], tests:
 
 def verify_run(run_dir: Path) -> dict[str, Any]:
     run_dir = run_dir.resolve()
-    require(run_dir == STAGE_C2_2_READINESS_ROOT.resolve(), "run directory is not the configured C2.2 readiness root")
-    require(run_dir.name == STAGE_C2_2_READINESS_RUN_ID and RUN_ID_RE.fullmatch(run_dir.name) is not None, "readiness run ID mismatch")
+    require(run_dir == STAGE_C2_3_READINESS_ROOT.resolve(), "run directory is not the configured C2.3 readiness root")
+    require(run_dir.name == STAGE_C2_3_READINESS_RUN_ID and RUN_ID_RE.fullmatch(run_dir.name) is not None, "readiness run ID mismatch")
     verification_path = run_dir / "verification.json"
     if verification_path.exists():
         raise FileExistsError(f"immutable verification already exists: {verification_path}")
@@ -286,7 +295,7 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
 
     result = {
         "schema_version": 2,
-        "stage": "C2_2_zero_candidate_contract_closure",
+        "stage": "C2_3_zero_candidate_receipt_navigation_evidence",
         "status": "pass",
         "run_id": run_dir.name,
         "run_dir": str(run_dir),
@@ -296,6 +305,7 @@ def verify_run(run_dir: Path) -> dict[str, Any]:
         "accepted_stage_c1_readiness_verification_sha256": PREDECESSOR_VERIFICATION_SHA256,
         "environment_digest": digest,
         **{key: readiness[key] for key in sorted(REQUIRED_READINESS_SHA_KEYS)},
+        **{key: readiness[key] for key in sorted(REQUIRED_READINESS_EVIDENCE_KEYS)},
         "receipt_report_template_sha256": readiness["receipt_report_template_sha256"],
         "verifier_template_sha256": readiness["verifier_template_sha256"],
         "offline_tests_run": tests["tests_run"],

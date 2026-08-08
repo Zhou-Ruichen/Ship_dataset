@@ -39,8 +39,8 @@ from ncei.code.scs_v2_stage_c_processing import (
     source_field_ledger,
     source_object_id,
     source_processing_row,
-    STAGE_C2_2_READINESS_ROOT,
-    STAGE_C2_2_READINESS_RUN_ID,
+    STAGE_C2_3_READINESS_ROOT,
+    STAGE_C2_3_READINESS_RUN_ID,
     sounding_batch_table,
     validate_readiness_bundle,
     validate_receipt_readiness_bindings,
@@ -51,7 +51,7 @@ from ncei.code.scs_v2_stage_c_processing import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEALED_ROOT = REPO_ROOT / "ncei/archive/scs_v2_sealed_confirmation/20260805T230449Z"
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
-READINESS_ROOT = STAGE_C2_2_READINESS_ROOT
+READINESS_ROOT = STAGE_C2_3_READINESS_ROOT
 SCHEMA_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c01-output-schema.yaml"
 PROCESSING_FORMATS = {".mb58.gz"}
 SIDECAR_FORMATS = {".fnv", ".inf", ".fbt"}
@@ -85,7 +85,7 @@ def validate_active_authorization(
     processing_run_id: str,
     *,
     readiness_root: Path = READINESS_ROOT,
-    expected_readiness_run_id: str = STAGE_C2_2_READINESS_RUN_ID,
+    expected_readiness_run_id: str = STAGE_C2_3_READINESS_RUN_ID,
     stage_c_root: Path = STAGE_C_ROOT,
 ) -> dict[str, Any]:
     receipt = load_json(receipt_path)

@@ -49,9 +49,13 @@
       }
     },
     "20260809T030000Z": {
-      "classification": "verified_pass_pending_separate_review",
+      "classification": "verified_but_not_authorizable_due_review_blockers",
       "immutable": true,
       "verification_present": true,
+      "review_blockers": [
+        "active_receipt_fixed_fields_not_exhaustively_bound",
+        "navigation_source_states_not_persisted_or_independently_verified"
+      ],
       "files": {
         "audit_manifest.json": "8448c84c1b8ed03b9c93294f78685e3deb68a622280031b4a983ad435524abc8",
         "readiness_lock.json": "73c4d5033fa4099fa86e45071b11ff10b43ec320244978582ec18e4f07fd1c7f",
@@ -67,6 +71,6 @@
       }
     }
   },
-  "target_readiness_run_id": "20260809T030000Z",
-  "target_status": "verified_pass_pending_separate_review"
+  "target_readiness_run_id": "20260809T040000Z",
+  "target_status": "pending_c2_3_implementation"
 }

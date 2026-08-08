@@ -40,9 +40,11 @@ from ncei.code.scs_v2_stage_c1a_contract import (
     parse_source_streams_atomically,
 )
 from ncei.code.scs_v2_stage_c_processing import (
-    STAGE_C2_2_READINESS_ROOT,
-    STAGE_C2_2_READINESS_RUN_ID,
-    STAGE_C2_2_TEMPLATE_SOURCE_PATH,
+    STAGE_C0_PLANNING_COMMIT,
+    STAGE_C0_PLANNING_LOCK_SHA256,
+    STAGE_C2_3_READINESS_ROOT,
+    STAGE_C2_3_READINESS_RUN_ID,
+    STAGE_C2_3_TEMPLATE_SOURCE_PATH,
 )
 
 
@@ -60,16 +62,19 @@ CONTRACT_FILES = [
     *C1A_CONTRACT_FILES,
     "stage-c2-1-contract.yaml",
     "stage-c2-2-contract.yaml",
+    "stage-c2-3-contract.yaml",
 ]
 C2_1_TASK_ROOT = REPO_ROOT / ".trellis/tasks/08-09-scs-v2-stage-c2-1-correction"
 C2_2_TASK_ROOT = REPO_ROOT / ".trellis/tasks/08-09-scs-v2-stage-c2-2-contract-closure"
+C2_3_TASK_ROOT = REPO_ROOT / ".trellis/tasks/08-09-scs-v2-stage-c2-3-zero-candidate-correction"
 CONTRACT_SOURCES = {
     **{name: RESEARCH_ROOT / name for name in [*C1_CONTRACT_FILES, *C1A_CONTRACT_FILES]},
     "stage-c2-1-contract.yaml": C2_1_TASK_ROOT / "research/stage-c2-1-contract.yaml",
     "stage-c2-2-contract.yaml": C2_2_TASK_ROOT / "research/stage-c2-2-contract.yaml",
+    "stage-c2-3-contract.yaml": C2_3_TASK_ROOT / "research/stage-c2-3-contract.yaml",
 }
-AUTHORIZATION_TEMPLATE_SOURCE_PATH = STAGE_C2_2_TEMPLATE_SOURCE_PATH
-READINESS_ROOT = STAGE_C2_2_READINESS_ROOT.parent
+AUTHORIZATION_TEMPLATE_SOURCE_PATH = STAGE_C2_3_TEMPLATE_SOURCE_PATH
+READINESS_ROOT = STAGE_C2_3_READINESS_ROOT.parent
 FIXTURE_ROOT = REPO_ROOT / "_common/tests/fixtures"
 C1_FIXTURE_ROOT = FIXTURE_ROOT / "scs_v2_stage_c1"
 C1A_FIXTURE_ROOT = FIXTURE_ROOT / "scs_v2_stage_c1a"
@@ -231,6 +236,11 @@ def run_tests() -> dict[str, Any]:
         "test_readiness_rejects_missing_verification",
         "test_receipt_binding_rejects_wrong_readiness_id",
         "test_receipt_rejects_each_frozen_sha_drift",
+        "test_template_field_classification_is_disjoint_and_complete",
+        "test_receipt_rejects_every_exact_field_drift_after_rehash",
+        "test_receipt_rejects_invalid_activation_values_after_rehash",
+        "test_receipt_rejects_json_number_type_drift_after_rehash",
+        "test_production_verifier_recomputes_navigation_from_source_states",
         "test_gate_rejects_nested_placeholder_recursively",
         "test_gate_rejects_missing_field",
         "test_gate_rejects_extra_field",
@@ -257,8 +267,8 @@ def run_tests() -> dict[str, Any]:
 def produce(environment_root: Path, source_root: Path, planning_commit: str, run_id: str) -> Path:
     if not RUN_ID_RE.fullmatch(run_id):
         raise ValueError("readiness run ID must be YYYYMMDDTHHMMSSZ")
-    if run_id != STAGE_C2_2_READINESS_RUN_ID:
-        raise ValueError("readiness run ID does not match the C2.2 production root")
+    if run_id != STAGE_C2_3_READINESS_RUN_ID:
+        raise ValueError("readiness run ID does not match the C2.3 production root")
     environment_root = environment_root.resolve()
     source_root = source_root.resolve()
     c0_lock = validate_inputs(environment_root, source_root, planning_commit)
@@ -310,7 +320,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
 
         access_ledger = {
             "schema_version": 2,
-            "stage": "C2_2_zero_candidate_contract_closure",
+            "stage": "C2_3_zero_candidate_receipt_navigation_evidence",
             "allowed_inputs": [
                 str(PREDECESSOR_RUN / "audit_manifest.json"),
                 str(PREDECESSOR_RUN / "verification.json"),
@@ -336,12 +346,14 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
 
         readiness_lock = {
             "schema_version": 2,
-            "stage": "C2_2_zero_candidate_contract_closure",
+            "stage": "C2_3_zero_candidate_receipt_navigation_evidence",
             "status": "ready_for_separate_stage_c_authorization",
             "run_id": run_id,
             "created_utc": utc_now(),
             "planning_commit": planning_commit,
             "accepted_stage_c0_planning_lock_sha256": ACCEPTED_C0_LOCK_SHA256,
+            "stage_c0_planning_lock_sha256": STAGE_C0_PLANNING_LOCK_SHA256,
+            "stage_c0_planning_commit": STAGE_C0_PLANNING_COMMIT,
             "accepted_stage_c1_readiness_run_id": PREDECESSOR_RUN_ID,
             "accepted_stage_c1_readiness_manifest_sha256": PREDECESSOR_MANIFEST_SHA256,
             "accepted_stage_c1_readiness_verification_sha256": PREDECESSOR_VERIFICATION_SHA256,
@@ -369,6 +381,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
             "c1a_tests_sha256": source_hashes["c1a_tests"]["sha256"],
             "stage_c2_1_contract_sha256": contract_records["stage-c2-1-contract.yaml"]["sha256"],
             "stage_c2_2_contract_sha256": contract_records["stage-c2-2-contract.yaml"]["sha256"],
+            "stage_c2_3_contract_sha256": contract_records["stage-c2-3-contract.yaml"]["sha256"],
             "output_schema_sha256": contract_records["stage-c01-output-schema.yaml"]["sha256"],
             "qc_contract_sha256": contract_records["stage-c01-source-internal-qc.yaml"]["sha256"],
             "verification_contract_sha256": contract_records["stage-c01-verification-contract.yaml"]["sha256"],
@@ -411,7 +424,7 @@ def produce(environment_root: Path, source_root: Path, planning_commit: str, run
 
         audit_manifest = {
             "schema_version": 1,
-            "stage": "C2_2_zero_candidate_contract_closure",
+            "stage": "C2_3_zero_candidate_receipt_navigation_evidence",
             "run_id": run_id,
             "created_utc": utc_now(),
             "planning_commit": planning_commit,

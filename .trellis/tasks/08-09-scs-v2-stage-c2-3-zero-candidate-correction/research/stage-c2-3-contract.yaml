@@ -1,0 +1,49 @@
+schema_version: 1
+stage: C2_3_zero_candidate_receipt_navigation_evidence
+status: frozen_before_implementation
+
+planning_lock:
+  sha256: ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e
+  commit: 0aadea0d5f94783d138fdf6b4479e6f51b0d35db
+
+authorization_receipt:
+  template_field_count: 33
+  classifications:
+    template_fixed_count: 17
+    readiness_evidence_filled_count: 11
+    activation_controlled_count: 5
+  unclassified_field_count: 0
+  exact_key_set_required: true
+  recursive_placeholder_rejection: true
+  canonical_hash_is_not_sufficient_for_fixed_field_changes: true
+
+sounding_lineage:
+  schema_version: 4
+  fields:
+    u3_navigation_finite: {type: bool, nullable: false}
+    u0_navigation_finite: {type: bool, nullable: true, null_meaning: u0_absent}
+    navigation_valid: {type: bool, nullable: false}
+  verifier_expression: >-
+    u3_navigation_finite and
+    (u0_navigation_finite is null or u0_navigation_finite) and
+    output_coordinate_range_valid
+
+prohibitions:
+  sealed_object_body_read: true
+  archive_decompression: true
+  stage_c_rerun: true
+  sounding_or_cell_generation: true
+  gebco_product_or_model_comparison: true
+  mrar_merge: true
+  datum_or_bias_fit: true
+  cross_cruise_aggregation: true
+  confirmation_role_promotion: true
+
+readiness:
+  previous_run_id: 20260809T030000Z
+  previous_classification: verified_but_not_authorizable_due_review_blockers
+  target_run_id: 20260809T040000Z
+  stage_c_authorized: false
+  confirmation_role_eligible: false
+  zero_candidate_required: true
+  separate_review_required: true

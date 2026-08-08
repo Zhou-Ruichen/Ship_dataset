@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "receipt_red": {
+    "tests_run": 3,
+    "failures": 28,
+    "errors": 1,
+    "meaning": "C2.2 allowed 26 exact-field mutations plus invalid UTC and unsafe processing run ID; the classification API did not exist"
+  },
+  "navigation_red": {
+    "tests_run": 3,
+    "failures": 3,
+    "errors": 6,
+    "meaning": "schema remained v3, lineage omitted both source states, and production verifier accepted forged final/source navigation evidence"
+  },
+  "green": {
+    "related_test_modules": 4,
+    "tests_run": 71,
+    "failures": 0,
+    "errors": 0,
+    "exact_receipt_fields_mutated_and_rejected": 48,
+    "invalid_activation_values_rejected": 6,
+    "json_number_type_drift_rejected": true,
+    "processor_tamper_rejection": true,
+    "production_verifier_tamper_rejection": true,
+    "forged_navigation_cases_rejected": 2
+  },
+  "sealed_object_body_read_count": 0,
+  "archive_decompression_count": 0,
+  "stage_c_rerun_performed": false
+}

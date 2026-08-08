@@ -13,9 +13,13 @@ from pathlib import Path
 from typing import Any
 
 from ncei.code.scs_v2_stage_c_processing import (
-    STAGE_C2_2_READINESS_ROOT,
-    STAGE_C2_2_READINESS_RUN_ID,
-    STAGE_C2_2_TEMPLATE_PATH,
+    ACTIVE_AUTHORIZATION_RECEIPT_SCHEMA_VERSION,
+    PERMITTED_BODY_READ_COUNTS,
+    PROHIBITED_EXTERNAL_INPUTS,
+    STAGE_C0_PLANNING_COMMIT,
+    STAGE_C0_PLANNING_LOCK_SHA256,
+    STAGE_C2_3_READINESS_ROOT,
+    STAGE_C2_3_READINESS_RUN_ID,
     canonical_authorization_receipt_sha256,
     safe_processing_run_id,
     sha256_file,
@@ -26,7 +30,7 @@ from ncei.code.scs_v2_stage_c_processing import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLANNING_LOCK_PATH = REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c0-planning-lock.json"
-READINESS_ROOT = STAGE_C2_2_READINESS_ROOT
+READINESS_ROOT = STAGE_C2_3_READINESS_ROOT
 STAGE_C_ROOT = REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c"
 PRIMARY_IDS = ["EQT20210702", "EQT190012", "EQT180002", "TN352"]
 
@@ -55,7 +59,7 @@ def materialize_authorization(
     qc_contract_path: Path,
     verification_contract_path: Path,
     readiness_root: Path = READINESS_ROOT,
-    expected_readiness_run_id: str = STAGE_C2_2_READINESS_RUN_ID,
+    expected_readiness_run_id: str = STAGE_C2_3_READINESS_RUN_ID,
     stage_c_root: Path = STAGE_C_ROOT,
     planning_lock_path: Path = PLANNING_LOCK_PATH,
 ) -> dict[str, Any]:
@@ -98,12 +102,14 @@ def materialize_authorization(
         check=True,
     ).stdout.strip()
     require(re.fullmatch(r"[0-9a-f]{40}", planning_commit) is not None, "planning commit not resolved")
+    require(planning_lock_sha == STAGE_C0_PLANNING_LOCK_SHA256, "Stage C0 planning lock SHA mismatch")
+    require(planning_commit == STAGE_C0_PLANNING_COMMIT, "Stage C0 planning commit mismatch")
 
     receipt = dict(template)
     receipt.pop("producer_sha256", None)
     receipt.update(
         {
-            "schema_version": 5,
+            "schema_version": ACTIVE_AUTHORIZATION_RECEIPT_SCHEMA_VERSION,
             "stage_c_authorized": True,
             "authorized_by": authorized_by,
             "authorized_utc": authorized_utc,
@@ -133,8 +139,8 @@ def materialize_authorization(
             "stage_c1a_readiness_manifest_sha256": readiness["manifest_sha256"],
             "stage_c1a_readiness_verification_sha256": readiness["verification_sha256"],
             "source_internal_only": True,
-            "permitted_body_read_counts": {".mb58.gz": 192, ".fnv": 0, ".inf": 0, ".fbt": 0},
-            "prohibited_external_inputs": ["GEBCO", "product", "model", "GGM", "PINN", "MRAR_merge"],
+            "permitted_body_read_counts": PERMITTED_BODY_READ_COUNTS,
+            "prohibited_external_inputs": PROHIBITED_EXTERNAL_INPUTS,
             "gebco_or_product_comparison_authorized": False,
             "model_comparison_authorized": False,
             "mrar_merge_authorized": False,

@@ -1,4 +1,4 @@
-schema_version: 3
+schema_version: 4
 stage: C_source_internal_qc
 supersedes_for_future_stage_c:
   path: research/source-internal-qc.yaml
@@ -15,6 +15,10 @@ actions:
   datum_or_bias_fit: false
   global_three_std_filter: false
 navigation_validity:
+  persisted_source_fields:
+    u3_navigation_finite: {type: bool, nullable: false}
+    u0_navigation_finite: {type: bool, nullable: true, null_meaning: u0_key_absent}
+  verifier_expression: u3_navigation_finite && (u0_navigation_finite_is_null || u0_navigation_finite) && output_coordinate_range_valid
   u3_xy_nonfinite: navigation_valid_false
   present_u0_xy_nonfinite: navigation_valid_false
   u0_key_absent: not_a_navigation_failure_by_itself

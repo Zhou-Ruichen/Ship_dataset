@@ -31,14 +31,14 @@ from ncei.code.scs_v2_stage_c1_contract import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STAGE_C2_2_READINESS_RUN_ID = "20260809T030000Z"
-STAGE_C2_2_READINESS_ROOT = (
-    REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness" / STAGE_C2_2_READINESS_RUN_ID
+STAGE_C2_3_READINESS_RUN_ID = "20260809T040000Z"
+STAGE_C2_3_READINESS_ROOT = (
+    REPO_ROOT / "ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness" / STAGE_C2_3_READINESS_RUN_ID
 )
-STAGE_C2_2_TEMPLATE_SOURCE_PATH = (
+STAGE_C2_3_TEMPLATE_SOURCE_PATH = (
     REPO_ROOT / ".trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c-authorization.template.json"
 )
-STAGE_C2_2_TEMPLATE_PATH = STAGE_C2_2_READINESS_ROOT / "stage_c_authorization.template.json"
+STAGE_C2_3_TEMPLATE_PATH = STAGE_C2_3_READINESS_ROOT / "stage_c_authorization.template.json"
 STAGE_C_PRODUCTION_CODE_BINDINGS = {
     "stage_c_processing_helper_sha256": ("stage_c_processing_helper", Path(__file__).resolve()),
     "stage_c_processor_sha256": ("stage_c_processor", REPO_ROOT / "ncei/code/process_scs_v2_stage_c_source_internal.py"),
@@ -60,7 +60,7 @@ STAGE_C_PRODUCTION_CONTRACT_BINDINGS = {
     ),
 }
 AUTHORIZATION_SCAFFOLD_REMOVED = frozenset({"producer_sha256"})
-AUTHORIZATION_ADDED_KEYS = frozenset(
+AUTHORIZATION_RECEIPT_ONLY_FIELDS = frozenset(
     {
         "authorization_receipt_sha256",
         "authorization_script_sha256",
@@ -71,10 +71,7 @@ AUTHORIZATION_ADDED_KEYS = frozenset(
         "gebco_or_product_comparison_authorized",
         "model_comparison_authorized",
         "mrar_merge_authorized",
-        "model_or_product_evaluation_authorized",
-        "stage_d_confirmation_evaluation_authorized",
         "parser_binary_sha256",
-        "parser_help_snapshot_sha256",
         "permitted_body_read_counts",
         "processing_helper_sha256",
         "processor_sha256",
@@ -84,13 +81,73 @@ AUTHORIZATION_ADDED_KEYS = frozenset(
         "stage_c1a_readiness_manifest_sha256",
         "stage_c1a_readiness_verification_sha256",
         "time_fixture_verification_sha256",
+    }
+)
+# Compatibility export used by the production verifier and existing schema tests.
+AUTHORIZATION_ADDED_KEYS = AUTHORIZATION_RECEIPT_ONLY_FIELDS
+ACTIVE_AUTHORIZATION_RECEIPT_SCHEMA_VERSION = 6
+STAGE_C0_PLANNING_LOCK_SHA256 = "ec0a0a491c995c374ac99306a37f3eb9b26e06692616939072736f7b7f08d78e"
+STAGE_C0_PLANNING_COMMIT = "0aadea0d5f94783d138fdf6b4479e6f51b0d35db"
+AUTHORIZATION_TEMPLATE_FIXED_FIELDS = frozenset(
+    {
+        "access_lock_sha256",
+        "acquisition_run_id",
+        "command_contract_sha256",
+        "confirmation_role_eligible",
+        "fixed_output_root",
+        "fixture_contract_sha256",
+        "immutable_primary_cruise_ids",
+        "model_or_product_evaluation_authorized",
+        "object_count",
+        "parser_name",
+        "parser_source_commit",
+        "parser_version",
+        "permitted_object_reads",
+        "sealed_archive_manifest_sha256",
+        "stage_b_verification_sha256",
+        "stage_d_confirmation_evaluation_authorized",
+        "total_bytes",
+    }
+)
+AUTHORIZATION_TEMPLATE_EVIDENCE_FIELDS = frozenset(
+    {
+        "fixture_verification_sha256",
         "format58_fixture_bytes_sha256",
         "format58_fixture_oracle_sha256",
-        "fixture_verification_sha256",
-        "stage_c0_planning_lock_sha256",
-        "stage_c0_planning_commit",
+        "output_schema_sha256",
         "parser_environment_digest",
+        "parser_help_snapshot_sha256",
+        "qc_contract_sha256",
+        "stage_c0_planning_commit",
+        "stage_c0_planning_lock_sha256",
+        "verification_contract_sha256",
+        "verifier_sha256",
     }
+)
+AUTHORIZATION_TEMPLATE_ACTIVATION_FIELDS = frozenset(
+    {
+        "authorized_by",
+        "authorized_utc",
+        "processing_run_id",
+        "schema_version",
+        "stage_c_authorized",
+    }
+)
+AUTHORIZATION_VARIABLE_ACTIVATION_FIELDS = frozenset(
+    {"authorized_by", "authorized_utc", "processing_run_id"}
+)
+PERMITTED_BODY_READ_COUNTS = {".mb58.gz": 192, ".fnv": 0, ".inf": 0, ".fbt": 0}
+PROHIBITED_EXTERNAL_INPUTS = ["GEBCO", "product", "model", "GGM", "PINN", "MRAR_merge"]
+PROHIBITED_AUTHORIZATION_FIELDS = (
+    "gebco_or_product_comparison_authorized",
+    "model_comparison_authorized",
+    "mrar_merge_authorized",
+    "cross_cruise_aggregation_authorized",
+    "datum_or_bias_fit_authorized",
+    "confirmation_role_promotion_authorized",
+    "confirmation_role_eligible",
+    "model_or_product_evaluation_authorized",
+    "stage_d_confirmation_evaluation_authorized",
 )
 
 
@@ -279,7 +336,125 @@ def expected_authorization_keys(template_path: Path) -> set[str]:
     template = json.loads(template_path.read_text(encoding="utf-8"))
     if not isinstance(template, dict):
         raise AssertionError("authorization template is not an object")
+    authorization_template_field_classification(template_path)
     return (set(template) - AUTHORIZATION_SCAFFOLD_REMOVED) | AUTHORIZATION_ADDED_KEYS
+
+
+def authorization_template_field_classification(template_path: Path) -> dict[str, frozenset[str]]:
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    if not isinstance(template, dict):
+        raise AssertionError("authorization template is not an object")
+    classification = {
+        "template_fixed": AUTHORIZATION_TEMPLATE_FIXED_FIELDS,
+        "readiness_evidence_filled": AUTHORIZATION_TEMPLATE_EVIDENCE_FIELDS,
+        "activation_controlled": AUTHORIZATION_TEMPLATE_ACTIVATION_FIELDS,
+    }
+    classified: set[str] = set()
+    for name, fields in classification.items():
+        overlap = classified & fields
+        if overlap:
+            raise AssertionError(f"authorization template fields multiply classified in {name}: {sorted(overlap)}")
+        classified.update(fields)
+    template_fields = set(template)
+    if classified != template_fields:
+        missing = template_fields - classified
+        stale = classified - template_fields
+        raise AssertionError(
+            f"authorization template classification mismatch: unclassified={sorted(missing)}, stale={sorted(stale)}"
+        )
+    return classification
+
+
+def _readiness_output_file(readiness: Mapping[str, Any], relative_path: str) -> Path:
+    path = (Path(readiness["root"]) / relative_path).resolve()
+    record = readiness["manifest"].get("outputs", {}).get(relative_path, {})
+    if not path.is_file() or Path(record.get("path", "")).resolve() != path:
+        raise AssertionError(f"readiness output path mismatch: {relative_path}")
+    if record.get("sha256") != sha256_file(path) or record.get("bytes") != path.stat().st_size:
+        raise AssertionError(f"readiness output SHA mismatch: {relative_path}")
+    return path
+
+
+def expected_active_authorization_values(readiness: Mapping[str, Any]) -> dict[str, Any]:
+    template_path = Path(readiness["template_path"])
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    classification = authorization_template_field_classification(template_path)
+    expected = {
+        field: template[field]
+        for field in classification["template_fixed"]
+    }
+
+    environment_path = _readiness_output_file(readiness, "environment_lock.json")
+    fixture_path = _readiness_output_file(readiness, "fixture_verification.json")
+    time_fixture_path = _readiness_output_file(
+        readiness, "time_contract_fixture_verification.json"
+    )
+    environment = json.loads(environment_path.read_text(encoding="utf-8"))
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    binaries = environment["material"]["binaries"]
+    environment_digest = environment["environment_digest"]
+    if readiness["lock"].get("environment_digest") != environment_digest:
+        raise AssertionError("readiness environment digest mismatch")
+    if readiness["verification"].get("environment_digest") != environment_digest:
+        raise AssertionError("readiness verification environment digest mismatch")
+    if readiness["lock"].get("accepted_stage_c0_planning_lock_sha256") != STAGE_C0_PLANNING_LOCK_SHA256:
+        raise AssertionError("readiness Stage C0 planning lock mismatch")
+    if readiness["verification"].get("stage_c0_planning_lock_sha256") != STAGE_C0_PLANNING_LOCK_SHA256:
+        raise AssertionError("readiness verification Stage C0 planning lock mismatch")
+    if readiness["verification"].get("stage_c0_planning_commit") != STAGE_C0_PLANNING_COMMIT:
+        raise AssertionError("readiness verification Stage C0 planning commit mismatch")
+
+    expected.update(
+        {
+            "fixture_verification_sha256": sha256_file(fixture_path),
+            "format58_fixture_bytes_sha256": fixture["fixture"]["sha256"],
+            "format58_fixture_oracle_sha256": fixture["oracle"]["sha256"],
+            "output_schema_sha256": readiness["contract_hashes"]["output_schema_sha256"],
+            "parser_environment_digest": environment_digest,
+            "parser_help_snapshot_sha256": {
+                name: binaries[name]["version_or_help_sha256"]
+                for name in ("mblist", "mbinfo", "gzip")
+            },
+            "qc_contract_sha256": readiness["contract_hashes"]["qc_contract_sha256"],
+            "stage_c0_planning_commit": STAGE_C0_PLANNING_COMMIT,
+            "stage_c0_planning_lock_sha256": STAGE_C0_PLANNING_LOCK_SHA256,
+            "verification_contract_sha256": readiness["contract_hashes"]["verification_contract_sha256"],
+            "verifier_sha256": readiness["code_hashes"]["stage_c_verifier_sha256"],
+            "schema_version": ACTIVE_AUTHORIZATION_RECEIPT_SCHEMA_VERSION,
+            "stage_c_authorized": True,
+            "authorization_template_sha256": readiness["template_sha256"],
+            "authorization_script_sha256": readiness["code_hashes"]["stage_c_authorizer_sha256"],
+            "processor_sha256": readiness["code_hashes"]["stage_c_processor_sha256"],
+            "processing_helper_sha256": readiness["code_hashes"]["stage_c_processing_helper_sha256"],
+            "parser_binary_sha256": {
+                name: binaries[name]["sha256"]
+                for name in ("mblist", "mbinfo", "gzip")
+            },
+            "permitted_body_read_counts": PERMITTED_BODY_READ_COUNTS,
+            "prohibited_external_inputs": PROHIBITED_EXTERNAL_INPUTS,
+            "source_internal_only": True,
+            "stage_c_readiness_run_id": readiness["run_id"],
+            "stage_c1a_readiness_manifest_sha256": readiness["manifest_sha256"],
+            "stage_c1a_readiness_verification_sha256": readiness["verification_sha256"],
+            "time_fixture_verification_sha256": sha256_file(time_fixture_path),
+            "gebco_or_product_comparison_authorized": False,
+            "model_comparison_authorized": False,
+            "mrar_merge_authorized": False,
+            "cross_cruise_aggregation_authorized": False,
+            "datum_or_bias_fit_authorized": False,
+            "confirmation_role_promotion_authorized": False,
+        }
+    )
+    exact_fields = expected_authorization_keys(template_path) - AUTHORIZATION_VARIABLE_ACTIVATION_FIELDS - {
+        "authorization_receipt_sha256"
+    }
+    if set(expected) != exact_fields:
+        missing = exact_fields - set(expected)
+        extra = set(expected) - exact_fields
+        raise AssertionError(
+            f"active authorization field validation is incomplete: missing={sorted(missing)}, extra={sorted(extra)}"
+        )
+    return expected
 
 
 def validate_authorization_receipt(receipt: dict[str, Any], template_path: Path) -> None:
@@ -304,42 +479,34 @@ def validate_authorization_receipt(receipt: dict[str, Any], template_path: Path)
 def validate_receipt_readiness_bindings(receipt: dict[str, Any], readiness: Mapping[str, Any]) -> None:
     """Require an active receipt to use exactly the readiness-frozen files."""
     validate_authorization_receipt(receipt, Path(readiness["template_path"]))
-    if receipt["stage_c_authorized"] is not True or not str(receipt["authorized_by"]).strip() or not str(receipt["authorized_utc"]).strip():
-        raise AssertionError("authorization receipt is not active")
-    if receipt["source_internal_only"] is not True:
-        raise AssertionError("authorization receipt is not source-internal only")
-    for key in (
-        "gebco_or_product_comparison_authorized",
-        "model_comparison_authorized",
-        "mrar_merge_authorized",
-        "cross_cruise_aggregation_authorized",
-        "datum_or_bias_fit_authorized",
-        "confirmation_role_promotion_authorized",
-        "confirmation_role_eligible",
-        "model_or_product_evaluation_authorized",
-        "stage_d_confirmation_evaluation_authorized",
+    if (
+        receipt["stage_c_authorized"] is not True
+        or not isinstance(receipt["authorized_by"], str)
+        or not receipt["authorized_by"].strip()
     ):
+        raise AssertionError("authorization receipt is not active")
+    if not isinstance(receipt["authorized_utc"], str):
+        raise AssertionError("authorization UTC is not a string")
+    try:
+        authorized_utc = datetime.fromisoformat(receipt["authorized_utc"].replace("Z", "+00:00"))
+    except ValueError as error:
+        raise AssertionError("authorization UTC is invalid") from error
+    if authorized_utc.tzinfo is None or authorized_utc.utcoffset() != timedelta(0):
+        raise AssertionError("authorization UTC must have a UTC offset")
+    if not isinstance(receipt["processing_run_id"], str):
+        raise AssertionError("authorization processing run ID is not a string")
+    try:
+        safe_processing_run_id(receipt["processing_run_id"])
+    except ValueError as error:
+        raise AssertionError("authorization processing run ID is unsafe") from error
+    for key in PROHIBITED_AUTHORIZATION_FIELDS:
         if receipt[key] is not False:
             raise AssertionError(f"authorization enables prohibited action: {key}")
     if receipt["stage_c_readiness_run_id"] != readiness["run_id"]:
         raise AssertionError("authorization readiness run ID mismatch")
-    if receipt["stage_c1a_readiness_manifest_sha256"] != readiness["manifest_sha256"]:
-        raise AssertionError("authorization readiness manifest SHA mismatch")
-    if receipt["stage_c1a_readiness_verification_sha256"] != readiness["verification_sha256"]:
-        raise AssertionError("authorization readiness verification SHA mismatch")
-    if receipt["authorization_template_sha256"] != readiness["template_sha256"]:
-        raise AssertionError("authorization readiness template SHA mismatch")
-    for receipt_key, readiness_key in (
-        ("processing_helper_sha256", "stage_c_processing_helper_sha256"),
-        ("processor_sha256", "stage_c_processor_sha256"),
-        ("authorization_script_sha256", "stage_c_authorizer_sha256"),
-        ("verifier_sha256", "stage_c_verifier_sha256"),
-    ):
-        if receipt[receipt_key] != readiness["code_hashes"][readiness_key]:
-            raise AssertionError(f"authorization readiness code SHA mismatch: {receipt_key}")
-    for receipt_key, digest in readiness["contract_hashes"].items():
-        if receipt[receipt_key] != digest:
-            raise AssertionError(f"authorization readiness contract SHA mismatch: {receipt_key}")
+    for field, expected in expected_active_authorization_values(readiness).items():
+        if canonical_sha256(receipt[field]) != canonical_sha256(expected):
+            raise AssertionError(f"authorization receipt fixed field mismatch: {field}")
 
 
 
@@ -1005,6 +1172,10 @@ def sounding_row(
         "lon_deg_status": status_known,
         "lat_deg": lat,
         "lat_deg_status": status_known,
+        "u3_navigation_finite": bool(raw["u3_navigation_finite"]),
+        "u0_navigation_finite": (
+            None if u0_navigation_finite is None else bool(u0_navigation_finite)
+        ),
         "navigation_valid": nav_ok,
         "horizontal_datum": None,
         "horizontal_datum_status": "officially_unknown",
@@ -1138,6 +1309,11 @@ def sounding_batch_table(
         "lon_deg_status": ["known"] * count,
         "lat_deg": lat_values,
         "lat_deg_status": ["known"] * count,
+        "u3_navigation_finite": [bool(value) for value in raw["u3_navigation_finite"]],
+        "u0_navigation_finite": [
+            None if value is None else bool(value)
+            for value in raw["u0_navigation_finite"]
+        ],
         "navigation_valid": nav_values,
         "horizontal_datum": [None] * count,
         "horizontal_datum_status": ["officially_unknown"] * count,

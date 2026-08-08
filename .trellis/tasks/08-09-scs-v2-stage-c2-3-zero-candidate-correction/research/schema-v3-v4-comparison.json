@@ -1,0 +1,31 @@
+{
+  "schema": "sounding_lineage.parquet",
+  "old": {
+    "readiness_run_id": "20260809T030000Z",
+    "schema_version": 3,
+    "field_count": 61,
+    "sha256": "7026dfec6cb4c2a3ca886aaabc91ca89e9cf660d417cd37214a11efaa4afce1b",
+    "navigation_fields": [
+      {"name": "navigation_valid", "type": "bool", "nullable": false}
+    ]
+  },
+  "new": {
+    "target_readiness_run_id": "20260809T040000Z",
+    "schema_version": 4,
+    "field_count": 63,
+    "sha256_before_implementation_commit": "a1dbb2fc3ba14fc46cf2af36be0b2975a202d4e3e27c1d4bbaffe61d013aed31",
+    "navigation_fields": [
+      {"name": "u3_navigation_finite", "type": "bool", "nullable": false},
+      {"name": "u0_navigation_finite", "type": "bool", "nullable": true},
+      {"name": "navigation_valid", "type": "bool", "nullable": false}
+    ]
+  },
+  "unchanged": [
+    "primary_key",
+    "time_utc_nonnullable",
+    "depth_positive_down",
+    "H03_navigation_policy",
+    "cell_assignment_fields",
+    "held_out_role_fields"
+  ]
+}
