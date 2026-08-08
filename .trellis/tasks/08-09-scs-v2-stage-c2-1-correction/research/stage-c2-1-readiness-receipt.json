@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "stage": "C2_1_zero_candidate_contract_correction",
+  "status": "pass",
+  "authoritative_run": {
+    "run_id": "20260809T020001Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260809T020001Z",
+    "audit_manifest_sha256": "a477bfd2109ab252aba4806e28db56c85e3a17bf1a0e8cd63214d53ee31b73af",
+    "verification_sha256": "7fd59f297496b2854dd784315370f02501d606efd6a6614e105841a438c74542",
+    "readiness_lock_sha256": "b75abb300aec82224885f000c909a3827cd2a5cfb4078c458bc0e66bb842d566",
+    "environment_lock_sha256": "e57f0c171805de639f2fcbd1f8fc3b94ae1033b6d4e1a9718a07bec13275f5d9",
+    "fixture_verification_sha256": "f8f522997708627517af5c21ecf17eaeda73b7c46c8413f7c24255e2890359a3",
+    "time_fixture_verification_sha256": "2b1606484ba440116116761fe7c02c3daaa103aab08debca04077671c91fa5b0",
+    "test_results_sha256": "9569d8674903aafa26999aed79b0276508a1985561ea7490aeb65f799f2d5130",
+    "planning_commit": "b3a51cc8bc5e0b9e1d44317f7ee704e93e350f29",
+    "environment_digest": "b2c47303df33602a297754e48057f68ce8a8801fbd95a987866bf9d25172b0bb",
+    "accepted_predecessor_run_id": "20260806T090504Z",
+    "accepted_predecessor_manifest_sha256": "e822e795d90ebee83459d4c13fb2a3a8ad8879f0b54362bb71fc992ee4074789",
+    "accepted_predecessor_verification_sha256": "443e864009c87ffb315c784c1edaad4a5f5bad209374c4a3816e93ed63ebfb9e"
+  },
+  "template_binding": {
+    "path": "/mnt/data2/00-Data/ship/.trellis/tasks/08-06-scs-v2-stage-c0-source-internal-planning/research/stage-c-authorization.template.json",
+    "authorization_template_sha256": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+    "receipt_report_template_sha256": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4",
+    "verifier_template_sha256": "210fdda2154ee8c37b1869ef38f4b59577e87433e0e49b7a8eb8c78783cf4aa4"
+  },
+  "stage_c2_1_binding": {
+    "contract_sha256": "382ec1236548687997714303396522cd74ed51016625945c0eb48aaa6327e2be",
+    "processor_sha256": "4e44f60fb195c406aedc5ecdef69e5fa72606aa175f56ddcb45c76ee78ea0eec",
+    "authorizer_sha256": "86b760afaaf737cd4f9e41ae966f43f8e0df69ad3cb7c0fb68e23a9f7c29ea52",
+    "verifier_sha256": "078c6205c85a8d34b5d95fe290ad24fe178d0ca5bea9ca14f13f1f5a9b970355",
+    "processing_helper_sha256": "4e32ad5025c5d0fc7c817ed57e274346537cf2d2bc67df6d176a53577915363d",
+    "processing_tests_sha256": "e05a0ff6cf359c7dfd8dc4d2398f3fb794c0e19ed0d69a2163a5a6730ef1a7fe",
+    "verifier_tests_sha256": "442673bd0b6c485bd6347542f53a25c951be5ffd8c2e9c52182c8d9db77be88f"
+  },
+  "verification": {
+    "checks_passed": 435,
+    "offline_tests_run": 51,
+    "sealed_object_body_read_count": 0,
+    "archive_decompression_count": 0,
+    "candidate_sounding_row_count": 0,
+    "candidate_cell_row_count": 0,
+    "stage_b_objects_root_opened": false,
+    "stage_c_authorized": false,
+    "confirmation_role_eligible": false
+  },
+  "authorization": {
+    "stage_c_authorized": false,
+    "confirmation_role_eligible": false,
+    "model_or_product_evaluation_authorized": false,
+    "stage_d_confirmation_evaluation_authorized": false,
+    "stage_c_rerun": "HOLD"
+  },
+  "scope_stop": "C2.1 zero-candidate readiness only. Stage C rerun, sealed body access, Stage D confirmation evaluation, and confirmation role promotion remain unauthorized."
+}
