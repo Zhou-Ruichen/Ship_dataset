@@ -390,3 +390,63 @@ Process note: each bug surfaced only at a deeper stage than the previous run rea
 ### Next Steps
 
 - None for this task. GEBCO/product sanity comparison, if wanted, belongs in a separately authorized task that lifts the source-internal-only constraint.
+
+
+## Session 7: SCS v2 development-only Stage C rerun
+
+**Date**: 2026-08-09
+**Task**: SCS v2 development-only Stage C rerun
+**Branch**: `main`
+
+### Summary
+
+Completed and archived one source-internal development-only Stage C rerun with independent verification, immutable hashes, and an explicit non-confirmation evidence ceiling.
+
+### Main Changes
+
+- Added scoped Git ignore rules for the immutable sealed-acquisition object
+  payloads, machine-generated run JSON files, and local Serena state. The
+  9,626,893,507-byte acquisition remains on disk. Removed the empty untracked
+  package-lock.json; no package.json exists in the repository.
+- Executed immutable Stage C run `20260808T231659Z` from C.2.2 commit
+  `3131f729fb5f9c5ca26943128af38c0b2151186f`, bound to readiness
+  `20260809T030000Z`; the isolated suite passed 66/66 tests.
+- Independent source-internal verification passed: 59,298,192 sounding rows,
+  51,303,876 eligible rows, 5,297 contributor rows, and 3,549 candidate rows.
+  Object 0168 recovered 96,768 rows, including 86,184 eligible rows.
+- Versus `20260807T090000Z`, the run added 10 candidate cells, removed none,
+  and changed median depth in 20 common cells. All changes belong to TN352 in
+  the frozen South China Sea rectangle.
+- The run read 192 authorized `.mb58.gz` bodies and zero `.fnv`, `.inf`, or
+  `.fbt` bodies. It ran no GEBCO, product residual, model, GGM, PINN, MRAR
+  merge, cross-cruise aggregation, or datum/bias fit.
+- Output role remains `development_only_not_confirmation`. C.2.2 receipt-field
+  and independent U3/U0 state-validation gaps remain known engineering
+  limitations; the run is not confirmation or publication evidence.
+- Archived handoff:
+  `.trellis/tasks/archive/2026-08/08-09-scs-v2-stage-c-development-rerun/research/stage-c-development-handoff-20260808T231659Z.json`
+  (SHA256 `2e0d659e05a43592497b0475a78183816fdef886346275bfa6d8af9cd54435d1`).
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `501b491` | (see git log) |
+| `18446ac` | (see git log) |
+| `f1cb6f1` | (see git log) |
+
+### Testing
+
+- [OK] C.2.2 isolated test suite passed 66/66.
+- [OK] Production source-internal verifier returned `status=pass`.
+- [OK] Archived handoff JSON, schema, artifact hashes, and verification binding
+  were rechecked after the task move.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Upstream task complete; downstream model work remains outside this repository.

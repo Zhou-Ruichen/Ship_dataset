@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-08-06
+- **Total Sessions**: 7
+- **Last Active**: 2026-08-09
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~334 | Active |
+| `journal-1.md` | ~449 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-08-09 | SCS v2 development-only Stage C rerun | `501b491`, `18446ac`, `f1cb6f1` | `main` |
+| 6 | 2026-08-07 | SCS v2 Stage C source-internal processing | `0e7d8b3`, `75c66d2` | `main` |
 | 5 | 2026-08-06 | SCS v2 Stage B opaque sealed acquisition | `84287ac` | `main` |
 | 4 | 2026-08-06 | SCS MRAR/JAMSTEC lineage exact replay v2 | `251f4b6` | `main` |
 | 3 | 2026-08-05 | SCS ship sounding QC v2 preflight | `a4c7516` | `main` |
