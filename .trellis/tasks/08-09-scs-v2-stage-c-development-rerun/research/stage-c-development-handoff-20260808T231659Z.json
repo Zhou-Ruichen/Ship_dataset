@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "handoff_kind": "stage_c_source_internal_development",
+  "handoff_status": "ready_for_downstream_development",
+  "created_utc": "2026-08-09T02:57:23Z",
+  "output_role": "development_only_not_confirmation",
+  "confirmation_role_eligible": false,
+  "publication_evidence_eligible": false,
+  "run": {
+    "processing_run_id": "20260808T231659Z",
+    "acquisition_run_id": "20260805T230449Z",
+    "path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c/20260808T231659Z",
+    "immutable": true,
+    "producer_status": "processed_pending_independent_verification",
+    "independent_verification_status": "pass"
+  },
+  "execution_snapshot": {
+    "git_commit": "3131f729fb5f9c5ca26943128af38c0b2151186f",
+    "readiness_run_id": "20260809T030000Z",
+    "readiness_path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/20260809T030000Z",
+    "readiness_manifest_sha256": "8448c84c1b8ed03b9c93294f78685e3deb68a622280031b4a983ad435524abc8",
+    "readiness_verification_sha256": "ab75894dc8215bbea6a6e52d96c68524e4592b5b001d53891033549f8897bfb9",
+    "test_result": {
+      "status": "pass",
+      "passed": 66,
+      "total": 66
+    },
+    "random_seed": null,
+    "random_seed_reason": "deterministic_source_processing_without_random_sampling",
+    "processing_helper_sha256": "35a155fd573ce23d44b65bbfc46f21e66b9ee563539dc34e7ba5792da834202b",
+    "processor_sha256": "1adadd1ccea4fe290a8cbde3db961b5e28e5ea04736679dcc13556cc2f6dbf0b",
+    "authorizer_sha256": "563b95b7f4b05be1d1326f4b1f764c71bb0086b5fd722bf9a301425685bf9503",
+    "verifier_sha256": "833fa7b33ca89d3e3b10884a20679e8dc64f56156fe445da18f43a980106776a",
+    "qc_contract_sha256": "6c7622a608a913b8a0d34ecc6de723d351b2bc6907e8cbc5314ad6f28e75cf58",
+    "verification_contract_sha256": "930d5cfd6b750fd469bebd0450b56175a4916c5d300932d440340dd65d7a25cf"
+  },
+  "authorization": {
+    "authorized_by": "Ruichen Zhou",
+    "authorized_utc": "2026-08-08T23:21:57Z",
+    "stage_c_authorized": true,
+    "authorization_receipt_path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c/20260808T231659Z/authorization_receipt.json",
+    "authorization_receipt_file_sha256": "18a8234edc608d3f4d9ddba85a7b5075548847e49f76a52e7104eea5c4a2943d",
+    "authorization_receipt_canonical_sha256": "515abb5884250dfc7290a29cb6c1a5a29b42a191d1d695c328e6d36fa25c21a0",
+    "stage_d_confirmation_evaluation_authorized": false,
+    "confirmation_role_promotion_authorized": false
+  },
+  "input_access": {
+    "authorized_mb58_gz_bodies": 192,
+    "read_mb58_gz_bodies": 192,
+    "read_fnv_bodies": 0,
+    "read_inf_bodies": 0,
+    "read_fbt_bodies": 0,
+    "archive_decompression_count": 192,
+    "processing_command_invocation_count": 768,
+    "processing_parser_invocation_count": 576,
+    "command_role_counts": {
+      "decompression": 192,
+      "mbinfo": 192,
+      "mblist_u3": 192,
+      "mblist_u0": 192
+    }
+  },
+  "roles": {
+    "immutable_primary_cruise_ids": [
+      "EQT20210702",
+      "EQT190012",
+      "EQT180002",
+      "TN352"
+    ],
+    "all_cruises_held_out": true,
+    "use_for_training": false,
+    "use_for_tuning": false,
+    "use_for_threshold_selection": false,
+    "role_v2_h": "held_out_candidate_mrar_out",
+    "role_v2_w": "blocked_source_independence_unknown"
+  },
+  "counts": {
+    "total": {
+      "sounding_rows": 59298192,
+      "eligible_sounding_rows": 51303876,
+      "reviewed_sounding_rows": 18784544,
+      "contributor_rows": 5297,
+      "contributor_groups": 5027,
+      "candidate_rows": 3549,
+      "candidate_groups": 3549
+    },
+    "south_china_sea_rectangle": {
+      "bounds": {
+        "xmin_inclusive": 105.0,
+        "xmax_exclusive": 125.0,
+        "ymin_inclusive": 0.0,
+        "ymax_exclusive": 25.0
+      },
+      "sounding_rows": 19699118,
+      "eligible_sounding_rows": 16120154,
+      "contributor_rows": 3247,
+      "candidate_rows": 2369
+    },
+    "by_cruise": {
+      "EQT20210702": {
+        "sounding_rows": 27739296,
+        "eligible_sounding_rows": 25414492,
+        "contributor_rows": 16,
+        "candidate_rows": 5,
+        "south_china_sea_sounding_rows": 0,
+        "south_china_sea_eligible_sounding_rows": 0,
+        "south_china_sea_contributor_rows": 0,
+        "south_china_sea_candidate_rows": 0
+      },
+      "EQT190012": {
+        "sounding_rows": 5917536,
+        "eligible_sounding_rows": 3769373,
+        "contributor_rows": 3,
+        "candidate_rows": 3,
+        "south_china_sea_sounding_rows": 5917104,
+        "south_china_sea_eligible_sounding_rows": 3769115,
+        "south_china_sea_contributor_rows": 1,
+        "south_china_sea_candidate_rows": 1
+      },
+      "EQT180002": {
+        "sounding_rows": 6066576,
+        "eligible_sounding_rows": 4908695,
+        "contributor_rows": 3,
+        "candidate_rows": 3,
+        "south_china_sea_sounding_rows": 0,
+        "south_china_sea_eligible_sounding_rows": 0,
+        "south_china_sea_contributor_rows": 0,
+        "south_china_sea_candidate_rows": 0
+      },
+      "TN352": {
+        "sounding_rows": 19574784,
+        "eligible_sounding_rows": 17211316,
+        "contributor_rows": 5275,
+        "candidate_rows": 3538,
+        "south_china_sea_sounding_rows": 13782014,
+        "south_china_sea_eligible_sounding_rows": 12351039,
+        "south_china_sea_contributor_rows": 3246,
+        "south_china_sea_candidate_rows": 2368
+      }
+    }
+  },
+  "object_0168": {
+    "source_object_id": "20260805T230449Z/objects/TN352/em302/0168_20180501_164920_TGT.all.mb58.gz",
+    "reference_status": "failed_parser_contract",
+    "reference_parsed_row_count": 0,
+    "reference_error_code": "PARSER_CONTRACT_FAILURE",
+    "reference_error_detail": "X is not finite: '            nan'",
+    "new_status": "pass",
+    "recovered_sounding_rows": 96768,
+    "recovered_eligible_sounding_rows": 86184,
+    "recovered_sounding_rows_in_south_china_sea": 96570,
+    "recovered_eligible_rows_in_south_china_sea": 86184,
+    "navigation_invalid_rows": 198,
+    "h03_navigation_range_rows": 198
+  },
+  "comparison_to_20260807T090000Z": {
+    "reference_run_path": "/mnt/data2/00-Data/ship/ncei/derived/scs_v2_sealed_confirmation/stage_c/20260807T090000Z",
+    "count_changes": {
+      "sounding_rows": {
+        "old": 59201424,
+        "new": 59298192,
+        "delta": 96768
+      },
+      "eligible_sounding_rows": {
+        "old": 51217692,
+        "new": 51303876,
+        "delta": 86184
+      },
+      "contributor_rows": {
+        "old": 5266,
+        "new": 5297,
+        "delta": 31
+      },
+      "candidate_rows": {
+        "old": 3539,
+        "new": 3549,
+        "delta": 10
+      }
+    },
+    "cell_key": [
+      "cell_id",
+      "official_cruise_id"
+    ],
+    "added_cells": 10,
+    "removed_cells": 0,
+    "depth_changed_common_cells": 20,
+    "added_cells_in_south_china_sea": 10,
+    "depth_changed_cells_in_south_china_sea": 20,
+    "affected_cruise_ids": [
+      "TN352"
+    ],
+    "absolute_depth_change_m": {
+      "min": 0.03519999999980428,
+      "median": 16.529874999999947,
+      "max": 305.97135000000026
+    },
+    "reference_output_hashes_unchanged": true,
+    "reference_output_sha256": {
+      "sounding_lineage.parquet": "b5870e44e431af471f2d6601c72961f4732852f845422fb14693ff735c90e3e1",
+      "cell_cruise_contributors.parquet": "06823db54ff1796069e7049f13a5de56a497b7213e2f47dc531679ccccaaaa52",
+      "cell_cruise_candidates.parquet": "2a5fd921a26fcd96105e13f410f93e3c73300cc5c91b0fcbdb25bad92e60a28e",
+      "field_recovery_ledger.parquet": "8ddda35e51e68838ddb919f5f55ad459eb53f1628ed62edfe789121f6c394dbd",
+      "source_object_processing.parquet": "6de7d63658c6cc829e3f822053aea52be06817e319be09d09c599d3c7b5d4786"
+    }
+  },
+  "schema": {
+    "output_schema_version": 3,
+    "path_relative_to_handoff": "stage-c01-output-schema-v3.yaml",
+    "sha256": "7026dfec6cb4c2a3ca886aaabc91ca89e9cf660d417cd37214a11efaa4afce1b",
+    "depth_unit": "m",
+    "depth_direction": "positive_down",
+    "held_out": true,
+    "cross_cruise_pooling": false
+  },
+  "artifact_sha256": {
+    "audit_manifest.json": "e59c1f26e3f1cf414ad6d75843115913a3df9a30afcdfd1f93b3ca72499f767b",
+    "verification.json": "19329cb83bb7fc623757fbacfbb9ba15c7b0a0daf2fbbe44ee919b1b1f4fd2fe",
+    "authorization_receipt.json": "18a8234edc608d3f4d9ddba85a7b5075548847e49f76a52e7104eea5c4a2943d",
+    "sounding_lineage.parquet": "06f5c22d24260af1b690b7d389eff2d94ed8b27847553e366bd5c3567d54708f",
+    "cell_cruise_contributors.parquet": "e1e44fab67f1d187859ad38eda9ee36ec941c793eb2d523eb3a11740c367e644",
+    "cell_cruise_candidates.parquet": "cc23c17170ad51e1adfa35fad2176e448a0368643240652f81d625140816e214",
+    "field_recovery_ledger.parquet": "ea9b0e078ae0e17e00e33e838ab618c998f331d1ab851315cebb2400066484b6",
+    "source_object_processing.parquet": "c3e4a44cfd4d5c0840765229f246723512e3fd00f16e58c98a16e698a51be8de",
+    "object_access_closure.parquet": "74458360a9eeb16cbb6c993041c51f9e0d0770293bbb616e33d9933bb3cda6f0"
+  },
+  "source_internal_verification": {
+    "status": "pass",
+    "content_parsed": true,
+    "source_object_count": 768,
+    "failed_parser_contract_object_count": 0,
+    "failed_invalid_time_object_count": 0,
+    "independent_verifier_opened_sealed_body": false,
+    "independent_verifier_parser_invocation_count": 0,
+    "hash_recomputation": "pass"
+  },
+  "prohibited_operations": {
+    "external_product_or_model_reference_count": 0,
+    "cross_cruise_aggregation_count": 0,
+    "mrar_merge_count": 0,
+    "datum_or_bias_fit_count": 0,
+    "ggm_run_count": 0,
+    "pinn_run_count": 0,
+    "product_residual_comparison_count": 0,
+    "gebco_comparison_count": 0,
+    "model_comparison_count": 0
+  },
+  "known_engineering_limitations": [
+    {
+      "id": "c2_2_receipt_field_validation",
+      "description": "The C.2.2 shared gate does not independently validate every authorization receipt field.",
+      "effect": "This run cannot be used as confirmation or publication evidence."
+    },
+    {
+      "id": "c2_2_u3_u0_independent_state_validation",
+      "description": "The C.2.2 output and verifier do not persist and independently reconstruct separate U3 and U0 navigation source states.",
+      "effect": "This run cannot be used as confirmation or publication evidence."
+    }
+  ],
+  "downstream_constraints": {
+    "allowed_use": "development_only",
+    "target_repository": "/mnt/data2/06-Projects/12-ggm_scs",
+    "confirmation_use": false,
+    "publication_use": false,
+    "downstream_must_freeze_split_before_model_comparison": true
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "scs-v2-stage-c-development-rerun",
+  "name": "scs-v2-stage-c-development-rerun",
+  "title": "SCS v2 development-only Stage C rerun",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Ruichen Zhou",
+  "assignee": "Ruichen Zhou",
+  "createdAt": "2026-08-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-06-scs-v2-stage-c0-source-internal-planning",
+  "relatedFiles": [
+    "ncei/derived/scs_v2_sealed_confirmation/stage_c/20260808T231659Z",
+    ".trellis/tasks/archive/2026-08/08-09-scs-v2-stage-c-development-rerun/research/stage-c-development-handoff-20260808T231659Z.json",
+    ".trellis/tasks/archive/2026-08/08-09-scs-v2-stage-c-development-rerun/research/stage-c01-output-schema-v3.yaml"
+  ],
+  "notes": "Development-only Stage C rerun passed source-internal verification. It is not confirmation or publication evidence.",
+  "meta": {}
+}

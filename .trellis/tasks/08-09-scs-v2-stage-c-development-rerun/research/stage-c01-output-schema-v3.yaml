@@ -1,0 +1,213 @@
+schema_version: 3
+stage: C_source_internal_candidate_processing
+supersedes_for_future_stage_c:
+  path: research/output-schema.yaml
+  preserved_unchanged: true
+status_enum:
+  - known
+  - officially_unknown
+  - not_recoverable
+  - inferred_from_filename
+  - verified_from_source_metadata
+global_contract:
+  immutable_input_run_id: 20260805T230449Z
+  source_object_id_formula: acquisition_run_id + '/' + canonical_source_object_relative_path
+  source_object_sha256_semantics: content_integrity_only
+  depth_unit: m
+  depth_direction: positive_down
+  longitude_range: "[-180,180)"
+  latitude_range: "[-90,90]"
+  time_zone: UTC
+  held_out: true
+  cross_cruise_pooling: false
+  confirmation_role_eligible: false
+tables:
+  source_object_processing.parquet:
+    primary_key: [source_object_id]
+    fields:
+      - {name: processing_run_id, type: string, nullable: false}
+      - {name: acquisition_run_id, type: string, nullable: false}
+      - {name: source_object_id, type: string, nullable: false}
+      - {name: source_object_identity_basis, type: string, nullable: false}
+      - {name: official_cruise_id, type: string, nullable: false}
+      - {name: official_cruise_id_status, type: string, nullable: false}
+      - {name: source_object_relative_path, type: string, nullable: false}
+      - {name: source_object_filename, type: string, nullable: false}
+      - {name: source_object_role, type: string, nullable: false}
+      - {name: source_object_format, type: string, nullable: false}
+      - {name: source_object_bytes, type: int64, nullable: false}
+      - {name: source_object_sha256, type: string, nullable: false}
+      - {name: body_read_authorized, type: bool, nullable: false}
+      - {name: body_read_performed, type: bool, nullable: false}
+      - {name: parser_name, type: string, nullable: true}
+      - {name: parser_version, type: string, nullable: true}
+      - {name: parser_source_commit, type: string, nullable: true}
+      - {name: parser_environment_digest, type: string, nullable: true}
+      - {name: command_sha256, type: string, nullable: true}
+      - {name: decompressed_derivative_sha256, type: string, nullable: true}
+      - {name: parse_status, type: string, nullable: false}
+      - {name: parsed_row_count, type: int64, nullable: false}
+      - {name: error_code, type: string, nullable: true}
+      - {name: error_detail, type: string, nullable: true}
+  sounding_lineage.parquet:
+    primary_key: [source_object_id, parser_ping_index, beam_index]
+    fields:
+      - {name: processing_run_id, type: string, nullable: false}
+      - {name: acquisition_run_id, type: string, nullable: false}
+      - {name: source_object_id, type: string, nullable: false}
+      - {name: source_object_relative_path, type: string, nullable: false}
+      - {name: source_object_sha256, type: string, nullable: false}
+      - {name: official_cruise_id, type: string, nullable: false}
+      - {name: official_cruise_id_status, type: string, nullable: false}
+      - {name: parser_name, type: string, nullable: false}
+      - {name: parser_version, type: string, nullable: false}
+      - {name: parser_source_commit, type: string, nullable: false}
+      - {name: parser_environment_digest, type: string, nullable: false}
+      - {name: parser_command_sha256, type: string, nullable: false}
+      - {name: parser_ping_index, type: int64, nullable: false}
+      - {name: parser_ping_index_status, type: string, nullable: false}
+      - {name: native_ping_counter, type: int64, nullable: false}
+      - {name: native_ping_counter_status, type: string, nullable: false}
+      - {name: native_ping_id, type: string, nullable: true}
+      - {name: native_ping_id_status, type: string, nullable: false}
+      - {name: beam_index, type: int32, nullable: false}
+      - {name: beam_index_status, type: string, nullable: false}
+      - {name: native_beam_id, type: string, nullable: true}
+      - {name: native_beam_id_status, type: string, nullable: false}
+      - {name: line_id, type: string, nullable: true}
+      - {name: line_id_status, type: string, nullable: false}
+      - {name: time_utc, type: timestamp_us_UTC, nullable: false}
+      - {name: time_utc_status, type: string, nullable: false}
+      - {name: lon_deg, type: float64, nullable: false}
+      - {name: lon_deg_status, type: string, nullable: false}
+      - {name: lat_deg, type: float64, nullable: false}
+      - {name: lat_deg_status, type: string, nullable: false}
+      - {name: navigation_valid, type: bool, nullable: false}
+      - {name: horizontal_datum, type: string, nullable: true}
+      - {name: horizontal_datum_status, type: string, nullable: false}
+      - {name: parser_depth_value, type: float64, nullable: true}
+      - {name: depth_m_positive_down, type: float64, nullable: true}
+      - {name: depth_m_positive_down_status, type: string, nullable: false}
+      - {name: elev_m, type: float64, nullable: true}
+      - {name: depth_unit, type: string, nullable: false}
+      - {name: depth_direction, type: string, nullable: false}
+      - {name: vertical_datum, type: string, nullable: true}
+      - {name: vertical_datum_status, type: string, nullable: false}
+      - {name: heading_deg, type: float64, nullable: false}
+      - {name: heading_deg_status, type: string, nullable: false}
+      - {name: native_quality_state, type: string, nullable: false}
+      - {name: native_quality_state_status, type: string, nullable: false}
+      - {name: native_quality_code, type: string, nullable: true}
+      - {name: native_quality_code_status, type: string, nullable: false}
+      - {name: qc_hard_pass, type: bool, nullable: false}
+      - {name: qc_hard_failure_codes, type: list_string, nullable: false}
+      - {name: qc_review_codes, type: list_string, nullable: false}
+      - {name: qc_eligible_for_cell, type: bool, nullable: false}
+      - {name: lon_bin, type: int64, nullable: true}
+      - {name: lat_bin, type: int64, nullable: true}
+      - {name: cell_id, type: string, nullable: true}
+      - {name: held_out, type: bool, nullable: false}
+      - {name: use_for_training, type: bool, nullable: false}
+      - {name: use_for_tuning, type: bool, nullable: false}
+      - {name: use_for_threshold_selection, type: bool, nullable: false}
+      - {name: role_v2_h, type: string, nullable: false}
+      - {name: role_v2_w, type: string, nullable: false}
+      - {name: confirmation_role_eligible, type: bool, nullable: false}
+  cell_cruise_contributors.parquet:
+    primary_key: [cell_id, official_cruise_id, source_object_id]
+    fields:
+      - {name: processing_run_id, type: string, nullable: false}
+      - {name: cell_id, type: string, nullable: false}
+      - {name: official_cruise_id, type: string, nullable: false}
+      - {name: source_object_id, type: string, nullable: false}
+      - {name: source_object_relative_path, type: string, nullable: false}
+      - {name: source_object_sha256, type: string, nullable: false}
+      - {name: n_soundings_all, type: int64, nullable: false}
+      - {name: n_native_good, type: int64, nullable: false}
+      - {name: n_native_flagged, type: int64, nullable: false}
+      - {name: n_native_null, type: int64, nullable: false}
+      - {name: n_qc_eligible, type: int64, nullable: false}
+      - {name: n_review, type: int64, nullable: false}
+      - {name: median_depth_m_positive_down_exact, type: float64, nullable: true}
+      - {name: nmad_depth_m_exact, type: float64, nullable: true}
+      - {name: vertical_datum, type: string, nullable: true}
+      - {name: vertical_datum_status, type: string, nullable: false}
+  cell_cruise_candidates.parquet:
+    primary_key: [cell_id, official_cruise_id]
+    fields:
+      - {name: processing_run_id, type: string, nullable: false}
+      - {name: cell_id, type: string, nullable: false}
+      - {name: lon_bin, type: int64, nullable: false}
+      - {name: lat_bin, type: int64, nullable: false}
+      - {name: lon_center, type: float64, nullable: false}
+      - {name: lat_center, type: float64, nullable: false}
+      - {name: official_cruise_id, type: string, nullable: false}
+      - {name: official_cruise_id_status, type: string, nullable: false}
+      - {name: n_source_objects, type: int64, nullable: false}
+      - {name: n_soundings_all, type: int64, nullable: false}
+      - {name: n_native_good, type: int64, nullable: false}
+      - {name: n_native_flagged, type: int64, nullable: false}
+      - {name: n_native_null, type: int64, nullable: false}
+      - {name: n_qc_eligible, type: int64, nullable: false}
+      - {name: n_review, type: int64, nullable: false}
+      - {name: n_unique_parser_pings, type: int64, nullable: false}
+      - {name: time_start_utc, type: timestamp_us_UTC, nullable: true}
+      - {name: time_end_utc, type: timestamp_us_UTC, nullable: true}
+      - {name: time_coverage_status, type: string, nullable: false}
+      - {name: median_depth_m_positive_down_exact, type: float64, nullable: false}
+      - {name: mean_depth_m_positive_down_exact, type: float64, nullable: false}
+      - {name: nmad_depth_m_exact, type: float64, nullable: false}
+      - {name: q25_depth_m_exact, type: float64, nullable: false}
+      - {name: q75_depth_m_exact, type: float64, nullable: false}
+      - {name: min_depth_m, type: float64, nullable: false}
+      - {name: max_depth_m, type: float64, nullable: false}
+      - {name: range_depth_m, type: float64, nullable: false}
+      - {name: aggregation_basis, type: string, nullable: false}
+      - {name: vertical_datum, type: string, nullable: true}
+      - {name: vertical_datum_status, type: string, nullable: false}
+      - {name: held_out, type: bool, nullable: false}
+      - {name: use_for_training, type: bool, nullable: false}
+      - {name: use_for_tuning, type: bool, nullable: false}
+      - {name: use_for_threshold_selection, type: bool, nullable: false}
+      - {name: role_v2_h, type: string, nullable: false}
+      - {name: role_v2_w, type: string, nullable: false}
+      - {name: confirmation_role_eligible, type: bool, nullable: false}
+  field_recovery_ledger.parquet:
+    primary_key: [official_cruise_id, source_object_id, field_name]
+    fields:
+      - {name: official_cruise_id, type: string, nullable: false}
+      - {name: source_object_id, type: string, nullable: false}
+      - {name: source_object_relative_path, type: string, nullable: false}
+      - {name: source_object_sha256, type: string, nullable: false}
+      - {name: field_name, type: string, nullable: false}
+      - {name: field_available, type: bool, nullable: false}
+      - {name: field_status, type: string, nullable: false}
+      - {name: evidence_kind, type: string, nullable: false}
+      - {name: evidence_path_or_command_sha256, type: string, nullable: false}
+      - {name: note, type: string, nullable: true}
+required_other_outputs:
+  - environment.json
+  - fixture_verification.json
+  - command_ledger.jsonl
+  - qc_summary.tsv
+  - audit_report.md
+  - audit_manifest.json
+  - access_lock.json
+  - verification.json
+forbidden_output_tokens:
+  - gebco
+  - etopo
+  - srtm
+  - sdust
+  - topo_25
+  - ggm
+  - pinn
+  - prediction
+  - model_error
+  - product_residual
+  - confirmation_error
+  - train_split
+  - validation_weight
+  - crossover_adjustment
+  - fitted_datum
+  - fitted_bias
