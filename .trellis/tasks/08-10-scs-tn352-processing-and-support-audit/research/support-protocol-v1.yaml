@@ -1,0 +1,162 @@
+schema_version: 1
+protocol_id: tn352_mrar_support_v1
+status: proposed_pending_user_review
+activation:
+  require_user_review: true
+  require_task_status: in_progress
+  require_phase_a_verification_status: pass
+  output_status_after_copy: approved_frozen
+  immutable_after_depth_access: true
+
+claim_boundary:
+  output_role: development_only_not_confirmation
+  validated_bathymetric_truth: false
+  confirmation_role_eligible: false
+  phase_b_can_change_processing_classification: false
+
+inputs:
+  stage_c_run: ncei/derived/scs_v2_sealed_confirmation/stage_c/20260808T231659Z
+  stage_c_sounding_table: sounding_lineage.parquet
+  stage_c_candidate_table: cell_cruise_candidates.parquet
+  mrar_checked_points: ncei/derived/regional_mrar/points_checked/bathymetry_points.parquet
+  mrar_cell_labels: ncei/derived/validation_cells_1min/regional_mrar_experiment_cells.parquet
+  hashes_required_in_input_lock: true
+
+cohort:
+  rectangle:
+    lon_min_inclusive: 105.0
+    lon_max_exclusive: 125.0
+    lat_min_inclusive: 0.0
+    lat_max_exclusive: 25.0
+  join_key: cell_id
+  expected_unique_cell_count: 2244
+  count_mismatch_action: stop_before_depth_access
+  ordering: [lat_bin, lon_bin, cell_id]
+  cell_size_degrees: 0.016666666666666666
+  cell_formula:
+    lon_bin: floor((lon_deg + 180.0) * 60.0)
+    lat_bin: floor((lat_deg + 90.0) * 60.0)
+    lon_center: -180.0 + (lon_bin + 0.5) / 60.0
+    lat_center: -90.0 + (lat_bin + 0.5) / 60.0
+    cell_id: 1min_{lat_bin}_{lon_bin}
+
+point_selectors:
+  tn352:
+    official_cruise_id: TN352
+    qc_eligible_for_cell: true
+    require_common_cell_id: true
+    stable_key: [source_object_id, parser_ping_index, beam_index]
+  mrar:
+    point_check_pass_basic: true
+    require_finite_lon_lat_depth: true
+    require_positive_down_depth: true
+    recompute_cell_id: true
+    require_common_cell_id: true
+    stable_key: [track_id, point_index_in_track]
+  no_additional_depth_filter: true
+
+geometry:
+  longitude_unit: degree_east
+  latitude_unit: degree_north
+  earth_model: unit_sphere
+  earth_radius_m: 6371008.8
+  unit_vector_formula:
+    x: cos(lat_rad) * cos(lon_rad)
+    y: cos(lat_rad) * sin(lon_rad)
+    z: sin(lat_rad)
+  centroid: normalized_mean_unit_vector
+  distance: great_circle_arc_from_unit_chord
+  nearest_search: scipy.spatial.cKDTree_on_unit_vectors
+  exact_distance_recompute: true
+  tie_tolerance_m: 0.000001
+  tie_break: lexicographic_stable_point_key
+  matching_partition: independently_within_each_cell
+  mutual_nearest_computed_once_without_cutoff: true
+  inclusive_distance_thresholds_m: [100.0, 250.0, 500.0]
+
+occupancy:
+  grid_size_m: 100.0
+  plane: local_tangent_equirectangular
+  origin: exact_one_arcmin_cell_center
+  x_formula: earth_radius_m * cos(cell_center_lat_rad) * (lon_rad - cell_center_lon_rad)
+  y_formula: earth_radius_m * (lat_rad - cell_center_lat_rad)
+  index_formula: [floor(x_m / 100.0), floor(y_m / 100.0)]
+  footprint_basis: occupied_grid_indices_from_all_selected_support_points
+  intersection: count(set_tn352 intersection set_mrar)
+  union: count(set_tn352 union set_mrar)
+  jaccard: intersection / union
+  smaller_support_coverage: intersection / min(count(set_tn352), count(set_mrar))
+
+depth:
+  unit: m
+  direction: positive_down
+  pair_difference: tn352_depth_m_positive_down - mrar_depth_m_positive_down
+  positive_difference_meaning: TN352_deeper
+  raw_cell_difference: tn352_exact_median - mrar_representative_depth
+  nmad_scale: 1.4826
+  quantile_method: linear
+  metrics:
+    - count
+    - bias_mean_signed
+    - mae
+    - rmse
+    - p50_absolute
+    - p95_absolute
+    - min_signed
+    - max_signed
+  weighting: none
+  empty_match_metrics: null
+
+tail_protocol:
+  cell_tail_abs_threshold_m: 500.0
+  high_relief_range_threshold_m: 500.0
+  zero_footprint_overlap: occupancy_intersection == 0
+  low_footprint_jaccard_threshold_exclusive: 0.25
+  low_matched_pair_count_exclusive: 3
+  small_tn352_object_count_max: 1
+  small_mrar_track_count_max: 1
+  h03_association_scope: contributing_tn352_object_has_h03_rows
+  material_contraction:
+    minimum_matched_cell_count: 30
+    max_p95_ratio: 0.75
+    max_tail_fraction_ratio: 0.75
+    require_both: true
+  concentration:
+    minimum_tail_cells_in_stratum: 10
+    minimum_tail_prevalence_risk_ratio: 2.0
+  unresolved_cell:
+    require_raw_tail: true
+    persistent_if_no_pair_within_m: 500.0
+    persistent_if_abs_matched_cell_median_delta_gt_m: 500.0
+    registered_associations:
+      - zero_or_low_footprint_overlap
+      - high_relief
+      - low_matched_support
+      - small_source_support
+      - h03_associated_object
+
+access_order:
+  - verify_phase_a
+  - copy_and_hash_protocol
+  - hash_inputs_and_schemas
+  - read_non_depth_cell_identity_and_geometry
+  - write_and_hash_common_cell_cohort
+  - assert_expected_cell_count
+  - exit_freeze_process
+  - start_separate_depth_enabled_process
+
+prohibited:
+  - modify_stage_c
+  - open_new_sealed_body
+  - read_fnv_body
+  - read_inf_body
+  - read_fbt_body
+  - GGM
+  - PINN
+  - GEBCO
+  - product_residual_filter
+  - model_residual_filter
+  - datum_or_bias_fit
+  - cross_cruise_aggregation
+  - post_depth_threshold_change
+  - confirmation_promotion
