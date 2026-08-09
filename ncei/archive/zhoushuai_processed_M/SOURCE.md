@@ -125,6 +125,35 @@ geographic coverage and sampling density rule out a same-data
 hypothesis. M.rar's 113M points = **~4% of JAMSTEC multibeam raw**
 total. Consistent with a heavily decimated regional subset.
 
+## Downstream usage pointer
+
+- **Recorded downstream use**: `12-ggm_scs` task
+  `07-24-scs-ggm-inversion` (created 2026-07-24) uses the cataloged
+  `regional_mrar_experiment_cells.parquet` as experimental GGM control cells
+  over the South China Sea (lon 105–125°E, lat 0–25°N). Those cells descend
+  from `bathymetry_points.parquet`; the downstream configuration also records
+  this raw Parquet path for provenance checks.
+- **SCS density, recomputed 2026-08-09**: direct filtering with Python 3.12.10
+  and PyArrow 24.0.0 of `bathymetry_points.parquet` (SHA256
+  `1d24e0c5f0174ebf3f4a5d0074d327420ef968ce3e2d8eeea07942568a326b67`)
+  with half-open bounds `[105, 125)E × [0, 25)N` gives 2,896,011 of
+  113,356,582 cleaned MRAR points. The 500 deg² rectangle therefore has
+  5,792.022 points/deg². The matching half-open source quadrant
+  `[0, 180)E × [0, 85)N` contains 38,590,457 points, or 2,522.252
+  points/deg², making the SCS density ratio 2.296. This is a regional
+  concentration within a partial global subset, not an SCS-exclusive dataset.
+  These are coordinate-area densities, not geodesic area densities.
+- **Catalog role**: MRAR is listed under
+  `ship_labels.regional_mrar_experiment` with role
+  `regional_sensitivity_only`; it is not authoritative validation truth.
+  `strict_primary_multibeam_cells` (JAMSTEC+NCEI) remains the catalog's
+  authoritative validation baseline and is used by the GGM task as an
+  evaluation cross-check. The partially opaque MRAR provenance does not by
+  itself establish source independence between the two datasets.
+- **Provenance caveat carries forward**: the opacity noted above (missing NW
+  quadrant, upstream land-elevation mixing) is inherited by the downstream
+  task and documented in its run record.
+
 ## Known unknowns (recorded, not chased)
 
 Per PRD Q8 — provenance is **not actively chased**:
