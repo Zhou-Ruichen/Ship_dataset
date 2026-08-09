@@ -4,33 +4,36 @@ This task is not authorized to execute while its status is `planning`.
 
 ## Phase A
 
-- [ ] Freeze a new audit run ID and hash the accepted Stage C evidence, the
+- [x] Freeze a new audit run ID and hash the accepted Stage C evidence, the
       20260807T090000Z comparison outputs, source code, schemas, and task
       protocol. Abort if any accepted hash differs from the planning evidence.
-- [ ] Implement the Phase A producer using retained JSONL/JSON/TSV/Parquet
+- [x] Implement the Phase A producer using retained JSONL/JSON/TSV/Parquet
       evidence only. Do not import or invoke MB-System and do not open a sealed
       body.
-- [ ] Emit a long-form processing contract and per-TN352-object policy table.
+- [x] Emit a long-form processing contract and per-TN352-object policy table.
       Close literal commands, flags, parser/environment identities, sidecar
       access, quality states, eligibility, and correction status.
-- [ ] Recompute supplied total/TN352/SCS counts from selected Parquet columns.
-- [ ] Build the 0168 old/new cell audit and conserve recovered, eligible, H03,
+- [x] Recompute supplied total/TN352/SCS counts from selected Parquet columns.
+- [x] Build the 0168 old/new cell audit and conserve recovered, eligible, H03,
       added-cell, and changed-median counts.
-- [ ] Apply the fixed A/B classification. If B, render only an unexecuted
+- [x] Apply the fixed A/B classification. If B, render only an unexecuted
       `TN352-v2-processed` proposal with explicit blockers.
-- [ ] Implement an independent Phase A verifier and tests for command closure,
+- [x] Implement an independent Phase A verifier and tests for command closure,
       status semantics, exact medians, immutable inputs, TSV/JSON equivalence,
       manifests, and prohibited access.
-- [ ] Run Phase A producer once, run its verifier, and stop on any failure.
+- [x] Run Phase A producer and its independent verifier. The accepted Phase A
+      run is `20260809T174007Z`; verification passed with classification B.
 
 ## Phase B freeze
 
-- [ ] Require Phase A `verification.json=status=pass` and verify its hashes.
-- [ ] Copy the approved task protocol into `phase_b/frozen_protocol.json` with
+- [x] Require Phase A `verification.json=status=pass` and verify its hashes.
+- [x] Copy the approved task protocol into the preserved failed-freeze evidence
+      with
       status `approved_frozen`; record the task commit and protocol SHA256.
 - [ ] Create the input lock with paths, schemas, row counts, bytes, and SHA256.
-- [ ] Read only cell identity/geometry columns, form the sorted common-cell
-      cohort, and assert exactly 2,244 unique SCS cells.
+- [x] Read only cell identity/geometry columns and form the sorted common-cell
+      cohort. The hard gate observed 2,367 rather than 2,244 unique SCS cells,
+      wrote a failure receipt, and stopped before writing a passing input lock.
 - [ ] Write and hash `common_cell_cohort.parquet`, then exit the freeze process.
       Do not import the Phase B depth reader in this command.
 
@@ -53,10 +56,10 @@ This task is not authorized to execute while its status is `planning`.
 
 ## Verification
 
-- [ ] Implement an independent Phase B verifier that reconstructs cohort IDs,
+- [x] Implement an independent Phase B verifier that reconstructs cohort IDs,
       point selectors, medians, geometry, pairs, metrics, nested sets, tail
       decisions, hashes, and access counters.
-- [ ] Test tie resolution, zero-match cells, dateline-safe spherical centroid,
+- [x] Test tie resolution, zero-match cells, dateline-safe spherical centroid,
       threshold inclusivity, occupancy anchoring, positive-down delta sign,
       NMAD, tail zero denominators, and count-drift failure.
 - [ ] Run the narrow test modules, syntax checks, Phase A verifier, and Phase B
@@ -80,5 +83,13 @@ python -m py_compile \
   ncei/code/verify_scs_tn352_mrar_support_audit.py
 ```
 
-Producer commands and run IDs are deliberately absent until the user reviews
-the task and separately authorizes `task.py start`.
+The user authorized `task.py start`; Phase A and the Phase B freeze attempt are
+recorded below.
+
+## Current stop condition
+
+Phase B is stopped at the pre-depth cohort gate. Current Stage C candidate
+labels and current MRAR label/checked-point identities both yield 2,367 common
+cells under the frozen selector; the expected value is 2,244. No Phase B depth
+column, pair difference, or support metric was read or computed. See
+`research/execution-status-20260809T174007Z.md`.

@@ -3,7 +3,7 @@
   "name": "scs-tn352-processing-and-support-audit",
   "title": "SCS TN352 processing and support audit",
   "description": "Read-only audit of the TN352 NCEI format-58 processing chain and, only after Phase A passes, a frozen-protocol spatial-support diagnostic against MRAR in the expected 2,244 common 1-arcmin cells. No Stage C mutation, reprocessing, GGM, PINN, GEBCO, model-residual filtering, or confirmation promotion.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": "ncei",
   "package": null,
@@ -31,6 +31,6 @@
     "ncei/derived/validation_cells_1min/regional_mrar_experiment_cells.parquet",
     ".trellis/tasks/archive/2026-08/08-09-scs-v2-stage-c-development-rerun/research/stage-c-development-handoff-20260808T231659Z.json"
   ],
-  "notes": "Independent task with no parent. Planning only: no Phase A or Phase B producer has been run. The 2,244-cell overlap is a user-provided expected count and must be independently verified from cell IDs before any Phase B depth column is opened.",
+  "notes": "Independent task with no parent. Phase A run 20260809T174007Z passed independent verification and classified TN352 as B: official_raw_source_development_label. Phase B stopped before depth access because the frozen cell-ID join produced 2,367 common cells rather than the user-supplied 2,244. The failed freeze receipt is preserved under ncei/derived/scs_tn352_processing_and_support_audit/20260809T174007Z.failed/phase_b. Task remains in progress pending cohort provenance or a separately approved protocol amendment.",
   "meta": {}
 }

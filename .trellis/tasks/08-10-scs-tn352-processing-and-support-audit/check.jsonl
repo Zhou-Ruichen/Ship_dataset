@@ -7,3 +7,4 @@
 {"file":".trellis/tasks/08-10-scs-tn352-processing-and-support-audit/research/support-protocol-v1.yaml","reason":"Recompute geometry, mutual-nearest pairs, metrics, and decisions from the approved frozen rules."}
 {"file":".trellis/tasks/archive/2026-08/08-09-scs-v2-stage-c-development-rerun/research/stage-c-development-handoff-20260808T231659Z.json","reason":"Close Phase A results to the authoritative handoff without upgrading its evidence role."}
 {"file":".trellis/tasks/archive/2026-08/08-09-scs-v2-stage-c-development-rerun/research/stage-c01-output-schema-v3.yaml","reason":"Inspect actual producer schemas and verify required keys and field semantics."}
+{"file": ".trellis/tasks/08-10-scs-tn352-processing-and-support-audit/research/execution-status-20260809T174007Z.md", "reason": "Check boundary: 2,367 observed versus 2,244 expected; no depth access"}
