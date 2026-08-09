@@ -20,7 +20,10 @@
   "subtasks": [],
   "children": [
     "08-06-scs-v2-stage-c-source-internal-processing",
-    "08-08-scs-v2-stage-c2-zero-candidate-correction"
+    "08-08-scs-v2-stage-c2-zero-candidate-correction",
+    "08-09-scs-v2-stage-c2-1-correction",
+    "08-09-scs-v2-stage-c2-2-contract-closure",
+    "08-09-scs-v2-stage-c-development-rerun"
   ],
   "parent": null,
   "relatedFiles": [

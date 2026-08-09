@@ -21,6 +21,6 @@
   "children": [],
   "parent": "08-06-scs-v2-stage-c0-source-internal-planning",
   "relatedFiles": [],
-  "notes": "",
+  "notes": "Authorization receipts for processing_run_id 20260807T000300Z and 20260807T061500Z are retained as authorization-only evidence. Before the disposition note was added, no matching retained Stage C run directory or independent producer/verification evidence was found; execution state remains unresolved. See research/stage-c-authorization-disposition-20260809.md. These receipts do not support confirmation or publication claims.",
   "meta": {}
 }
