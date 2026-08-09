@@ -79,3 +79,10 @@ defines the stated 2,244 cells. If 2,244 has no retained provenance and the
 intended cohort is the intersection of the current registered inputs, a new
 protocol version may set the expected count to 2,367 after separate user
 approval. Phase B must use a new run and repeat the freeze process.
+
+## Resolution
+
+The user later supplied the exact 2,244-row frozen assignment and its old
+lineage/selection provenance. Final Phase B run `20260809T191946Z` passed; see
+`execution-status-20260809T191946Z.md`. This file remains the historical record
+of the earlier count-gate stop.

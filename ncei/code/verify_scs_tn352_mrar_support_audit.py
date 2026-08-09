@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from scipy.spatial import cKDTree
 
@@ -34,6 +35,88 @@ from ncei.code.scs_tn352_support import (
 
 
 OUTPUT_ROLE = "development_only_not_confirmation"
+
+
+def cell_sort_key(cell_id: str) -> tuple[int, int]:
+    prefix, lat_bin, lon_bin = cell_id.split("_")
+    require(prefix == "1min", f"invalid cell ID prefix: {cell_id}")
+    return int(lat_bin), int(lon_bin)
+
+
+def verify_cell_id_gate(lock: dict[str, Any], phase_b: Path) -> None:
+    frozen_path = Path(lock["inputs"]["frozen_scalar_pair_assignments"]["path"])
+    frozen_rows = pq.read_table(frozen_path, columns=["cell_id"]).column("cell_id").to_pylist()
+    frozen = {str(value) for value in frozen_rows}
+    require(len(frozen_rows) == len(frozen) == 2_244, "independent frozen assignment count differs")
+
+    stage_path = Path(lock["inputs"]["stage_c_candidate_labels"]["path"])
+    stage_rows = pq.read_table(
+        stage_path,
+        columns=["cell_id", "lon_center", "lat_center", "aggregation_basis"],
+        filters=[("official_cruise_id", "=", "TN352")],
+    ).to_pylist()
+    tn352 = {
+        str(row["cell_id"])
+        for row in stage_rows
+        if 105.0 <= float(row["lon_center"]) < 125.0
+        and 0.0 <= float(row["lat_center"]) < 25.0
+        and row["aggregation_basis"] == "individual_qc_eligible_beams_exact"
+    }
+    require(len(tn352) == 2_368, "independent TN352 candidate count differs")
+
+    mrar_path = Path(lock["inputs"]["mrar_checked_points"]["path"])
+    mrar_dataset = ds.dataset(mrar_path, format="parquet")
+    mrar_filter = (
+        ds.field("point_check_pass_basic")
+        & (ds.field("lon") >= 105.0)
+        & (ds.field("lon") < 125.0)
+        & (ds.field("lat") >= 0.0)
+        & (ds.field("lat") < 25.0)
+    )
+    coordinate_table = mrar_dataset.to_table(columns=["lon", "lat"], filter=mrar_filter)
+    lon = coordinate_table.column("lon").to_numpy(zero_copy_only=False)
+    lat = coordinate_table.column("lat").to_numpy(zero_copy_only=False)
+    require(np.all(np.isfinite(lon) & np.isfinite(lat)), "independent MRAR coordinates are non-finite")
+    lon_bin = np.floor((lon + 180.0) * 60.0).astype(np.int64)
+    lat_bin = np.floor((lat + 90.0) * 60.0).astype(np.int64)
+    mrar = {f"1min_{lat_value}_{lon_value}" for lon_value, lat_value in zip(lon_bin, lat_bin)}
+    raw_common = tn352 & mrar
+
+    expected_sets = {
+        "frozen_scalar_pair": sorted(frozen, key=cell_sort_key),
+        "frozen_missing_tn352": sorted(frozen - tn352, key=cell_sort_key),
+        "frozen_missing_raw_support": sorted(frozen - raw_common, key=cell_sort_key),
+        "raw_support_common": sorted(raw_common, key=cell_sort_key),
+        "raw_support_only_not_in_frozen_scalar_pair": sorted(raw_common - frozen, key=cell_sort_key),
+        "tn352_without_mrar_raw_support": sorted(tn352 - mrar, key=cell_sort_key),
+    }
+    observed = read_json(phase_b / "cell_id_comparison.json")
+    require(observed["cell_ids"] == expected_sets, "independent cell-ID set comparison differs")
+    require(observed["counts"] == {name: len(values) for name, values in expected_sets.items()}, "cell-ID counts differ")
+    require(not expected_sets["frozen_missing_tn352"] and not expected_sets["frozen_missing_raw_support"], "frozen cohort is not fully supported")
+    require(len(raw_common) == 2_367 and len(raw_common - frozen) == 123, "raw-support set counts differ")
+    require(expected_sets["tn352_without_mrar_raw_support"] == ["1min_6739_18005"], "TN352 no-support cell differs")
+
+    statuses = pq.read_table(phase_b / "phase_b_cell_id_status.parquet").to_pylist()
+    require(len(statuses) == 2_368 and len({row["cell_id"] for row in statuses}) == 2_368, "cell-ID status rows differ")
+    expected_status = {}
+    for cell_id in tn352:
+        if cell_id in frozen:
+            expected_status[cell_id] = "frozen_scalar_pair"
+        elif cell_id in raw_common:
+            expected_status[cell_id] = "raw_support_only_not_in_frozen_scalar_pair"
+        else:
+            expected_status[cell_id] = "tn352_without_mrar_raw_support"
+    require(
+        {str(row["cell_id"]): str(row["analysis_status"]) for row in statuses} == expected_status,
+        "cell-ID analysis statuses differ",
+    )
+    for row in statuses:
+        cell_id = str(row["cell_id"])
+        require(bool(row["in_frozen_scalar_pair"]) == (cell_id in frozen), f"frozen status differs: {cell_id}")
+        require(bool(row["in_tn352_candidate"]) == (cell_id in tn352), f"TN352 status differs: {cell_id}")
+        require(bool(row["in_mrar_raw_support"]) == (cell_id in raw_common), f"MRAR status differs: {cell_id}")
+        require(bool(row["included_in_phase_b"]) == (cell_id in frozen), f"Phase B inclusion differs: {cell_id}")
 
 
 def close(left: Any, right: Any, message: str, *, atol: float = 1.0e-8, rtol: float = 1.0e-12) -> None:
@@ -218,7 +301,6 @@ def verify_tail_summary(phase_b: Path, support: list[dict[str, Any]]) -> None:
 
 def verify(run_dir: Path) -> Path:
     run_dir = run_dir.resolve()
-    phase_a = run_dir / "phase_a"
     phase_b = run_dir / "phase_b"
     verification_path = phase_b / "verification.json"
     require(not verification_path.exists(), "Phase B verification already exists")
@@ -234,6 +316,8 @@ def verify(run_dir: Path) -> Path:
         require(sha256_file(phase_b / "frozen_protocol.json") == manifest["frozen_protocol_sha256"], "protocol hash differs")
         require(sha256_file(phase_b / "input_lock.json") == manifest["input_lock_sha256"], "input lock hash differs")
         require(sha256_file(phase_b / "common_cell_cohort.parquet") == manifest["common_cell_cohort_sha256"], "cohort hash differs")
+        require(sha256_file(phase_b / "cell_id_comparison.json") == lock["cell_id_comparison"]["sha256"], "cell-ID comparison hash differs")
+        require(sha256_file(phase_b / "phase_b_cell_id_status.parquet") == lock["phase_b_cell_id_status"]["sha256"], "cell-ID status hash differs")
         checks.append("freeze_order_and_hashes")
         for name, record in lock["inputs"].items():
             path = Path(record["path"])
@@ -245,14 +329,28 @@ def verify(run_dir: Path) -> Path:
                     rows.append({"relative_path": child.relative_to(path).as_posix(), "bytes": child.stat().st_size, "sha256": sha256_file(child)})
                 require(canonical_sha256(rows) == record["sha256"], f"input tree drift: {name}")
         checks.append("input_hashes_unchanged")
+        verify_cell_id_gate(lock, phase_b)
+        checks.append("independent_pre_depth_cell_id_sets_and_statuses")
+        phase_a = Path(lock["phase_a_path"])
+        require(phase_a.is_dir(), "locked Phase A directory is missing")
         cohort = pq.read_table(phase_b / "common_cell_cohort.parquet").to_pylist()
         support = pq.read_table(phase_b / "tn352_mrar_support_cells.parquet").to_pylist()
         require(len(cohort) == len(support) == 2_244, "cohort/support row count differs")
         require([row["cell_id"] for row in cohort] == [row["cell_id"] for row in support], "support row ordering or cohort differs")
         require(len({row["cell_id"] for row in support}) == 2_244, "support cell IDs are not unique")
-        checks.append("cohort_and_support_keys")
+        status_rows = pq.read_table(phase_b / "phase_b_cell_id_status.parquet").to_pylist()
+        excluded_ids = {
+            str(row["cell_id"])
+            for row in status_rows
+            if row["analysis_status"] == "raw_support_only_not_in_frozen_scalar_pair"
+        }
+        require(len(excluded_ids) == 123, "excluded raw-support-only ID count differs")
+        require(not (excluded_ids & {str(row["cell_id"]) for row in support}), "excluded IDs entered support output")
+        checks.append("cohort_support_and_excluded_keys")
         pair_rows, pair_keys = read_pairs(phase_b)
-        checks.append("pair_schema_delta_distance_and_nesting")
+        for threshold in (100, 250, 500):
+            require(not (excluded_ids & set(pair_rows[threshold])), f"excluded IDs entered {threshold} m pairs")
+        checks.append("pair_schema_delta_distance_nesting_and_exclusions")
         tn_points = load_tn352_points(cohort)
         mrar_points = load_mrar_points(cohort)
         tn_offsets = cell_offsets(tn_points, len(cohort))
@@ -314,6 +412,9 @@ def verify(run_dir: Path) -> Path:
             objects = sorted({tn.group_values[int(code)] for code in np.unique(tn.group_code)})
             tracks = sorted({mrar.group_values[int(code)] for code in np.unique(mrar.group_code)})
             require(observed["tn352_source_object_ids"] == objects and observed["mrar_track_ids"] == tracks, f"source identity list differs: {cell_id}")
+            require(int(observed["tn352_source_object_count"]) == len(objects), f"TN352 selected object count differs: {cell_id}")
+            require(len(objects) <= int(cohort_row["tn352_n_source_objects_all_soundings"]), f"TN352 selected object count exceeds all-sounding count: {cell_id}")
+            require(int(observed["mrar_track_count"]) == len(tracks), f"MRAR track count differs: {cell_id}")
             h03_objects = [value for value in objects if h03.get(value, 0) > 0]
             require(int(observed["h03_associated_object_count"]) == len(h03_objects), f"H03 object count differs: {cell_id}")
             require(int(observed["h03_rows_in_contributing_objects"]) == sum(h03[value] for value in h03_objects), f"H03 associated rows differ: {cell_id}")
@@ -341,6 +442,7 @@ def verify(run_dir: Path) -> Path:
         require(all(int(access[name]) == 0 for name in prohibited), "prohibited operation count differs")
         report = " ".join((phase_b / "audit_report.md").read_text(encoding="utf-8").split())
         require("No GGM, PINN, GEBCO" in report and "does not promote the label" in report, "report evidence boundary differs")
+        require("raw_support_only_not_in_frozen_scalar_pair" in report, "report cell-ID exclusion status differs")
         checks.append("prohibited_operations_and_claim_boundary")
         verification = {
             "schema_version": 1,

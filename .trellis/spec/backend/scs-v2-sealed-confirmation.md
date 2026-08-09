@@ -243,3 +243,18 @@ Any exception preserves received bytes and writes a machine-readable
 `failure_receipt.json` plus completed-object manifest under a `.failed` run.
 Its status and role are `failed_unsealed`; no candidate replacement or sealed
 manifest is permitted.
+
+## 11. Stage C candidate object-count semantics
+
+In `cell_cruise_candidates.parquet`, `n_source_objects` is the number of
+per-object contributor rows for the `(cell_id, official_cruise_id)` group.
+Those contributor rows include objects whose soundings in the cell are all
+ineligible. It is therefore an all-sounding object count, not the number of
+objects contributing to the candidate's exact eligible-depth median.
+
+A downstream consumer that selects `qc_eligible_for_cell=true` soundings must
+derive its selected object IDs from those sounding rows. The selected count
+must be positive and no greater than `n_source_objects`; equality is not
+required. Name copied fields explicitly, for example
+`n_source_objects_all_soundings`, to prevent the two meanings from being
+silently conflated.

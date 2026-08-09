@@ -39,6 +39,9 @@ The report must keep these levels separate:
 - Phase A must not open a sealed object body. It audits retained evidence.
 - Phase B may read only already exposed derived TN352 and MRAR lineage. It must
   not open a new sealed object or any `.fnv`, `.inf`, or `.fbt` body.
+- The Phase B cohort is the complete set of 2,244 `cell_id` values in the
+  user-supplied `paired_split_assignments.parquet`; its file SHA256 and split
+  metadata are frozen before depth access.
 - Do not run GGM, PINN, GEBCO, product residuals, model residuals, datum/bias
   fitting, cross-cruise aggregation, or depth-based selection/exclusion.
 - Write a new immutable audit run. Existing run IDs must fail closed.
@@ -113,10 +116,13 @@ any depth-difference column is opened, the implementation must:
 - copy and hash the approved `research/support-protocol-v1.yaml` into the new
   Phase B run;
 - hash all Phase B inputs and write an input lock;
-- construct and hash the common-cell cohort using cell IDs and non-depth
-  identity/geometry columns only;
-- verify the expected cohort is exactly 2,244 unique cells; otherwise write a
-  failure receipt and stop without reading depth differences.
+- compare the 2,244 frozen IDs against current TN352 candidates and current
+  MRAR basic-pass raw-support IDs using non-depth identity/geometry columns;
+- stop before depth access if any frozen ID is absent from either source;
+- when the subset gate passes, write the exact 2,244-ID analysis cohort and
+  mark the additional 123 current raw-support cells as
+  `raw_support_only_not_in_frozen_scalar_pair` so they cannot enter a source
+  difference output.
 
 No cell, point, object, threshold, or stratum may be changed after a depth
 difference is observed.
@@ -174,6 +180,8 @@ ncei/derived/scs_tn352_processing_and_support_audit/<RUN_ID>/
   phase_b/
     frozen_protocol.json
     input_lock.json
+    cell_id_comparison.json
+    phase_b_cell_id_status.parquet
     common_cell_cohort.parquet
     tn352_mrar_support_cells.parquet
     matched_difference_100m.parquet
@@ -185,40 +193,41 @@ ncei/derived/scs_tn352_processing_and_support_audit/<RUN_ID>/
     verification.json
 ```
 
-The three Phase B lock/cohort files are required auxiliary evidence and must be
-included in the Phase B manifest.
+The Phase B protocol, input lock, ID comparison, ID-status table, cohort, and
+freeze receipt are required auxiliary evidence and must be included in the
+Phase B manifest.
 
 ## Acceptance Criteria
 
-- [ ] Phase A reproduces the supplied four-cruise, TN352, SCS, and object 0168
+- [x] Phase A reproduces the supplied four-cruise, TN352, SCS, and object 0168
       counts from the immutable derived artifacts without opening sealed data.
-- [ ] Phase A lists every retained command invocation and proves that command
+- [x] Phase A lists every retained command invocation and proves that command
       role counts close to the accepted verification receipt.
-- [ ] Every requested processing/correction item has a status and direct
+- [x] Every requested processing/correction item has a status and direct
       evidence locator; absent evidence is reported as `unknown` or
       `not_performed`, not inferred as success.
-- [ ] The five evidence levels remain distinct and exactly one A/B
+- [x] The five evidence levels remain distinct and exactly one A/B
       classification is emitted with `confirmation_role_eligible=false`.
-- [ ] The 0168 audit accounts for all 96,768 recovered rows, 86,184 eligible
+- [x] The 0168 audit accounts for all 96,768 recovered rows, 86,184 eligible
       rows, 198 H03 rows, 10 added cells, and 20 changed common-cell medians.
-- [ ] Phase A TSV/JSON records are semantically identical and independently
+- [x] Phase A TSV/JSON records are semantically identical and independently
       verified; all Phase A outputs are hashed in the manifest.
-- [ ] Phase B cannot start unless Phase A verification passes and the frozen
+- [x] Phase B cannot start unless Phase A verification passes and the frozen
       protocol/input/cohort locks exist before depth access.
-- [ ] The common-cell cohort is unique, SCS-bounded, and exactly 2,244 rows;
+- [x] The common-cell cohort is unique, SCS-bounded, and exactly 2,244 rows;
       count drift stops execution.
-- [ ] Point identities are unique, cell membership is recomputed, and both
+- [x] Point identities are unique, cell membership is recomputed, and both
       source cell medians close against the frozen label tables before support
       metrics are accepted.
-- [ ] Mutual-nearest pairs are unique and nested across 100, 250, and 500 m;
+- [x] Mutual-nearest pairs are unique and nested across 100, 250, and 500 m;
       every pair-level difference recomputes exactly as TN352 minus MRAR.
-- [ ] `tn352_mrar_support_cells.parquet` contains exactly one row for each
+- [x] `tn352_mrar_support_cells.parquet` contains exactly one row for each
       common cell, including zero-match cells with explicit null metrics.
-- [ ] Tail and concentration conclusions use only pre-registered thresholds;
+- [x] Tail and concentration conclusions use only pre-registered thresholds;
       no post-result filter or threshold change is permitted.
-- [ ] Independent Phase B verification recomputes cohort identity, geometry,
+- [x] Independent Phase B verification recomputes cohort identity, geometry,
       pair membership, metrics, hashes, and prohibited-access counters.
-- [ ] Both reports state that no GGM, PINN, GEBCO, model comparison, or product
+- [x] Both reports state that no GGM, PINN, GEBCO, model comparison, or product
       residual comparison was run and that results remain development-only.
 
 ## Notes

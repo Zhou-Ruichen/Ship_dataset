@@ -8,6 +8,8 @@ import csv
 import json
 import math
 import os
+import platform
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
+import scipy
 
 from ncei.code.scs_tn352_audit_common import (
     MRAR_CELLS_PATH,
@@ -77,7 +80,14 @@ class PairWriters:
 
 
 def verify_freeze(phase_b: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
-    required = ["frozen_protocol.json", "input_lock.json", "common_cell_cohort.parquet", "freeze_receipt.json"]
+    required = [
+        "frozen_protocol.json",
+        "input_lock.json",
+        "cell_id_comparison.json",
+        "phase_b_cell_id_status.parquet",
+        "common_cell_cohort.parquet",
+        "freeze_receipt.json",
+    ]
     require(all((phase_b / name).is_file() for name in required), "Phase B freeze files are incomplete")
     protocol = read_json(phase_b / "frozen_protocol.json")
     lock = read_json(phase_b / "input_lock.json")
@@ -89,6 +99,8 @@ def verify_freeze(phase_b: Path) -> tuple[dict[str, Any], dict[str, Any], list[d
     require(sha256_file(phase_b / "frozen_protocol.json") == receipt["frozen_protocol_sha256"] == lock["frozen_protocol_sha256"], "frozen protocol hash differs")
     require(sha256_file(phase_b / "input_lock.json") == receipt["input_lock_sha256"], "input lock hash differs")
     require(sha256_file(phase_b / "common_cell_cohort.parquet") == receipt["common_cell_cohort_sha256"] == lock["common_cell_cohort"]["sha256"], "cohort hash differs")
+    require(sha256_file(phase_b / "cell_id_comparison.json") == receipt["cell_id_comparison_sha256"] == lock["cell_id_comparison"]["sha256"], "cell-ID comparison hash differs")
+    require(sha256_file(phase_b / "phase_b_cell_id_status.parquet") == receipt["phase_b_cell_id_status_sha256"] == lock["phase_b_cell_id_status"]["sha256"], "cell-ID status hash differs")
     for name, record in lock["inputs"].items():
         path = Path(record["path"])
         if path.is_file():
@@ -109,6 +121,12 @@ def verify_freeze(phase_b: Path) -> tuple[dict[str, Any], dict[str, Any], list[d
             require(canonical_sha256(current_files) == record["sha256"], f"locked input tree hash differs: {name}")
     cohort = pq.read_table(phase_b / "common_cell_cohort.parquet").to_pylist()
     require(len(cohort) == 2_244 and len({row["cell_id"] for row in cohort}) == 2_244, "common cohort no longer has 2,244 unique cells")
+    comparison = read_json(phase_b / "cell_id_comparison.json")
+    require(comparison["status"] == "pass", "cell-ID comparison did not pass")
+    require(not comparison["cell_ids"]["frozen_missing_tn352"], "frozen IDs are missing from TN352")
+    require(not comparison["cell_ids"]["frozen_missing_raw_support"], "frozen IDs are missing MRAR raw support")
+    require(comparison["counts"]["raw_support_only_not_in_frozen_scalar_pair"] == 123, "raw-support-only count differs")
+    require({row["cell_id"] for row in cohort} == set(comparison["cell_ids"]["frozen_scalar_pair"]), "cohort differs from frozen assignments")
     return protocol, lock, cohort
 
 
@@ -139,6 +157,14 @@ def load_object_h03(phase_a: Path) -> dict[str, int]:
     with (phase_a / "tn352_object_policy_summary.tsv").open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle, delimiter="\t"))
     return {str(row["source_object_id"]): int(row["n_h03"]) for row in rows}
+
+
+def validate_selected_source_object_count(selected: int, all_soundings: int, cell_id: str) -> None:
+    require(selected > 0, f"TN352 selected source object count is zero: {cell_id}")
+    require(
+        selected <= all_soundings,
+        f"TN352 selected source object count exceeds all-sounding count: {cell_id}",
+    )
 
 
 def point_slice(points: SupportPoints, start: int, stop: int) -> SupportPoints:
@@ -307,6 +333,7 @@ def render_report(
     support_rows: list[dict[str, Any]],
     summary_rows: list[dict[str, Any]],
     pair_counts: dict[int, int],
+    cell_id_comparison: dict[str, Any],
 ) -> str:
     overall = {row["basis"]: row for row in summary_rows if row["stratum"] == "overall"}
     contraction_lines = []
@@ -324,6 +351,17 @@ def render_report(
     ]
     concentration_text = ", ".join(row["stratum"] for row in concentration) if concentration else "none of the registered strata"
     unresolved = sum(bool(row["unresolved_500m"]) for row in support_rows)
+    matched_500 = overall["matched_500m"]
+    overlap_500 = next(
+        row
+        for row in summary_rows
+        if row["basis"] == "matched_500m" and row["stratum"] == "zero_or_low_footprint_overlap"
+    )
+    small_support_500 = next(
+        row
+        for row in summary_rows
+        if row["basis"] == "matched_500m" and row["stratum"] == "small_source_support"
+    )
     return f"""# TN352-MRAR spatial-support audit
 
 Output role: `{OUTPUT_ROLE}`
@@ -333,6 +371,18 @@ Phase A classification: `B. official_raw_source_development_label`
 Common-cell cohort: `{len(support_rows):,}`
 
 Mutual-nearest pairs: 100 m `{pair_counts[100]:,}`, 250 m `{pair_counts[250]:,}`, 500 m `{pair_counts[500]:,}`
+
+## Frozen cell-ID gate
+
+All `{cell_id_comparison['counts']['frozen_scalar_pair']:,}` frozen scalar-pair
+cell IDs are present in both the current TN352 candidates and MRAR raw support.
+The current raw-support intersection contains
+`{cell_id_comparison['counts']['raw_support_common']:,}` cells. Its additional
+`{cell_id_comparison['counts']['raw_support_only_not_in_frozen_scalar_pair']:,}`
+cells are recorded as `raw_support_only_not_in_frozen_scalar_pair` and excluded
+from every source-difference result in this report. The only TN352 candidate
+without MRAR raw support is
+`{cell_id_comparison['cell_ids']['tn352_without_mrar_raw_support'][0]}`.
 
 ## Registered questions
 
@@ -349,12 +399,22 @@ after reading depth differences.
 At 500 m, the registered concentration test is positive for:
 `{concentration_text}`. The CSV records stratum and complement counts, tail
 prevalence, and risk ratio. These are associations, not causal explanations.
+The zero/low-overlap stratum contains
+`{overlap_500['stratum_cell_count']:,}` of
+`{matched_500['evaluable_cell_count']:,}` evaluable cells, so it does not
+localize the tail by itself. High relief and low matched support remain the
+discriminating positive strata.
 
 ### 3. How many cells remain unresolved?
 
 `{unresolved:,}` cells meet the frozen unresolved definition: raw tail,
 persistent or unmatched at 500 m, and none of the registered footprint,
 relief, matched-support, source-support, or H03 associations.
+This registered count is not a causal explanation count. The small-source
+support flag applies to `{small_support_500['stratum_cell_count']:,}` of
+`{matched_500['evaluable_cell_count']:,}` evaluable cells because MRAR has one
+track here, so the protocol cannot identify a separate causally unexplained
+subset.
 
 ### 4. Does this support a label upgrade?
 
@@ -378,9 +438,8 @@ fit, cross-cruise aggregation, or sealed/sidecar body read was performed.
 
 def run(run_dir: Path) -> Path:
     run_dir = run_dir.resolve()
-    phase_a = run_dir / "phase_a"
     phase_b = run_dir / "phase_b"
-    require(phase_a.is_dir() and phase_b.is_dir(), "audit phases are incomplete")
+    require(phase_b.is_dir(), "Phase B freeze directory is missing")
     output_names = [
         "tn352_mrar_support_cells.parquet",
         "matched_difference_100m.parquet",
@@ -393,6 +452,9 @@ def run(run_dir: Path) -> Path:
     failed = phase_b / "run_failed"
     require(not failed.exists(), "Phase B failed output already exists")
     protocol, lock, cohort = verify_freeze(phase_b)
+    phase_a = Path(lock["phase_a_path"])
+    require(phase_a.is_dir(), "locked Phase A directory is missing")
+    cell_id_comparison = read_json(phase_b / "cell_id_comparison.json")
     temp = Path(tempfile.mkdtemp(prefix=".run-", dir=phase_b))
     try:
         stage_labels, mrar_labels = load_depth_labels(cohort)
@@ -416,7 +478,11 @@ def run(run_dir: Path) -> Path:
                 require(mrar_summary["median"] == mrar_labels[cell_id], f"MRAR point median does not close: {cell_id}")
                 tn_objects = sorted({tn.group_values[int(code)] for code in np.unique(tn.group_code)})
                 mrar_tracks = sorted({mrar.group_values[int(code)] for code in np.unique(mrar.group_code)})
-                require(len(tn_objects) == int(cohort_row["tn352_n_source_objects"]), f"TN352 object count differs: {cell_id}")
+                validate_selected_source_object_count(
+                    len(tn_objects),
+                    int(cohort_row["tn352_n_source_objects_all_soundings"]),
+                    cell_id,
+                )
                 require(len(mrar_tracks) == int(cohort_row["mrar_n_tracks"]), f"MRAR track count differs: {cell_id}")
                 tn_centroid = spherical_centroid(tn.lon, tn.lat)
                 mrar_centroid = spherical_centroid(mrar.lon, mrar.lat)
@@ -515,7 +581,7 @@ def run(run_dir: Path) -> Path:
         summary_rows = summarize_tail(support_rows)
         write_tail_summary(temp / "support_tail_summary.csv", summary_rows)
         (temp / "audit_report.md").write_text(
-            render_report(support_rows, summary_rows, writers.counts), encoding="utf-8"
+            render_report(support_rows, summary_rows, writers.counts, cell_id_comparison), encoding="utf-8"
         )
         for name in output_names:
             os.rename(temp / name, phase_b / name)
@@ -525,6 +591,8 @@ def run(run_dir: Path) -> Path:
             [
                 "frozen_protocol.json",
                 "input_lock.json",
+                "cell_id_comparison.json",
+                "phase_b_cell_id_status.parquet",
                 "common_cell_cohort.parquet",
                 "freeze_receipt.json",
                 *output_names,
@@ -537,6 +605,17 @@ def run(run_dir: Path) -> Path:
             "status": "produced_pending_independent_verification",
             "output_role": OUTPUT_ROLE,
             "confirmation_role_eligible": False,
+            "phase_a_path": str(phase_a),
+            "command": sys.argv,
+            "cwd": str(Path.cwd()),
+            "runtime_environment": {
+                "python": sys.version,
+                "platform": platform.platform(),
+                "numpy": np.__version__,
+                "pyarrow": pa.__version__,
+                "scipy": scipy.__version__,
+            },
+            "random_seed": "not_applicable_deterministic_geometry",
             "phase_a_classification": {"code": "B", "value": "official_raw_source_development_label"},
             "frozen_protocol_sha256": sha256_file(phase_b / "frozen_protocol.json"),
             "input_lock_sha256": sha256_file(phase_b / "input_lock.json"),
@@ -545,10 +624,14 @@ def run(run_dir: Path) -> Path:
             "output_schema": {
                 "support_cells": str(support_schema()),
                 "matched_pairs": str(pair_schema()),
+                "cell_id_status": str(pq.ParquetFile(phase_b / "phase_b_cell_id_status.parquet").schema_arrow),
                 "tail_summary_fields": list(summary_rows[0]),
             },
             "row_counts": {
                 "common_cells": len(support_rows),
+                "raw_support_common_cells": cell_id_comparison["counts"]["raw_support_common"],
+                "raw_support_only_not_in_frozen_scalar_pair": cell_id_comparison["counts"]["raw_support_only_not_in_frozen_scalar_pair"],
+                "tn352_without_mrar_raw_support": cell_id_comparison["counts"]["tn352_without_mrar_raw_support"],
                 "tn352_selected_points": len(tn_points),
                 "mrar_selected_points": len(mrar_points),
                 "matched_pairs_100m": writers.counts[100],

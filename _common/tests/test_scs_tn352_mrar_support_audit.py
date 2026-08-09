@@ -5,8 +5,15 @@ import unittest
 
 import numpy as np
 
-from ncei.code.audit_scs_tn352_mrar_support import summarize_tail
-from ncei.code.freeze_scs_tn352_mrar_support import assert_common_cell_count
+from ncei.code.audit_scs_tn352_mrar_support import (
+    summarize_tail,
+    validate_selected_source_object_count,
+)
+from ncei.code.freeze_scs_tn352_mrar_support import (
+    assert_common_cell_count,
+    compare_cell_id_sets,
+    validate_matching_cell_rows,
+)
 from ncei.code.scs_tn352_support import (
     EARTH_RADIUS_M,
     SupportPoints,
@@ -146,6 +153,48 @@ class SupportGeometryUnitTests(unittest.TestCase):
         assert_common_cell_count(2_244)
         with self.assertRaisesRegex(AssertionError, "2367 != 2244"):
             assert_common_cell_count(2_367)
+
+    def test_frozen_ids_are_distinct_from_raw_support_only_ids(self) -> None:
+        comparison = compare_cell_id_sets(
+            ["1min_1_1", "1min_1_2"],
+            {"1min_1_1", "1min_1_2", "1min_1_3", "1min_1_4"},
+            {"1min_1_1", "1min_1_2", "1min_1_3"},
+            expected_frozen_count=2,
+        )
+        self.assertEqual(comparison["frozen_missing_tn352"], [])
+        self.assertEqual(comparison["frozen_missing_raw_support"], [])
+        self.assertEqual(
+            comparison["raw_support_only_not_in_frozen_scalar_pair"],
+            ["1min_1_3"],
+        )
+        self.assertEqual(comparison["tn352_without_mrar_raw_support"], ["1min_1_4"])
+
+    def test_missing_frozen_raw_support_is_reported_before_depth_access(self) -> None:
+        comparison = compare_cell_id_sets(
+            ["1min_1_1", "1min_1_2"],
+            {"1min_1_1", "1min_1_2"},
+            {"1min_1_1"},
+            expected_frozen_count=2,
+        )
+        self.assertEqual(comparison["frozen_missing_raw_support"], ["1min_1_2"])
+
+    def test_cross_source_cell_centers_allow_serialization_roundoff(self) -> None:
+        tn352 = {
+            "cell_id": "1min_6615_18297",
+            "lon_bin": 18297,
+            "lat_bin": 6615,
+            "lon_center": 124.95833333333333,
+            "lat_center": 20.258333333333333,
+        }
+        mrar = dict(tn352, lat_center=tn352["lat_center"] + 1.0e-14)
+        validate_matching_cell_rows(tn352, mrar)
+        with self.assertRaisesRegex(AssertionError, "latitude center differs"):
+            validate_matching_cell_rows(tn352, dict(mrar, lat_center=tn352["lat_center"] + 2.0e-12))
+
+    def test_selected_source_objects_may_be_fewer_than_all_sounding_objects(self) -> None:
+        validate_selected_source_object_count(1, 2, "1min_6619_18285")
+        with self.assertRaisesRegex(AssertionError, "exceeds all-sounding"):
+            validate_selected_source_object_count(3, 2, "1min_6619_18285")
 
 
 if __name__ == "__main__":

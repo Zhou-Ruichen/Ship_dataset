@@ -38,6 +38,8 @@ already exposed old/new Stage C Parquet lineage and candidate tables.
   `ncei/derived/regional_mrar/points_checked/bathymetry_points.parquet`;
 - MRAR labels at
   `ncei/derived/validation_cells_1min/regional_mrar_experiment_cells.parquet`;
+- the 2,244-row frozen scalar-pair assignment at the user-supplied archived
+  GGM-task path, locked by SHA256;
 - passing Phase A verification and its manifest.
 
 No source outside these registered paths is permitted. The input lock records
@@ -116,9 +118,10 @@ and stop rules. Unknown correction inputs remain blocking fields.
 
 Phase B uses three separate commands/processes:
 
-1. `freeze`: verify Phase A pass, copy the approved protocol, hash inputs, read
-   only schemas and non-depth identity/geometry columns, create the common-cell
-   cohort, assert 2,244 cells, and exit.
+1. `freeze`: verify Phase A pass, combine the unchanged geometry protocol with
+   the user-approved cohort amendment, hash inputs, compare only frozen/TN352/
+   MRAR raw-support IDs, register all set differences, create the exact
+   2,244-cell cohort, and exit.
 2. `run`: require the immutable freeze outputs and their hashes, then open the
    registered point and depth columns and produce support outputs.
 3. `verify`: independently recompute the cohort, geometry, matches, metrics,
@@ -132,11 +135,17 @@ receipt. This process boundary makes the pre-depth freeze auditable.
 
 ### Common cells
 
-- TN352 side: accepted Stage C candidate rows with
-  `official_cruise_id == "TN352"` and centers inside `[105,125) x [0,25)`.
-- MRAR side: `regional_mrar_experiment_cells` rows in the same rectangle.
-- Join on exact `cell_id`; recompute bins/centers from the frozen one-arcminute
-  formula and require equality.
+- Analysis IDs: all 2,244 unique `cell_id` values from the frozen assignment,
+  retaining its `split`, `role`, sorted index, and permutation position.
+- TN352 side: accepted Stage C candidates with `official_cruise_id == "TN352"`,
+  `aggregation_basis == "individual_qc_eligible_beams_exact"`, and centers
+  inside `[105,125) x [0,25)`.
+- MRAR raw-support side: checked points with `point_check_pass_basic == true`
+  and finite coordinates in the same rectangle; recompute `cell_id` from the
+  coordinates without opening depth.
+- Require every frozen ID in TN352 and MRAR raw support. Register, but exclude,
+  the 123 additional current raw-support cells. Require the MRAR cell-label row
+  for every included frozen ID.
 - Sort by `(lat_bin, lon_bin, cell_id)`. The expected unique count is 2,244.
 
 ### TN352 support points
@@ -144,6 +153,9 @@ receipt. This process boundary makes the pre-depth freeze auditable.
 Use accepted sounding-lineage rows with TN352, common `cell_id`, and
 `qc_eligible_for_cell == true`. Recompute and verify cell membership. Stable
 identity is `(source_object_id, parser_ping_index, beam_index)`.
+The Stage C candidate field `n_source_objects` counts objects containing any
+sounding in the cell. The support output separately counts and lists objects
+that contribute selected eligible points; that count may be smaller.
 
 ### MRAR support points
 
@@ -237,6 +249,13 @@ none of the registered footprint, relief, low-support, small-support, or H03
 association flags. These flags are associations, not causal explanations.
 
 ## 10. Phase B output schemas
+
+### Cell-ID freeze evidence
+
+`cell_id_comparison.json` records both directions of every frozen/current
+raw-support set difference. `phase_b_cell_id_status.parquet` contains all 2,368
+TN352 candidate IDs and assigns exactly one analysis status; only
+`frozen_scalar_pair` rows may enter the difference outputs.
 
 ### `tn352_mrar_support_cells.parquet`
 

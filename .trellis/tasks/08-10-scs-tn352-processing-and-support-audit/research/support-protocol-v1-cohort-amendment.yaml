@@ -1,0 +1,47 @@
+schema_version: 1
+amendment_id: tn352_mrar_support_v1_frozen_scalar_pair
+status: approved_by_user
+authorization_date: 2026-08-10
+
+frozen_assignment:
+  path: /mnt/data2/06-Projects/12-ggm_scs/.trellis/tasks/archive/2026-08/08-09-scs-new-data-literature-random-interpolation/research/runs/preflight/20260809T_context_v3_preflight/paired_split_assignments.parquet
+  sha256: c7c3aacc0a33d680e3800162220e720776a8c475247562b9315a5588656d5efb
+  expected_rows: 2244
+  expected_unique_cell_ids: 2244
+  cell_id_column: cell_id
+  split_column: split
+  role_column: role
+
+provenance:
+  old_lineage: outputs/diagnostics/scs_lineage_contract_v2/20260805T194722Z/cell_lineage_merged.parquet
+  old_selection:
+    source_provider: mrar
+    weak_scalar_candidate_eligible: true
+    lon_min_inclusive: 120.0
+    lon_max_exclusive: 125.0
+    lat_min_inclusive: 20.0
+    lat_max_exclusive: 23.0
+  tn352_selection:
+    official_cruise_id: TN352
+    aggregation_basis: individual_qc_eligible_beams_exact
+  join:
+    type: exact_one_to_one_inner
+    key: cell_id
+
+current_raw_support_gate:
+  source: ncei/derived/regional_mrar/points_checked/bathymetry_points.parquet
+  selector: point_check_pass_basic_and_finite_coordinates
+  expected_tn352_intersection: 2367
+  frozen_missing_action: stop_before_depth_access
+  included_status: frozen_scalar_pair
+  excluded_status: raw_support_only_not_in_frozen_scalar_pair
+  expected_excluded_count: 123
+  expected_tn352_without_raw_support_count: 1
+
+unchanged_protocol_sections:
+  - point_selectors
+  - geometry
+  - occupancy
+  - depth
+  - tail_protocol
+  - prohibited
