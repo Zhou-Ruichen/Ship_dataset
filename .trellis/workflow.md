@@ -160,10 +160,11 @@ Phase 3: Finish  → record findings, update spec with durable knowledge, commit
 ### Planning Artifacts
 
 - `prd.md` — first line declares the mode; then, for exploratory tasks, the experiment question, the hypothesis, and the signal to look for (what result counts as interesting, what counts as a negative result); for durable tasks, requirements, constraints, and acceptance criteria. The evidence tier is decided per run, not recorded here. Do not put technical design or execution checklists here.
-- `design.md` — technical design for complex tasks: boundaries, contracts, data flow, tradeoffs, compatibility, rollout / rollback shape.
-- `implement.md` — execution plan for complex tasks: ordered checklist, validation commands, review gates, and rollback points.
+- `design.md` — create only when the user must review a non-obvious code/data interface, data role, compatibility choice, or rollback design before implementation.
+- `implement.md` — create only when execution has real step dependencies, coordination, migration, or rollback that is not already expressed by a config or run manifest. Do not copy acceptance criteria or validation commands into it.
 - `implement.jsonl` / `check.jsonl` — spec and research manifests for sub-agent context. They do not replace `implement.md`.
-- Lightweight tasks may be PRD-only. Complex tasks must have `prd.md`, `design.md`, and `implement.md` before `task.py start`.
+- Exploratory tasks are PRD-only by default, even when an experiment has several execution steps. Add the optional artifacts only for the conditions above. Durable tasks use the same conditions; task size alone does not require more files.
+- Check commands belong to Phase 2.2. The actual invocation, observation, findings, and output paths belong in `result.md`; planning artifacts do not repeat them.
 
 ### Parent / Child Task Trees
 
@@ -184,7 +185,7 @@ When creating a task, set its mode in prd.md line 1: exploratory (default) or du
 
 ### Phase 1: Plan
 - 1.0 Create task `[required · once]` (only after task-creation consent)
-- 1.1 Requirement exploration `[required · repeatable]` (`prd.md`; complex tasks also need `design.md` + `implement.md`)
+- 1.1 Requirement exploration `[required · repeatable]` (`prd.md`; optional artifacts only when their stated condition applies)
 - 1.2 Research `[optional · repeatable]`
 - 1.3 Configure context `[required · once]` — Claude Code, Cursor, OpenCode, Codex, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Grok, Kimi Code (sub-agent-dispatch platforms only; inline platforms skip)
 - 1.4 Activate task `[required · once]` (review gate, then `task.py start`; status → in_progress)
@@ -195,9 +196,9 @@ When creating a task, set its mode in prd.md line 1: exploratory (default) or du
 [workflow-state:planning]
 Load `trellis-brainstorm`; stay in planning.
 First line of `prd.md` declares the mode: exploratory (default) or durable.
-Lightweight: `prd.md` can be enough. Complex: finish `prd.md`, `design.md`, and `implement.md`; ask for review before `task.py start`.
+Exploratory default: `prd.md` only; add optional files only for their Phase 1 conditions, never to copy check commands.
 Multi-deliverable scope: consider a parent task plus independently verifiable child tasks; dependencies must be written in child artifacts, not implied by tree position.
-Sub-agent mode: curate `implement.jsonl` and `check.jsonl` as spec/research manifests before start.
+Sub-agent mode: keep each jsonl to directly relevant spec/research; seed-only is valid when no extra context exists.
 [/workflow-state:planning]
 
 <!-- Per-turn breadcrumb: shown throughout Phase 1 when codex.dispatch_mode=inline.
@@ -208,7 +209,7 @@ Sub-agent mode: curate `implement.jsonl` and `check.jsonl` as spec/research mani
 
 [workflow-state:planning-inline]
 Load `trellis-brainstorm`; stay in planning.
-Lightweight: `prd.md` can be enough. Complex: finish `prd.md`, `design.md`, and `implement.md`; ask for review before `task.py start`.
+Exploratory default: `prd.md` only; add optional files only for their Phase 1 conditions, never to copy checks.
 Multi-deliverable scope: consider a parent task plus independently verifiable child tasks; dependencies must be written in child artifacts, not implied by tree position.
 Inline mode: skip jsonl curation; Phase 2 reads artifacts/specs via `trellis-before-dev`.
 [/workflow-state:planning-inline]
@@ -271,7 +272,7 @@ Code committed. Run `/trellis:finish-work`; if dirty, return to Phase 3.4 first.
 2. Run steps in order inside each Phase; `[required]` steps can't be skipped
 3. Phases can roll back (e.g., Execute reveals a prd defect → return to Plan to fix, then re-enter Execute)
 4. Steps tagged `[once]` are skipped if the output already exists; don't re-run
-5. Artifact presence informs the next step; missing `design.md` / `implement.md` is valid for lightweight tasks and incomplete planning for complex tasks.
+5. Artifact presence informs the next step; missing `design.md` / `implement.md` is valid unless its specific Phase 1 condition applies.
 
 ### Active Task Routing
 
@@ -296,7 +297,7 @@ When a user request matches one of these intents inside an active task, route fi
 ### Guardrails
 
 - Task creation approval is not implementation approval; implementation waits for `task.py start` after artifact review.
-- PRD-only is valid for lightweight tasks; complex tasks need `design.md` + `implement.md`.
+- Exploratory tasks are PRD-only by default. Multi-step execution alone does not require more planning files; create optional artifacts only for their stated conditions.
 - Planning must be persisted to task artifacts; checks appropriate to the task's mode must run before reporting completion, and checks beyond the mode's depth require a concrete failure signal or an explicit user request.
 
 ### Loading Step Detail
@@ -343,7 +344,7 @@ The brainstorm skill will guide you to:
 - Update `prd.md` immediately after each user answer
 - Split large scopes into a parent task plus child tasks when the deliverables can be verified independently
 - Keep `prd.md` focused on the mode, the question, and what result counts as an answer (exploratory) or on requirements and acceptance criteria (durable)
-- For complex tasks, produce `design.md` and `implement.md` before implementation starts
+- Create `design.md` or `implement.md` only when its Planning Artifacts condition applies; do not create either file merely because an experiment has several steps
 
 When considering a parent/child split:
 - Use a parent task when one request contains several independently verifiable deliverables.
@@ -391,7 +392,7 @@ Brainstorm and research can interleave freely — pause to research a technical 
 
 [Claude Code, Cursor, OpenCode, codex-sub-agent, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Trae, Grok, Kimi Code]
 
-Curate `implement.jsonl` and `check.jsonl` so the Phase 2 sub-agents get the right spec/research context. These files were seeded on `task create` with a single self-describing `_example` line; your job here is to fill in real entries.
+Curate `implement.jsonl` and `check.jsonl` only when Phase 2 sub-agents need spec/research context beyond the automatically injected task artifacts. These files are seeded on `task create` with a self-describing `_example` line.
 
 **Location**: `{TASK_DIR}/implement.jsonl` and `{TASK_DIR}/check.jsonl` (already exist).
 
@@ -400,6 +401,7 @@ Curate `implement.jsonl` and `check.jsonl` so the Phase 2 sub-agents get the rig
 **What to put in**:
 - **Spec files** — `.trellis/spec/<package>/<layer>/index.md` and any specific guideline files (`error-handling.md`, `conventions.md`, etc.) relevant to this task
 - **Research files** — `{TASK_DIR}/research/*.md` that the sub-agent will need to consult
+- For exploratory work, normally select only `spec/shared/research-minimal.md` when it exists plus task research that directly changes implementation or checking. Do not add broad indexes merely to make the manifest look complete.
 
 **What NOT to put in**:
 - Code files (`src/**`, `packages/**/*.ts`, etc.) — those are read by the sub-agent during implementation, not pre-registered here
@@ -428,11 +430,11 @@ python3 ./.trellis/scripts/task.py add-context "$TASK_DIR" implement "<path>" "<
 python3 ./.trellis/scripts/task.py add-context "$TASK_DIR" check "<path>" "<reason>"
 ```
 
-Delete the seed `_example` line once real entries exist (optional — it's skipped automatically by consumers).
+Delete the seed `_example` line once real entries exist (optional — it is skipped automatically by consumers). If no directly relevant spec or research file exists, leave the seed row and proceed; `prd.md` and other task artifacts are injected separately.
 
-Ready gate: both `implement.jsonl` and `check.jsonl` must contain at least one real `{"file": "...", "reason": "..."}` entry before `task.py start`. The seed `_example` row alone is not ready.
+Ready gate: each manifest contains only files its consumer needs. Real entries are required only when such context exists; seed-only manifests are valid otherwise.
 
-Skip this step only when both files already have real curated entries.
+Skip this step when both files already have the minimum relevant entries or correctly remain seed-only.
 
 [/Claude Code, Cursor, OpenCode, codex-sub-agent, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Trae, Grok, Kimi Code]
 
@@ -450,7 +452,7 @@ After artifact review, flip the task status to `in_progress`:
 python3 ./.trellis/scripts/task.py start <task-dir>
 ```
 
-For lightweight tasks, `prd.md` can be enough. For complex tasks, `prd.md`, `design.md`, and `implement.md` must exist and be reviewed before start. On sub-agent-dispatch platforms, `implement.jsonl` and `check.jsonl` must both have real curated entries before start. Runtime consumers tolerate missing or seed-only manifests for compatibility, but that tolerance is not a planning-ready state.
+`prd.md` is always required. `design.md` and `implement.md` are required only when their Planning Artifacts condition applies. On sub-agent-dispatch platforms, review each jsonl and keep only directly relevant entries; a seed-only manifest is ready when no extra context exists.
 
 After this command succeeds, the breadcrumb auto-switches to `[workflow-state:in_progress]`, and the rest of Phase 2 / 3 follows.
 
@@ -463,13 +465,13 @@ If `task.py start` errors with a session-identity message (no context key from h
 | `prd.md` exists | ✅ |
 | User confirms task should enter implementation | ✅ |
 | `task.py start` has been run (status = in_progress) | ✅ |
-| `research/` has artifacts (complex tasks) | recommended |
-| `design.md` exists (complex tasks) | ✅ |
-| `implement.md` exists (complex tasks) | ✅ |
+| `research/` has Markdown findings when unresolved research was needed | conditional |
+| `design.md` exists when a user-reviewed interface/data/compatibility/rollback choice was needed | conditional |
+| `implement.md` exists when execution dependencies, coordination, migration, or rollback needed a separate plan | conditional |
 
 [Claude Code, Cursor, OpenCode, codex-sub-agent, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Trae, Grok, Kimi Code]
 
-| `implement.jsonl` and `check.jsonl` each contain at least one real curated entry (seed row does not count) | ✅ |
+| `implement.jsonl` and `check.jsonl` contain only directly relevant context, or remain seed-only when none exists | ✅ |
 
 [/Claude Code, Cursor, OpenCode, codex-sub-agent, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Trae, Grok, Kimi Code]
 
@@ -585,6 +587,8 @@ If issues are found → fix → re-check, until green.
 
 **Before adding any check (either mode)**, be able to name the concrete, plausible failure it targets and how its result would change the next action. Use the cheapest check that answers that question, and do not add another check for the same question once it is answered.
 
+Write the actual invocation, observation, findings, and output paths once in `<task>/result.md`. Do not copy planned validation lists from `prd.md` or `implement.md`. Later journal entries record the finding, commit, and `result.md` path instead of reproducing the check list.
+
 **Final pass (before Phase 3.4 commit)**: for durable tasks, the last 2.2 must run full-scope, not just on the latest implement chunk. List all affected packages with `python3 ./.trellis/scripts/get_context.py --mode packages`, then load each package's spec index Quality Check section. For exploratory tasks there is no final pass beyond the sanity list above.
 
 #### 2.3 Rollback `[on demand]`
@@ -687,7 +691,7 @@ This section is for developers who want to modify the Trellis workflow itself. A
 
 Edit the corresponding step's walkthrough body in the Phase 1 / 2 / 3 sections above. Critical invariants:
 - No active task must triage first and ask for task-creation consent before creating a Trellis task.
-- Planning must distinguish lightweight PRD-only tasks from complex tasks that require `prd.md`, `design.md`, and `implement.md` before start.
+- Planning must keep exploratory tasks PRD-only by default and create optional artifacts only for their stated information needs.
 - Every required execution path must keep the Phase 3.4 commit reminder reachable before `/trellis:finish-work`.
 
 All tag blocks live in the `## Phase Index` section above, immediately after each phase summary:
