@@ -56,10 +56,18 @@ If only a smoke check ran, write "smoke check passed; no result is claimed",
 not a discussion. Promote the run to retained before any claim, following
 [../shared/reproducibility.md](../shared/reproducibility.md).
 
+## Task Completion And Claim Review
+
+A completed Trellis task does not approve a scientific claim. Before using a
+claim in a manuscript or external release, the researcher reviews the retained
+evidence, the conditions it covers, its uncertainty, and its limitations.
+
 ## Completion Checklist
 
 - [ ] The write-up opens with the scientific question or finding.
 - [ ] Every claim links to retained evidence.
+- [ ] Manuscript or external claims have been reviewed by the researcher at the
+      scope and strength supported by that evidence.
 - [ ] Engineering terms live in methods, footnotes, or appendix, not in the
       narrative.
 - [ ] The self-check in `scientific-writing.md` passes.

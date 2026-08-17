@@ -411,7 +411,7 @@ Curate `implement.jsonl` and `check.jsonl` only when Phase 2 sub-agents need spe
 - `implement.jsonl` → specs + research the implement sub-agent needs to write code correctly
 - `check.jsonl` → specs for the check sub-agent (quality guidelines, check conventions, same research if needed)
 
-These manifests do not replace `implement.md`. `implement.md` is the human-readable execution plan for a complex task; jsonl files only list context files to inject or load.
+These manifests do not replace `implement.md` when its Planning Artifacts condition applies. The jsonl files only list context files to inject or load.
 
 **How to discover relevant specs**:
 
@@ -587,7 +587,7 @@ If issues are found → fix → re-check, until green.
 
 **Before adding any check (either mode)**, be able to name the concrete, plausible failure it targets and how its result would change the next action. Use the cheapest check that answers that question, and do not add another check for the same question once it is answered.
 
-Write the actual invocation, observation, findings, and output paths once in `<task>/result.md`. Do not copy planned validation lists from `prd.md` or `implement.md`. Later journal entries record the finding, commit, and `result.md` path instead of reproducing the check list.
+Write the actual invocation, observation, findings, output paths, and any limitation or uncertainty that changes the interpretation once in `<task>/result.md`. Do not copy planned validation lists from `prd.md` or `implement.md`. Later journal entries record the finding, commit, and `result.md` path instead of reproducing the check list. Task completion records that the requested work is done; it does not approve a scientific claim for a manuscript or external release.
 
 **Final pass (before Phase 3.4 commit)**: for durable tasks, the last 2.2 must run full-scope, not just on the latest implement chunk. List all affected packages with `python3 ./.trellis/scripts/get_context.py --mode packages`, then load each package's spec index Quality Check section. For exploratory tasks there is no final pass beyond the sanity list above.
 

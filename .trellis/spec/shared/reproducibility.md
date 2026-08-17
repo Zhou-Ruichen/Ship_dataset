@@ -116,6 +116,17 @@ When a computation uses randomness, the retained manifest records:
 
 If the computation is deterministic and has no seed, state that explicitly.
 
+## Protocol Changes
+
+Once a retained run or comparison starts, keep its question or hypothesis,
+method, data source and version, split, preprocessing, metric definition,
+baseline, and claim scope fixed for that record. If any of them changes, create
+a new run or comparison record, preserve the earlier artifacts, and state what
+changed and why. Create a new Trellis task when the research question changes.
+
+Scratch work can change freely. If it is promoted, the retained record must
+describe the inputs and protocol that produced the promoted result.
+
 ## Result Claims
 
 Do not say a method improved, converged, reproduced a number, supports a
@@ -130,6 +141,11 @@ to retained and:
 - environment freeze is recorded.
 
 If only a smoke test ran, say it was a smoke test.
+
+Completing a Trellis task means the requested work and evidence record are
+complete. It does not approve a scientific claim for a manuscript or external
+release. That decision requires human review of the retained evidence, claim
+scope, and limitations.
 
 ## External Tools
 
