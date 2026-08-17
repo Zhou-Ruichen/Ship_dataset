@@ -228,7 +228,7 @@ Sub-agent dispatch protocol applies to all platforms and all sub-agents, includi
 
 [workflow-state:in_progress]
 Mode from `prd.md` line 1; default exploratory.
-Exploratory: implement (Phase 2.1, no self-check) -> one `trellis-research-check` pass (2.2) -> result to `<task>/result.md` -> commit (Phase 3.4).
+Exploratory: implement (Phase 2.1, no execution/self-check) -> one result-producing `trellis-research-check` pass (2.2) -> result to `<task>/result.md` -> commit (Phase 3.4).
 Durable: implement -> `trellis-check` (2.2) -> spec update only if durable knowledge (3.3) -> commit.
 Never repeat a passed check without new failure evidence; an unexpected result is a finding, not a bug.
 [/workflow-state:in_progress]
@@ -240,7 +240,7 @@ Never repeat a passed check without new failure evidence; an unexpected result i
 
 [workflow-state:in_progress-inline]
 Mode from `prd.md` line 1; default exploratory.
-Exploratory: edit (no self-check) -> one sanity pass per 2.2 -> result to `<task>/result.md` -> commit (Phase 3.4).
+Exploratory: edit (no execution/self-check) -> one result-producing sanity pass per 2.2 -> result to `<task>/result.md` -> commit (Phase 3.4).
 Durable: edit -> `trellis-check` (2.2) -> spec update only if durable knowledge (3.3) -> commit.
 Never repeat a passed check without new failure evidence; no sub-agent dispatch in inline mode.
 [/workflow-state:in_progress-inline]
@@ -378,6 +378,10 @@ Do the research in the main session directly and write findings into `{TASK_DIR}
 - One file per research topic (e.g. `research/auth-library-comparison.md`)
 - Record third-party library usage examples, API references, version constraints in files
 - Note relevant spec file paths you discovered for later reference
+- Keep `research/` to Markdown investigation notes and small metadata. Datasets,
+  predictions, checkpoints, surfaces, figures, and run work directories belong
+  under the project's `outputs/` paths; `result.md` links to them instead of
+  copying them into the task directory.
 
 Brainstorm and research can interleave freely — pause to research a technical question, then return to talk with the user.
 
@@ -484,7 +488,7 @@ Dispatch rules for sub-agent platforms: only the main session dispatches; if alr
 Spawn the implement sub-agent:
 
 - **Agent type**: `trellis-implement`
-- **Task description**: Implement the reviewed task artifacts, consulting materials under `{TASK_DIR}/research/`. Do not run the workflow quality check; Phase 2.2 owns validation.
+- **Task description**: Implement the reviewed task artifacts, consulting materials under `{TASK_DIR}/research/`. Do not execute the experiment or run the workflow quality check; Phase 2.2 owns the result-producing invocation and validation.
 - **Dispatch prompt guard**: The prompt MUST start with `Active task: <task path>`, then tell the spawned agent it is already the `trellis-implement` sub-agent and must implement directly, not spawn another `trellis-implement` / `trellis-check`.
 
 The platform hook/plugin auto-handles:
@@ -499,7 +503,7 @@ The platform hook/plugin auto-handles:
 Spawn the implement sub-agent:
 
 - **Agent type**: `trellis-implement`
-- **Task description**: Implement the reviewed task artifacts, consulting materials under `{TASK_DIR}/research/`. Do not run the workflow quality check; Phase 2.2 owns validation.
+- **Task description**: Implement the reviewed task artifacts, consulting materials under `{TASK_DIR}/research/`. Do not execute the experiment or run the workflow quality check; Phase 2.2 owns the result-producing invocation and validation.
 - **Dispatch prompt guard**: The prompt MUST start with `Active task: <task path>`, then explicitly say the spawned agent is already `trellis-implement` and must implement directly without spawning another `trellis-implement` / `trellis-check`.
 
 The pull-based sub-agent definition auto-handles the context load requirement:
@@ -513,7 +517,7 @@ The pull-based sub-agent definition auto-handles the context load requirement:
 Spawn the implement sub-agent:
 
 - **Agent type**: `trellis-implement`
-- **Task description**: Implement the reviewed task artifacts, consulting materials under `{TASK_DIR}/research/`. Do not run the workflow quality check; Phase 2.2 owns validation.
+- **Task description**: Implement the reviewed task artifacts, consulting materials under `{TASK_DIR}/research/`. Do not execute the experiment or run the workflow quality check; Phase 2.2 owns the result-producing invocation and validation.
 - **Dispatch prompt guard**: Tell the spawned agent it is already the `trellis-implement` sub-agent and must implement directly, not spawn another `trellis-implement` / `trellis-check`.
 
 The platform prelude auto-handles the context load requirement:
@@ -527,8 +531,8 @@ The platform prelude auto-handles the context load requirement:
 1. Load the `trellis-before-dev` skill to read project guidelines
 2. Read `{TASK_DIR}/prd.md`, then `design.md` if present, then `implement.md` if present
 3. Consult materials under `{TASK_DIR}/research/`
-4. Implement the code per reviewed artifacts
-5. Proceed to Phase 2.2 for the mode's check; do not run it here
+4. Implement the code and configuration per reviewed artifacts; do not execute the experiment here
+5. Proceed to Phase 2.2 for the result-producing invocation and the mode's check
 
 [/codex-inline, Kilo, Antigravity, Devin, DeepSeek Harness]
 
@@ -540,13 +544,13 @@ Check depth follows the task's mode, read from `prd.md` line 1 (absent means exp
 
 [Claude Code, Cursor, OpenCode, codex-sub-agent, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Trae, Grok, Kimi Code]
 
-Load the `trellis-research-check` skill (it is a skill only; there is no sub-agent form): the changed path executes; shapes, dtypes, and units are consistent where relevant; no NaN/Inf or clearly invalid outputs; the reported result comes from the invocation just executed. Report findings; do not auto-fix, do not run test suites, do not add checks, and do not re-run a check that already passed.
+Load the `trellis-research-check` skill (it is a skill only; there is no sub-agent form). Perform one result-producing invocation and use that same invocation for the sanity check: the changed path executes; shapes, dtypes, and units are consistent where relevant; no NaN/Inf or clearly invalid outputs; the reported result comes from that invocation. Report findings; do not auto-fix, do not run test suites, do not add checks, and do not execute the experiment again after it passes.
 
 [/Claude Code, Cursor, OpenCode, codex-sub-agent, Kiro, Gemini, Qoder, CodeBuddy, Copilot, Droid, Pi, Oh My Pi, ZCode, Snow, Reasonix, Trae, Grok, Kimi Code]
 
 [codex-inline, Kilo, Antigravity, Devin, DeepSeek Harness]
 
-Apply the same sanity list inline in one pass. An unexpected scientific result is a finding to report, not a software failure to chase.
+Perform one result-producing invocation and apply the same sanity list to that invocation. Do not execute the experiment again after it passes. An unexpected scientific result is a finding to report, not a software failure to chase.
 
 [/codex-inline, Kilo, Antigravity, Devin, DeepSeek Harness]
 

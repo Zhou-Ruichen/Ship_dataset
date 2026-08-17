@@ -5,13 +5,14 @@ description: One-pass sanity check for exploratory research tasks. Establishes t
 
 # Research Check (exploratory, one pass)
 
-Purpose: establish whether the experiment is executable and whether the
-reported observation is trustworthy enough for the current research question.
-This is a single pass. It is not a review cycle.
+Purpose: execute the experiment once, produce the requested observation, and
+establish whether that same invocation is trustworthy enough for the current
+research question. This is a single pass. It is not a review cycle.
 
 ## Check only
 
-- The changed path executes.
+- Execute the changed path exactly once. This is the result-producing
+  invocation, not a preliminary run before a separate check.
 - Obvious shape, dtype, unit, and coordinate errors where relevant.
 - NaN/Inf or clearly invalid outputs.
 - The reported observation comes from the invocation just executed. Require
@@ -34,8 +35,9 @@ This is a single pass. It is not a review cycle.
 
 ## Stop rule
 
-After one successful pass over the list above, stop and report. Do not seek
-additional certainty without a concrete failure signal.
+After one successful pass over the list above, stop and report. Do not execute
+the experiment again or seek additional certainty without a concrete failure
+signal.
 
 ## Report format
 

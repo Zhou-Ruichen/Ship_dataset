@@ -34,7 +34,7 @@ The evidence tier (scratch / smoke / retained) is decided per run and controls w
 1. **Understand specs** — read relevant spec files in `.trellis/spec/`
 2. **Understand task artifacts** — read the artifacts listed above
 3. **Implement features** — write code that follows specs and existing patterns
-4. **No self-validation** — Phase 2.2 of the workflow owns the quality check. Write the code; do not run the experiment, lint, typecheck, or sanity checks unless the task explicitly asks you to run something to produce the requested result.
+4. **No execution or self-validation** — Phase 2.2 of the workflow owns the single result-producing invocation and its quality check. Write the code and configuration; do not run the experiment, lint, typecheck, or sanity checks. If the requested result requires execution, leave that execution to Phase 2.2.
 
 ## Forbidden Operations
 
