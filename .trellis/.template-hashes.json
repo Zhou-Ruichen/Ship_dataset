@@ -67,6 +67,19 @@
     ".claude/skills/trellis-meta/references/platform-files/overview.md": "6479cd2393166b4b369b511c44b78cbc64975c8b1df96ee1d4d1bd06b75cd48d",
     ".claude/skills/trellis-meta/references/platform-files/platform-map.md": "ded6751c06f31d0a701d33c9dd69c482a583539ad3ed464aaad9e705f793b212",
     ".claude/skills/trellis-meta/references/platform-files/skills-and-commands.md": "85435eb8bb6921283575bca51268fc534c22fd3ca33782e841ee5c76140ae48f",
-    ".claude/skills/trellis-update-spec/SKILL.md": "d975db7af166578488958751ae2c56edb827a68bddb569aa27acc3453f64e610"
+    ".claude/skills/trellis-update-spec/SKILL.md": "d975db7af166578488958751ae2c56edb827a68bddb569aa27acc3453f64e610",
+    ".trellis/spec/README.md": "888411d97106fee5029a4afabf85f9952e89335a646efc5c8e814053fd61e135",
+    ".trellis/spec/data/index.md": "190fddaa86ced6fe33de7a79092ca0584b480721c731de0027ef1f099501b7c2",
+    ".trellis/spec/evaluation/index.md": "2b93fb09868a3b48c1875e6cdf11ba110a7b33c62af5c8871b8112a2736e4eea",
+    ".trellis/spec/guides/add-run.md": "a6b14db399527bc6c96806c5cc59f17fa3598511e0c3b61e4c9abb496f0a4757",
+    ".trellis/spec/guides/code-review.md": "44eb9d2dcfaa1ca573624108b1689ec99d082d4c3b0c59ad8fb9b265bb704300",
+    ".trellis/spec/guides/index.md": "0086ea5ab48036301dc08151bad81bbd439708475e424d2ac97c14b802213839",
+    ".trellis/spec/guides/write-results.md": "112c10d58238a69b1d329b192b7b7509f0bd6fdeea54e9a1a46969c34d18e89b",
+    ".trellis/spec/shared/anti-bloat.md": "9516390aa5bf1aeb69c623eeed18d4fd87e25c7284c1b85eff264ef95848fc60",
+    ".trellis/spec/shared/index.md": "c6eaa3559d9dd1a8134ccec1e200b3ff1d8764eb28bfb4465be63c6d32c89b2c",
+    ".trellis/spec/shared/project-layout.md": "f01f8733130a97b3072191e8cf4aca53e8711858fc0cceb33b237f8162d6e195",
+    ".trellis/spec/shared/reproducibility.md": "0406442e09d24ce454eab1ba143f723bd99046f2ea4fb35e77b2d866f635dc40",
+    ".trellis/spec/shared/research-minimal.md": "7732a7f111706a32417dbfe7337527568a5223ae3aa3df244d9486a4fd5957c1",
+    ".trellis/spec/shared/scientific-writing.md": "fc440977fcc40b7e7a25962670e392cae6900248cab26c2690ed129eb3255106"
   }
 }
