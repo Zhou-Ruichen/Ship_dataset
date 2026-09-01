@@ -1,7 +1,6 @@
 <!--
-Maintainer note: the sibling template carries an equivalent copy of this file
-with domain examples adapted (research-core is generic; dl-earth-research is
-geoscience). Mirror structural changes -- section headings, self-check items,
+Maintainer note: the sibling template carries an equivalent copy of this file.
+Mirror structural changes -- section headings, self-check items,
 cross-reference targets -- across both copies unless a change is genuinely
 domain-specific. The duplication is structural: Trellis installs each template
 directory as a standalone flat copy into .trellis/spec/, so the two cannot share
@@ -18,17 +17,18 @@ That file holds the rules; this guide is the workflow.
 
 ## Steps
 
-1. Write the scientific question in one sentence before any numbers.
-2. List the retained evidence that can answer it (run directory or data
-   product). If none exists, stop and produce it first; do not draft a claim
-   ahead of evidence.
+1. Open with the scientific question or the supported finding, whichever reads
+   more naturally. Establish the comparison and condition before any numbers.
+2. List the evidence that can answer it: a retained run or data product,
+   supplied table or figure, existing analysis, or cited source. Produce a new
+   result only when a new claim depends on a result that does not yet exist.
 3. Draft the finding in domain language: the effect, its direction, magnitude,
    and the sample set, condition, or simulation setup it applies to.
 4. Add the interpretation: candidate mechanisms, uncertainty across seeds,
    folds, or repeats, and the limitations.
 5. Place every number with its condition and uncertainty.
-6. Move engineering detail (command, config path, run id) to a methods
-   paragraph, footnote, or appendix; link to the retained run.
+6. Put commands, config paths, and run identifiers in Methods, a footnote, or
+   an appendix when they are needed for reproduction; link to the retained run.
 7. Run the self-check in [../shared/scientific-writing.md](../shared/scientific-writing.md).
 
 ## Do
@@ -65,9 +65,9 @@ evidence, the conditions it covers, its uncertainty, and its limitations.
 ## Completion Checklist
 
 - [ ] The write-up opens with the scientific question or finding.
-- [ ] Every claim links to retained evidence.
+- [ ] Each new quantitative or result claim is traceable to supporting evidence.
 - [ ] Manuscript or external claims have been reviewed by the researcher at the
       scope and strength supported by that evidence.
-- [ ] Engineering terms live in methods, footnotes, or appendix, not in the
-      narrative.
+- [ ] Engineering state is not presented as a scientific finding; Methods keep
+      the exact technical detail needed for reproduction.
 - [ ] The self-check in `scientific-writing.md` passes.

@@ -88,7 +88,10 @@ HDF5, netCDF, JSON, or any project convention.
   record.
 - Handle missing-value sentinels, fill values, and NaN explicitly: state the
   convention and never let an unconverted sentinel reach a computation.
-- Record a checksum (sha256 by default) per durable data file in the manifest.
+- Record a checksum only when exact byte identity affects transfer integrity,
+  deduplication, or reproduction. Otherwise record the source, upstream
+  version or retrieval date, expected size or record count, and schema needed
+  to identify the data.
 - For data too large to version in the repository, store a reproducible pointer
   (root path or config key, protocol, upstream version or retrieval date)
   instead of the bytes, and record the resolution rule.
@@ -126,8 +129,8 @@ If the stage changes, update parameters and manifest, not the script name.
       paths.
 - [ ] Missing values, units, schema, and conventions are explicit.
 - [ ] Physical fields carry units; fill-value and sentinel handling is explicit.
-- [ ] Durable data files have a checksum, or the manifest states why one is
-      impractical.
+- [ ] Durable data has the source/version metadata needed to identify it;
+      checksums are present only when exact byte identity matters.
 - [ ] Large external data is a reproducible pointer, not committed bytes.
 - [ ] Large generated data is ignored by git unless the user explicitly
       chooses to version a small fixture.

@@ -17,7 +17,7 @@ Use the lightest tier that preserves the scientific record:
 - Retained: any run used in a comparison, report, paper, model handoff,
   regression baseline, or result claim. Retained runs must have the full
   manifest, parameter record, metrics or result files, data/source record,
-  assumptions, and environment freeze.
+  assumptions, and enough environment information to reconstruct the run.
 
 Promote a scratch or smoke run before citing it: move or copy the selected
 artifacts into `outputs/<run_id>/`, add the missing retained-run evidence, and
@@ -64,8 +64,7 @@ retained runs before they support a result claim.
     "name": "<env-name-or-null>",
     "language": "<python|r|julia|matlab|shell|...>",
     "language_version": "<version>",
-    "packages": {},
-    "freeze": "outputs/20260610-142233-sensitivity/environment.freeze.txt"
+    "record": "uv.lock"
   },
   "data": {
     "manifest": "data/manifests/input_v1.json",
@@ -87,23 +86,18 @@ hashes, metrics, seeds, package versions, data sources, or assumptions.
 ## Environment
 
 Each project declares one environment strategy in its own README or spec layer.
-This template does not pick the manager; it requires the contract:
+This template does not pick the manager. A retained run points to the existing
+lockfile, container digest, environment file, module list, or other record that
+describes its software environment. Create a per-run freeze only when no stable
+project record exists or the run depends on environment state that can drift.
 
-- Every retained run manifest records the environment it ran in, plus a freeze
-  snapshot written next to the run artifacts. `freeze` is a path to the
-  captured dependency/environment snapshot for this run, not a template-level
-  fixed file.
-- Do not create a freeze file for every scratch run in a sweep. If a scratch or
-  smoke run becomes evidence, promote it and capture or copy the environment
-  freeze then.
-- Shared environments drift; for retained runs, the freeze snapshot is what
-  preserves the run.
-- Use the selected ecosystem's equivalent export: `pip freeze`, `uv pip
-  freeze`, `conda env export`, `renv.lock`, `Manifest.toml`, a container digest,
-  a module list, or another reconstructable environment record.
-- Do not install packages ad hoc into a shared base environment for retained
-  work. Add dependencies to the project's dependency file or record the exact
-  environment snapshot.
+Suitable records include `uv.lock`, `renv.lock`, `Manifest.toml`, a conda export,
+a container digest, a module list, or a dependency freeze. Do not duplicate an
+unchanged project lockfile into every run directory.
+
+Do not install packages ad hoc into a shared base environment for retained work.
+Add dependencies to the project's dependency file or record the exact
+environment snapshot.
 
 ## Seed And Randomness Rule
 
@@ -122,7 +116,8 @@ Once a retained run or comparison starts, keep its question or hypothesis,
 method, data source and version, split, preprocessing, metric definition,
 baseline, and claim scope fixed for that record. If any of them changes, create
 a new run or comparison record, preserve the earlier artifacts, and state what
-changed and why. Create a new Trellis task when the research question changes.
+changed and why. Create a new Trellis task only when a separate work record is
+useful.
 
 Scratch work can change freely. If it is promoted, the retained record must
 describe the inputs and protocol that produced the promoted result.
@@ -138,7 +133,8 @@ to retained and:
   recorded;
 - parameters, command, seed/randomness state, and assumptions are recorded;
 - data manifest or source snapshot is recorded;
-- environment freeze is recorded.
+- the software environment points to an existing reproducible record, or a
+  per-run snapshot when needed.
 
 If only a smoke test ran, say it was a smoke test.
 

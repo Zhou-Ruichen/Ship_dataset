@@ -52,7 +52,9 @@ when that is the natural convention for the language or existing repository.
 - Prefer action-object names: `build_dataset.py`, `run_simulation.R`,
   `evaluate_results.jl`.
 - Do not use dates as normal source-code versioning.
-- Do not use `v2`, `final`, `new`, or backup suffixes for source files.
+- Use version labels for datasets, schemas, interfaces, releases, and protocols
+  that intentionally coexist. Keep one maintained filename for the current
+  source implementation instead of `v2`, `final`, `new`, or backup copies.
 
 Bad:
 
@@ -83,7 +85,7 @@ rebuild or audit the result:
 ```text
 manifest.json
 metrics.json
-environment.freeze.txt
+environment.record.txt  # only when no stable project record exists
 config.yaml or command.txt
 logs/
 figures/

@@ -1,41 +1,26 @@
 # Guide: Research Code Review
 
-Use this checklist before considering a change complete.
+Review the change against the task, not against a generic production checklist.
 
-## Correctness
+## Behavior And Evidence
 
-- [ ] The code addresses the real failure or requested behavior.
-- [ ] Data assumptions are explicit.
-- [ ] Shapes, schemas, units, missing values, and coordinate conventions are
-      clear where relevant.
-- [ ] Errors fail loudly at boundaries instead of producing fake success.
+- The code addresses the requested behavior or observed failure.
+- External data assumptions that affect the result are explicit at the boundary.
+- Result claims point to the command, inputs, parameters, environment record,
+  outputs, and assumptions that support them.
+- Errors are not hidden by fallback branches, swallowed exceptions, or fake
+  success messages.
 
-## Reproducibility
+## Repository Maintenance
 
-- [ ] Parameters, configs, or retained commands are the source of truth.
-- [ ] Retained run outputs include manifest, command/config, seed or randomness
-      state, environment freeze, data/source record, assumptions, and result
-      files.
-- [ ] Any result claim is backed by an actual retained artifact.
-- [ ] Durable data products have manifests and rebuild instructions.
+- Existing code was reused when it already owned the behavior.
+- Variants are parameters, configs, or commands rather than copied scripts.
+- New shared code corresponds to repeated durable logic, not possible future use.
+- Tracked code replaced by this task was removed. Research evidence, data,
+  untracked files, and unrelated suspected-dead code were preserved.
 
-## Anti-Bloat
+## Checks
 
-- [ ] No copied analysis, data-processing, or evaluation scripts.
-- [ ] No `*_v2`, `*_final`, or backup source directories.
-- [ ] New reusable logic is in the project's source area.
-- [ ] One-off exploration stayed in `notebooks/`, scratch output, or a thin
-      script.
-- [ ] Superseded variants were deleted, not left to accumulate; every deletion
-      is listed, and no experiment record was removed without asking.
-
-## Verification
-
-- [ ] Ran the narrowest meaningful command.
-- [ ] If no command was run, the reason is stated.
-- [ ] Test or smoke-check scope matches the risk of the change.
-- [ ] No metric-value assertion gates the task; a missed target is reported
-      as a finding, not treated as failure.
-- [ ] No TDD scaffolding or result assertions were added; sanity checks
-      verify code, not outcomes.
-- [ ] One-off test and diagnostic code was deleted, not committed.
+Use only checks authorized by the task, project, or user. Record what was checked
+or state that no executable verification was requested. Scientific metric values
+are observations, not software pass/fail thresholds.

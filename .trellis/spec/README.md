@@ -1,4 +1,4 @@
-# Research Core Spec
+# General Computational Research Spec
 
 General research-project rules for reproducible, inspectable computational
 work. Use this template for non-DL research, statistical analysis, simulation,
@@ -6,11 +6,11 @@ traditional ML, data-processing pipelines, and paper reproduction work.
 
 This template is intentionally language-agnostic. It does not prescribe a
 framework, package manager, model stack, or directory layout beyond the minimum
-contracts needed for evidence, cleanup, and result traceability.
+rules needed for evidence, cleanup, and result traceability.
 
-Use `dl-earth-research` instead when the project primarily trains or evaluates
-deep-learning models on geoscience data and needs PyTorch, checkpoint, ablation,
-or geospatial data rules.
+Use `research-deep-learning` (Deep Learning Research) instead when the project
+primarily trains or evaluates deep-learning models and needs PyTorch,
+checkpoint, experiment-comparison, or prediction rules.
 
 ## Structure
 
@@ -18,6 +18,7 @@ or geospatial data rules.
 
 Cross-cutting research engineering rules:
 
+- [Minimal Exploratory Work](./shared/research-minimal.md)
 - [Project Layout](./shared/project-layout.md)
 - [Anti-Bloat Rules](./shared/anti-bloat.md)
 - [Reproducibility](./shared/reproducibility.md)
@@ -43,7 +44,7 @@ Task guides for adding a run, writing results, and reviewing research-code chang
 
 ## Template Fit
 
-Use `research-core` for:
+Use `research-computational` for:
 
 - non-DL scientific computing;
 - statistical analysis or simulation;
@@ -55,7 +56,7 @@ Do not use it as a generic web/backend/product-development template. It is
 research-oriented: its strongest rules are about evidence, artifacts, cleanup,
 and claims.
 
-## Core Rules Summary
+## Rules Summary
 
 | Rule | Reference |
 | --- | --- |
@@ -75,5 +76,5 @@ renaming directories just to match the template.
 
 ## Version Notes
 
-Template ids are stable. Small rule changes ship under the same id. The
-source repository's root CHANGELOG.md records what changed in each release.
+Install from a release tag when the exact template matters. The source
+repository's root CHANGELOG.md records template-id and rule changes.

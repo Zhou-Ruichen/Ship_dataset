@@ -1,7 +1,6 @@
 <!--
-Maintainer note: the sibling template carries an equivalent copy of this file
-with domain examples adapted (research-core is generic; dl-earth-research is
-geoscience). Mirror structural changes -- section headings, self-check items,
+Maintainer note: the sibling template carries an equivalent copy of this file.
+Mirror structural changes -- section headings, self-check items,
 cross-reference targets -- across both copies unless a change is genuinely
 domain-specific. The duplication is structural: Trellis installs each template
 directory as a standalone flat copy into .trellis/spec/, so the two cannot share
@@ -10,10 +9,11 @@ a single source file.
 
 # Scientific Writing
 
-These rules govern how prose is written for this project: results discussions,
-methods text, paper drafts, figure and table captions, and curated reports.
-Code, configs, manifests, and commit messages are engineering artifacts and are
-not affected by this file.
+The plain-language rules in this file apply to human-facing project prose,
+including reports, papers, methods, captions, README files, documentation, and
+task results. The scientific narrative rules apply specifically to results,
+discussion, conclusions, and abstracts. Code, configs, manifests, and commit
+messages remain engineering artifacts.
 
 The goal: reports and discussions should read as science, not as a build log.
 
@@ -22,38 +22,49 @@ The goal: reports and discussions should read as science, not as a build log.
 - drafting a results discussion, conclusion, or abstract;
 - writing methods text or a paper draft;
 - writing figure or table captions and comparison tables for a report;
-- producing anything under `reports/`.
+- producing anything under `reports/`;
+- writing a README, project document, notebook explanation, or task result.
 
 Pair this file with the task workflow in
 [../guides/write-results.md](../guides/write-results.md).
 
 ## Core Principle
 
-Lead with the scientific claim and its meaning. Evidence (numbers, figures,
-comparisons) supports the claim; it is not the claim. A reader should learn
-what was found and why it matters before learning how it was produced.
+For results and discussion, lead with the supported finding and its meaning.
+Evidence (numbers, figures, comparisons) supports the claim; it is not the
+claim. Other prose should lead with its subject and purpose, not a stock
+introduction or a description of the writing process.
 
 ## Narrative Order
 
 For any results section or discussion:
 
-1. State the scientific question or hypothesis.
-2. State the finding in domain language: the phenomenon, the mechanism, the
-   direction and magnitude of the effect.
+1. State the scientific question or the supported finding, whichever reads
+   more naturally.
+2. State the finding in domain language: the phenomenon, direction, magnitude,
+   and conditions where it holds.
 3. Give the supporting evidence (metric, figure, comparison) with the sample
    set, condition, split, or simulation setup it applies to.
-4. Interpret: what could explain the result, what is uncertain, what limits it.
+4. Interpret: what could explain the result, what is uncertain, and what limits
+   it. State a mechanism as a finding only when the evidence directly tests it;
+   otherwise label it as an explanation or hypothesis.
 5. Point to reproducible evidence only as a reference (a methods paragraph, an
    appendix, or a footnote linking to the retained run).
 
 Do not invert this into "we ran X, recorded Y, produced Z".
+
+## Methods
+
+Methods describe data, design, processing, software, parameters, and analysis
+in the order needed to understand and reproduce the work. Exact technical terms
+are allowed. Do not force Methods into a finding-first Results structure.
 
 ## Engineering Term Isolation
 
 Engineering terms belong in code, config, manifest, and commit messages. They
 must not appear in scientific prose as if they were findings.
 
-Avoid in prose (results, discussion, methods narrative, abstract):
+Avoid in results, discussion, conclusions, and abstracts:
 
 - `retained run`, `run_id`, `manifest`, `artifact`, `artifact pipeline`;
 - `promotion`, `promote`, `scratch`, `smoke` used as nouns describing results;
@@ -61,7 +72,10 @@ Avoid in prose (results, discussion, methods narrative, abstract):
 - `checkpoint` as a result (it is acceptable in methods when it refers to a
   saved model state used for evaluation);
 - `ablation` as a standalone result label (describe what was removed and why);
-- `pipeline`, `framework`, `harness`, `orchestration`.
+- `pipeline`, `framework`, `harness`, `orchestration` used as vague labels.
+
+Methods may use these terms when they name an actual tool or processing
+sequence and the detail is needed for reproduction.
 
 If a reader needs the engineering detail, link it from a methods paragraph or
 appendix ("see Supplement; retained evidence under `outputs/...`") and keep the
@@ -106,8 +120,7 @@ Empty flourish inflates without informing. Do not use:
 Each is a signal that a sentence is performing competence instead of stating a
 fact. Replace with the concrete observation.
 
-For Chinese prose, drop the same items the global agent rules ban, verbatim.
-Two categories:
+For Chinese prose, use the following repository-local list. Two categories:
 
 - fake insight: "不是 X，而是 Y", "本质上", "底层逻辑", "核心/关键在于", "核心"
   as empty emphasis (as in "核心逻辑"), "真正稳的是", "更稳/最稳", "根因",
@@ -120,6 +133,11 @@ Two categories:
 
 Write plain, factual Chinese that states the action, the object, and the
 result directly.
+
+Do not add an empty conclusion merely to sound complete. Phrases such as
+"Overall", "Taken together", "These findings highlight", "总体而言", "由此可见",
+and "具有重要意义" are acceptable only when the sentence adds a concrete
+synthesis, consequence, or supported implication.
 
 ### Empty Adjectives And Hollow Comparisons
 
@@ -166,8 +184,10 @@ Good:
 
 ## Figures And Tables
 
-- Captions are self-contained: they state the conclusion the figure supports,
-  the data and condition, and read independently of the body text.
+- Captions are self-contained: they state what is shown, the data and condition,
+  and read independently of the body text. A result figure also states the
+  finding it supports; a location, coverage, or method figure need not claim a
+  result.
 - A caption must not be a file path or a variable name.
 - Comparison tables must explain why each comparison is scientifically
   meaningful (which hypothesis it separates), not only list metrics.
@@ -195,6 +215,10 @@ produced it.
 
 - [ ] The section opens with the scientific question or finding, not a run
       description.
+- [ ] Any mechanism stated as a finding was directly tested; other mechanisms
+      are labeled as explanations or hypotheses.
+- [ ] Methods retain the exact data, procedure, software, and parameters needed
+      for understanding and reproduction.
 - [ ] No engineering terms (`retained run`, `manifest`, `artifact`,
       `promotion`, `run_id`, `scratch`/`smoke`) appear as if they were results.
 - [ ] No over-ornamentation (`delve`, `unveil`, `leverage`, `tapestry`,

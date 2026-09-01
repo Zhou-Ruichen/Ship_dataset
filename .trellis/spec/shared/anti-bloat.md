@@ -1,118 +1,69 @@
-# Anti-Bloat Rules
+# Keep The Repository Maintainable
 
-Research repositories grow by copying experiments, leaving old variants in
-place, and turning one-off analysis into framework code. Prevent bloat by not
-adding it.
+Research repositories become difficult to maintain when each task copies a
+script, adds a wrapper, or leaves the replaced implementation beside the new
+one. Prevent that accumulation while leaving exploration free to change.
 
-## Rules
+## Reuse Before Adding
 
-- Search before adding a new file or helper.
-- Reuse existing loaders, transforms, metrics, plotting helpers, and analysis
-  routines.
-- Extract common code when two durable scripts share meaningful logic.
-- Do not create `*_v2`, `*_final`, `*_new`, or date-suffixed source variants.
-- Do not add a factory, registry, base class, plugin system, or config class
-  for a one-off script.
-- Before new code or a new dependency, climb the ladder in order: reuse this
-  codebase, then an already-installed dependency (for research code, usually
-  the scientific stack), then the standard library, then one line; only after
-  all four fail, write the minimum implementation the task needs.
-- Do not hide unknown behavior with broad fallback branches, swallowed
-  exceptions, or fake success logs.
-- Delete superseded code instead of accumulating variants. Git history is the
-  archive; follow the cleanup protocol below for what needs asking first.
+Before adding durable code:
 
-## Variants
+1. Search for an existing loader, transform, analysis routine, metric, plot, or
+   helper that already owns the behavior.
+2. Prefer a parameter, config, or documented command over a copied script.
+3. Reuse an existing dependency or the standard library before adding a new
+   dependency or local implementation.
+4. Add only the smallest implementation the task still needs.
 
-Bad:
+Extract shared code when repeated durable logic is already present. Do not add a
+factory, registry, base class, plugin system, or config class for possible future
+reuse.
+
+## Keep Variants In Parameters
+
+Use one implementation with explicit parameters:
 
 ```text
 scripts/analyze.py
+configs/baseline.yaml
+configs/sensitivity.yaml
+configs/without_filter.yaml
+```
+
+Do not accumulate source variants:
+
+```text
 scripts/analyze_v2.py
 scripts/analyze_final.py
 scripts/simulation_new.py
 ```
 
-Good:
+If the project does not use config files, preserve the parameterized command in
+the run record.
 
-```text
-scripts/analyze.py
-configs/sensitivity.yaml
-configs/baseline.yaml
-configs/ablation_without_filter.yaml
-```
+Version labels are valid when the thing itself has a versioned identity and the
+versions need to coexist: datasets, schemas, public interfaces, model releases,
+or experiment protocols. `dataset_v1.json` and `dataset_v2.json` can therefore
+be correct. A suffix is not a substitute for deciding which source file owns
+the current implementation.
 
-If a language or project does not use config files, record the parameterized
-command in the retained run manifest instead of copying the script.
+## Exploratory And Diagnostic Code
 
-## Diagnostic Scripts
+One-off notebook cells, scripts, and diagnostics may stay direct and local.
+Delete temporary instrumentation after it answers the question. Move logic into
+the maintained source area only when another task needs it or the repository
+will keep using it.
 
-A small diagnostic script is fine while debugging. If it becomes repeated or
-durable, either parameterize one entrypoint or move reusable logic to the
-project's source area.
+## Replace Without Accumulating
 
-Bad:
+When the current task replaces tracked code, remove the superseded implementation
+after the replacement has been checked. Git history preserves it. Do not keep `_old`,
+`_final`, backup directories, compatibility wrappers, duplicate tests, or source
+versions without a current reason to coexist.
 
-```text
-scripts/check_data.py
-scripts/check_data_v2.py
-scripts/debug_bad_case_final.R
-```
+This rule does not authorize unrelated cleanup. Report suspected dead code that
+the current task did not replace. Preserve retained outputs, data manifests,
+configs referenced by results, and untracked files unless the user requests
+their removal.
 
-Good:
-
-```text
-scripts/diagnose_run.py
-src/project/diagnostics.py
-```
-
-One-off test code follows the same rule as diagnostic scripts: scratch
-sanity or debugging tests are deleted once they answer their question and are
-never committed. `tests/` holds only durable checks: smoke tests,
-data-contract tests, shape/sanity properties, regression checks for
-maintained code, and small unit tests. Promote a scratch test only when a
-second task needs it again.
-
-## Cleanup Protocol
-
-Git history is the safety net: anything committed is recoverable, so deleting
-superseded work in the working tree is the default way to prevent bloat.
-
-Delete directly, then list every deletion in the completion report:
-
-- dead code and unused helpers;
-- superseded script or config variants;
-- rebuildable intermediates (`data/interim/`, `outputs/scratch/`, stale smoke
-  outputs);
-- debug instrumentation that served its purpose.
-
-Ask first only when deletion is irreversible or breaks the experiment record:
-
-- retained run artifacts under `outputs/` that back reported results;
-- `data/manifests/` entries;
-- baseline, ablation, or comparison configs still referenced by reports,
-  papers, notebooks, or tables;
-- anything not tracked by git.
-
-Deletion stays scoped to the task:
-
-- Delete only what the current task superseded or replaced, and only after the
-  replacement is verified to work.
-- "Probably dead" is not "superseded". If nothing in this task replaced it and
-  you only suspect it is unused, report it instead of deleting it.
-- Repo-wide sweeps and whole-directory removals are a separate cleanup task:
-  propose the file list first and wait for confirmation.
-
-When unsure which side something falls on, treat it as experiment record and
-ask. Never delete silently: a deletion that does not appear in the completion
-report is a bug.
-
-## Completion Report Requirement
-
-When a task adds code, report:
-
-- new files added;
-- files deleted and why;
-- net new lines if easily available;
-- any duplicate or bloat risk noticed;
-- why each new durable file is justified.
+In the completion report, mention material files added or removed and the reason.

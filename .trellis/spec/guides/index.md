@@ -1,4 +1,4 @@
-# Research Core Guides
+# Computational Research Guides
 
 Use these guides for common research-code workflows.
 
@@ -20,14 +20,14 @@ Use these guides for common research-code workflows.
 | Write a results discussion or report | [write-results.md](./write-results.md) and [../shared/scientific-writing.md](../shared/scientific-writing.md) |
 | Review for reproducibility and bloat | [code-review.md](./code-review.md) |
 
-## Core Rules Summary
+## Rules Summary
 
 | Rule | Reference |
 | --- | --- |
 | Use parameters, configs, or retained commands instead of copied scripts | [../shared/anti-bloat.md](../shared/anti-bloat.md) |
-| Retained runs need manifest, result files, data/source record, assumptions, and environment freeze | [../shared/reproducibility.md](../shared/reproducibility.md) |
+| Retained runs need manifest, result files, data/source record, assumptions, and an environment record | [../shared/reproducibility.md](../shared/reproducibility.md) |
 | Scratch and smoke runs stay lightweight unless promoted | [../shared/reproducibility.md](../shared/reproducibility.md) |
 | Durable data products need manifests | [../data/index.md](../data/index.md) |
 | Reports must point back to retained evidence | [../evaluation/index.md](../evaluation/index.md) |
 | Report prose leads with the finding, not the run | [../shared/scientific-writing.md](../shared/scientific-writing.md) |
-| Verification gates code, not outcomes; metric targets are reported, not gated | [../evaluation/index.md](../evaluation/index.md) |
+| Check execution and data assumptions; report scientific outcomes without pass/fail targets | [../evaluation/index.md](../evaluation/index.md) |

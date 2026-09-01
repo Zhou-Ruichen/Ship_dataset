@@ -30,10 +30,9 @@ boundaries.
 ## Verification Boundaries
 
 Research code is exploratory: the result is discovered, not specified. Do not
-import software-engineering verification regimes (TDD, coverage targets,
-metric gates) into it.
+add TDD, coverage targets, or metric pass/fail thresholds to an experiment.
 
-Hard gates apply to code, never to scientific outcomes:
+Check execution and input assumptions:
 
 - the pipeline runs and shapes, schemas, and units are consistent;
 - errors fail loudly at boundaries instead of producing fake success;
@@ -41,7 +40,7 @@ Hard gates apply to code, never to scientific outcomes:
   sums, no train/test leakage, coordinate conventions, a random-input
   baseline in the expected range).
 
-No gate applies to outcomes:
+Report scientific outcomes:
 
 - Do not assert metric values anywhere. "Error must be below X" encodes the
   answer the experiment is meant to discover.

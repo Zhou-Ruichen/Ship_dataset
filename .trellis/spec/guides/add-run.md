@@ -10,10 +10,10 @@ data-processing run, or evaluation.
 3. Reuse an existing entrypoint when possible.
 4. Add or edit parameters/config instead of copying a script.
 5. Add reusable code only when parameters cannot express the change.
-6. Run the narrowest smoke check that proves the command executes.
-7. If the result will be cited, promote it to retained and write the required
+6. Run the analyses, comparisons, and repeats required by the scientific question.
+7. If the result will be cited, promote it to retained and record the
    manifest, metrics/result files, data record, assumptions, and environment
-   freeze.
+   reference.
 8. Record the command and output path in the task response.
 
 ## Do
@@ -39,7 +39,7 @@ A retained run records:
 - parameters or config snapshot;
 - git commit and dirty state;
 - seed/randomness state or explicit "deterministic";
-- environment freeze;
+- environment lockfile, container, export, or per-run snapshot when needed;
 - input data manifest or source snapshot;
 - metrics, figures, tables, or product paths;
 - assumptions and exclusions.
@@ -49,7 +49,6 @@ A retained run records:
 - [ ] The run is represented by parameters/config/command, not copied code.
 - [ ] The run tier is clear: scratch, smoke, or retained.
 - [ ] Any result claim has retained artifacts.
-- [ ] Smoke validation was run or the reason it was not run is stated.
-- [ ] No metric target is written as a completion gate; targets are reported,
-      not gated.
+- [ ] The runs required by the scientific question are represented.
+- [ ] Metric targets are reported as observations, not task pass/fail criteria.
 - [ ] New reusable code, if any, is in the project's source area.
