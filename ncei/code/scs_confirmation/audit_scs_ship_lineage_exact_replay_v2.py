@@ -43,7 +43,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JAM_ROOT = REPO_ROOT / "jamstec/multibeam"
 NCEI_ROOT = REPO_ROOT / "ncei"
-_UPSTREAM_PATH = NCEI_ROOT / "code/audit_scs_upstream_lineage.py"
+_UPSTREAM_PATH = NCEI_ROOT / "code/scs_confirmation/audit_scs_upstream_lineage.py"
 _UPSTREAM_SPEC = importlib.util.spec_from_file_location("scs_upstream_lineage_v1", _UPSTREAM_PATH)
 if _UPSTREAM_SPEC is None or _UPSTREAM_SPEC.loader is None:
     raise RuntimeError(f"cannot load existing lineage helpers: {_UPSTREAM_PATH}")
