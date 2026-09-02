@@ -11,6 +11,7 @@ constructed; it is diagnostic only.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 from pathlib import Path
 
@@ -22,9 +23,16 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 import yaml
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NCEI_ROOT = REPO_ROOT / "ncei"
+_BIAS_SPEC = importlib.util.spec_from_file_location(
+    "singlebeam_bias", REPO_ROOT / "_common/singlebeam_bias.py"
+)
+if _BIAS_SPEC is None or _BIAS_SPEC.loader is None:
+    raise RuntimeError("cannot load _common/singlebeam_bias.py")
+_BIAS_MODULE = importlib.util.module_from_spec(_BIAS_SPEC)
+_BIAS_SPEC.loader.exec_module(_BIAS_MODULE)
+bias_decision = _BIAS_MODULE.bias_decision
 FREEZE_ROOT = Path(
     "/mnt/data2/06-Projects/15-swot_feature_physics_bathy/outputs/"
     "20260901T220024Z-prospective-nested-ggm-nested_region_freeze"
@@ -231,20 +239,6 @@ def assert_sb_training_blocks(
     )
 
 
-def weighted_median(values: pd.Series, weights: pd.Series) -> float:
-    order = np.argsort(values.to_numpy(dtype=float), kind="mergesort")
-    sorted_values = values.to_numpy(dtype=float)[order]
-    sorted_weights = weights.to_numpy(dtype=float)[order]
-    cutoff = sorted_weights.sum() / 2.0
-    return float(sorted_values[np.searchsorted(np.cumsum(sorted_weights), cutoff, side="left")])
-
-
-def nmad(values: pd.Series) -> float:
-    array = values.to_numpy(dtype=float)
-    center = np.median(array)
-    return float(1.4826 * np.median(np.abs(array - center)))
-
-
 def sb_leave_one_out_references(sb: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for cell_id, cell in sb.groupby("cell_id", sort=False):
@@ -282,21 +276,9 @@ def estimate_region_biases(region: str, sb: pd.DataFrame, mb: pd.DataFrame) -> p
     for track_id, track_cells in sb.groupby("track_id", sort=True):
         residuals = colocated.loc[colocated["track_id"].eq(track_id)]
         count = len(residuals)
-        if count:
-            candidate = weighted_median(residuals["residual_m"], residuals["n_unique_triples"])
-            spread = nmad(residuals["residual_m"])
-        else:
-            candidate = np.nan
-            spread = np.nan
-        if count < 5:
-            applied = False
-            reason = "thin_evidence"
-        elif abs(candidate) < 2.0 * spread:
-            applied = False
-            reason = "not_significant"
-        else:
-            applied = True
-            reason = "applied"
+        candidate, spread, applied, reason = bias_decision(
+            residuals["residual_m"], residuals["n_unique_triples"]
+        )
         rows.append({
             "region": region,
             "track_id": str(track_id),

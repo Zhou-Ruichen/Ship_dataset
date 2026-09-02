@@ -476,8 +476,48 @@ def grid_candidate_pairs(
                 ib = s_o[gstart[b]:gend[b]]
                 if len(ib) == 0:
                     continue
-                ci_parts.append(np.repeat(ia, len(ib)))
-                cj_parts.append(np.tile(ib, len(ia)))
+                # Sharing a coarse grid cell is necessary but can create a
+                # very large Cartesian product for dense, nearly collinear
+                # tracks.  A true segment intersection also requires the two
+                # segment bounding boxes to overlap.  Apply that exact
+                # necessary condition in bounded chunks before retaining the
+                # candidate ids; this changes cost, not the event set.
+                block = max(1, INTERSECT_CHUNK // len(ib))
+                for start in range(0, len(ia), block):
+                    aa = np.repeat(ia[start:start + block], len(ib))
+                    bb = np.tile(ib, min(block, len(ia) - start))
+                    overlap = (
+                        (np.minimum(x1[aa], x2[aa]) <= np.maximum(x1[bb], x2[bb]))
+                        & (np.minimum(x1[bb], x2[bb]) <= np.maximum(x1[aa], x2[aa]))
+                        & (np.minimum(y1[aa], y2[aa]) <= np.maximum(y1[bb], y2[bb]))
+                        & (np.minimum(y1[bb], y2[bb]) <= np.maximum(y1[aa], y2[aa]))
+                    )
+                    if overlap.any():
+                        aa = aa[overlap]
+                        bb = bb[overlap]
+                        rx = x2[aa] - x1[aa]
+                        ry = y2[aa] - y1[aa]
+                        sx = x2[bb] - x1[bb]
+                        sy = y2[bb] - y1[bb]
+                        denom = rx * sy - ry * sx
+                        nonparallel = np.abs(denom) > DENOM_EPS
+                        if not nonparallel.any():
+                            continue
+                        aa = aa[nonparallel]
+                        bb = bb[nonparallel]
+                        rx = rx[nonparallel]
+                        ry = ry[nonparallel]
+                        sx = sx[nonparallel]
+                        sy = sy[nonparallel]
+                        denom = denom[nonparallel]
+                        qx = x1[bb] - x1[aa]
+                        qy = y1[bb] - y1[aa]
+                        t = (qx * sy - qy * sx) / denom
+                        u = (qx * ry - qy * rx) / denom
+                        intersects = (t >= 0.0) & (t <= 1.0) & (u >= 0.0) & (u <= 1.0)
+                        if intersects.any():
+                            ci_parts.append(aa[intersects])
+                            cj_parts.append(bb[intersects])
 
     if not ci_parts:
         return np.empty(0, np.int64), np.empty(0, np.int64)
