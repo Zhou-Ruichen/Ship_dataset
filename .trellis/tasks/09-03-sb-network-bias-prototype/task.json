@@ -3,7 +3,7 @@
   "name": "sb-network-bias-prototype",
   "title": "SB crossover network constant-offset solve, six-region prototype",
   "description": "Solve the SB crossover network for per-track constant offsets on the existing six-region crossover events; compare against no-correction and step23 reference-cell bias on held-out crossover residuals; decide whether to globalize",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
