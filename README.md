@@ -38,7 +38,7 @@ source archives (see "Reproducibility" below).
 | `jamstec/multibeam/` | JAMSTEC (R/V Kaiyo / Kairei / Mirai / Kairei-Sonar; formerly mislabeled `NCEI_multibeam/`) | 2000–2015 | Step 00–11 complete |
 | `jamstec/archive/bathymetry_data/` | Same JAMSTEC archive, alternate packaging | same | Source archive only; 13 `subzips_bad` recoverable from here |
 | `jamstec/gravity_data/` | JAMSTEC gravity | — | Raw only, not yet processed |
-| `ncei/` | NCEI singlebeam track archive | — | Raw `.nc` zip + flat `.xyz`; pipeline not yet built |
+| `ncei/` | NCEI singlebeam and multibeam track archives | — | Global standardization, QC, bias, crossover, and disposition products available |
 
 > **Provenance note**: `jamstec/multibeam/` was renamed from
 > `NCEI_multibeam/` on 2026-05-16 (task `05-11-singlebeam-integration`
@@ -92,7 +92,7 @@ derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet
 Key design choices behind these steps (file-balanced median, 1' grid,
 A/B/C tiering, `run-label` gating, residual sign convention) are
 documented in
-[`.trellis/spec/backend/pipeline-design-decisions.md`](.trellis/spec/backend/pipeline-design-decisions.md).
+[`.trellis/spec/README.md`](.trellis/spec/README.md).
 
 ---
 
@@ -113,7 +113,8 @@ Reports:
 - [`ncei/docs/step08_gapfill_error_structure_report.md`](ncei/docs/step08_gapfill_error_structure_report.md)
   — expanded-primary gap-fill RMSE attribution by quality / depth / region.
 
-Method spec: [`.trellis/spec/backend/step08_publication_pack.md`](.trellis/spec/backend/step08_publication_pack.md).
+Data and result-record rules: [`.trellis/spec/data/index.md`](.trellis/spec/data/index.md)
+and [`.trellis/spec/shared/reproducibility.md`](.trellis/spec/shared/reproducibility.md).
 
 Frozen ranking by strict-primary RMSE (N = 2,398,774 cells, 5 global models):
 **GEBCO_2024 < ETOPO_2022 < SRTM15_V2.7 < TOPO_25.1 < SDUST_2023**. GEBCO
@@ -129,6 +130,20 @@ Product-role policy (frozen at v1.0):
 | `supplementary_singlebeam_cells` | non-primary coverage diagnostic |
 | `regional_mrar_experiment_cells` | regional sensitivity only |
 | `SWOT_T1` | separate regional task (not in v1.0) |
+
+## Current singlebeam products
+
+| Product | Path | How to use it |
+|---|---|---|
+| Global track bias | `ncei/derived/sb_track_bias_global/track_bias_summary.parquet` | Inspect the strict-multibeam bias estimate and whether it was applied to each supported track. |
+| Global crossover audit | `ncei/derived/global_sb_crossover_audit/` | Inspect geometric crossing differences and nc time checks used to judge track consistency. |
+| Global track disposition | `ncei/derived/sb_track_quality_global/track_quality.parquet` | Read one decision per singlebeam track, including the evidence and threshold behind it. |
+| Final singlebeam cells, round 2 | `ncei/derived/singlebeam/file_cells_1min_final_r2/` | Use these cells outside strict-multibeam coverage and filter `track_disposition != 'reject'`; rows are marked, not deleted. |
+| Six-region final controls | `ncei/derived/sb_track_bias_1min/controls_mb_sb_final_<tile>.parquet` | Use the retained strict-multibeam rows plus non-rejected final singlebeam rows for the named region. |
+
+Use strict multibeam wherever it exists. Elsewhere use
+`file_cells_1min_final_r2/` after filtering out rows whose
+`track_disposition` is `reject`.
 
 ---
 
@@ -151,15 +166,18 @@ ship/
 │   └── archive/              # Frozen source archives (ignored)
 │       ├── source_zips/      # 国外水深第一/第二部分.zip etc.
 │       └── bathymetry_data/  # 776 cruise zips (same source as multibeam/raw/subzips)
-├── ncei/                     # NCEI singlebeam — pipeline not yet built (renamed 2026-05-16 in PR-B)
-│   ├── docs/                 # README + reference paper
-│   └── singlebeam.xyz        # 3.1 GB flat dump (ignored; PR-C will archive)
+├── ncei/                     # NCEI ship-data processing and retained products
+│   ├── code/                 # Standardization, QC, cell, bias, crossover, and disposition stages
+│   │   └── scs_confirmation/ # Archived SCS/TN352 confirmation chain, not an active pipeline stage
+│   ├── docs/                 # Stage reports and product guidance
+│   ├── manifests/            # Track identity and source records
+│   └── derived/              # Generated products (ignored)
 ├── archive/                  # Top-level helper archives (ignored)
 ├── docs/                     # Cross-dataset documentation
 │   ├── 多波束船测数据处理流程.md   # Authoritative pipeline overview
 │   └── experiments/          # Finished investigations
 ├── .trellis/                 # Trellis workflow framework
-│   ├── spec/backend/         # Pipeline conventions (English)
+│   ├── spec/                 # Data, evaluation, reproducibility, and writing rules
 │   ├── tasks/                # Active and archived tasks
 │   ├── workflow.md           # Phase guide
 │   └── scripts/task.py       # Task lifecycle CLI
@@ -172,7 +190,7 @@ ship/
 
 ## Key conventions for contributors
 
-These are formalized in `.trellis/spec/backend/`:
+The current project rules are indexed in [`.trellis/spec/README.md`](.trellis/spec/README.md):
 
 - **Run-label gating**: every long stage (Step 02 / 03 / 04a, ~hours)
   refuses to run in `full` mode without `--confirm-full`, and writes
@@ -188,9 +206,8 @@ These are formalized in `.trellis/spec/backend/`:
   `<subzip>::<basename>.dat`. Never reconstruct it from filesystem
   normalization.
 - **File-balanced aggregation**: cell-level products use `median over
-  files of (per-file median)`, not `median over all points`. The
-  difference is load-bearing — see
-  [`pipeline-design-decisions.md`](.trellis/spec/backend/pipeline-design-decisions.md) §3.
+  files of (per-file median)`, not `median over all points`; this gives
+  each source file equal weight within a cell.
 
 ---
 
@@ -209,17 +226,47 @@ To rebuild the data products from a fresh clone you need:
    [`jamstec/multibeam/docs/PIPELINE_PROCESSING_GUIDE.md`](jamstec/multibeam/docs/PIPELINE_PROCESSING_GUIDE.md).
    A full run takes ~6–10 hours of single-machine time.
 
+## Adding new ship data
+
+Place new NCEI source files under the matching read-only source area:
+`ncei/tracklines_nc/`, `ncei/tracklines_xyz/`, or `ncei/archive/source_zips/`.
+Place JAMSTEC multibeam files under `jamstec/multibeam/raw/`. Do not mix new
+inputs into an existing generated product.
+Add their source paths and identities through the stage 01 manifest builder.
+Compare `(track_id, source_type)` with
+`ncei/manifests/trackline_source_manifest.parquet`: an unseen pair is a new
+source record, while a matching pair retains the existing identity and is
+handled as an updated source rather than a second track.
+
+For NCEI ship data, rerun the applicable stages in this order from the repository
+root: stage 01 manifest; stages 02–06 standardization and QC; stages 07–08 cell
+products; stage 25 global bias; stage 26 global crossovers; stage 30 global
+disposition and final cells. Read each script's arguments before running it and
+keep existing derived rounds unchanged.
+
+## Product rounds
+
+Durable derived-product directories carry a round suffix, for example
+`file_cells_1min_final_r2/`. Downstream work names the exact round instead of a
+moving `final/` path. Each round's product manifest records its generation time,
+input trackline-manifest SHA-256 value, input paths, output paths, and processing
+command. A changed source manifest or disposition method produces a new round;
+it does not overwrite an earlier round.
+
 ---
 
 ## Working with this repo via AI tools
 
 The project uses [Trellis](https://github.com/) for AI-assisted
-development. The `.trellis/spec/backend/` directory is auto-injected into
-every AI sub-agent prompt, so an assistant working in this repo will
-match the team's actual conventions instead of writing generic Python.
+development. The current project rules live under `.trellis/spec/` and are
+routed by `AGENTS.md` and `.trellis/workflow.md`.
 Active and queued tasks live under `.trellis/tasks/`. See
 [`AGENTS.md`](AGENTS.md) and [`.trellis/workflow.md`](.trellis/workflow.md)
 for the full workflow.
+
+The completed SCS/TN352 confirmation scripts were moved from the flat
+`ncei/code/` listing to `ncei/code/scs_confirmation/`. They are retained for
+provenance and are not part of the active ingestion pipeline.
 
 ---
 

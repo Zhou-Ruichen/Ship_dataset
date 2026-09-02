@@ -1,0 +1,26 @@
+# 下游消费者登记表（consumers.yaml）
+#
+# 用途：登记哪些仓库在消费本仓库（/mnt/data2/00-Data/ship/）的交付数据产品。
+# 新一轮数据产品发布时，按本表逐条通过 paseo 通知 consuming_agent_or_workspace。
+#
+# 字段说明：
+#   repo_name                 下游仓库名
+#   repo_path                 下游仓库绝对路径
+#   product                   消费的产品（如 global_grid_1min_r2、file_cells_1min_final_r2）
+#   round                     固定的轮次标签（如 "_r2"）；写 latest 表示跟随最新轮次
+#   consuming_agent_or_workspace  接收新轮次通知的 paseo agent 或 workspace 名
+#   registered_at             登记日期（YYYY-MM-DD）
+#
+# 说明：登记是约定而非强制，本仓库不阻止未登记的读取；未登记的后果是收不到新轮次通知。
+# 接入流程见 docs/数据产品规范与下游接入.md 第 4-6 节；登记是接入的最后一步。
+#
+# 示例条目（取消注释即可生效）：
+#
+# - repo_name: 15-swot_feature_physics_bathy
+#   repo_path: /mnt/data2/06-Projects/15-swot_feature_physics_bathy
+#   product: file_cells_1min_final_r2
+#   round: _r2
+#   consuming_agent_or_workspace: fill-me-in
+#   registered_at: "2026-09-03"
+
+consumers: []
