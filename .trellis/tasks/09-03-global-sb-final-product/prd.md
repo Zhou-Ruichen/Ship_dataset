@@ -34,7 +34,7 @@ backward-time tracks and zero-cell tracks, as in the six-region rule.
 2. `ncei/derived/sb_track_quality_global/track_quality.parquet`: one row per
    SB track with bias fields, misfit before/after, n_crossovers, QC flags,
    disposition, reason, threshold used.
-3. `ncei/derived/singlebeam/file_cells_1min_final/`: mirrors
+3. `ncei/derived/singlebeam/file_cells_1min_final_r2/`: mirrors
    `file_cells_1min_adjusted/` with corrections/reverts applied per track
    and added column `track_disposition`. NO rows deleted; consumers filter
    `track_disposition != 'reject'`.
@@ -50,10 +50,20 @@ backward-time tracks and zero-cell tracks, as in the six-region rule.
    differences explained by the NMAD-scale change must be listed.
 6. README.md update: current product inventory (paths, one-line purpose,
    consumption rule), fix the dead `.trellis/spec/backend/` links, note the
-   scs_confirmation archive location.
+   scs_confirmation archive location. Add two sections:
+   (a) "Adding new ship data": where raw files go, which pipeline steps to
+   re-run (01 manifest -> 02-06 standardize/QC -> 07-08 cells -> 25 bias ->
+   26 crossovers -> 30 disposition), and how new tracks are identified
+   against the existing trackline source manifest;
+   (b) product round convention: derived product dirs carry a round tag
+   (e.g. `file_cells_1min_final_r2/`) and each product records generation
+   time + input manifest hash, so downstream can pin a round explicitly.
 7. Update `docs/单波束数据质量处理与下游实验结论.md` sections 4-6 with the
    final products and the interpolation-test conclusion (SB valuable where
-   MB is absent: pooled 1841 -> 731 -> 673 m; reject beats correct).
+   MB is absent: pooled 1841 -> 731 -> 673 m; reject beats correct), and
+   state the two-layer consumption rule (strict MB where it exists, final
+   SB with disposition filter elsewhere) in one sentence a new reader can
+   act on.
 
 ## Hard constraints
 
@@ -70,7 +80,8 @@ backward-time tracks and zero-cell tracks, as in the six-region rule.
   (nothing lost, only marked/valued-changed).
 - Six-region named-track checks pass; control-table MB rows identical.
 - README product section lets a new consumer find and correctly filter the
-  final product without reading any code.
+  final product without reading any code; the ingestion section lets a new
+  source be added without asking the original author.
 
 ## Out of scope
 
