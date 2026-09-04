@@ -145,6 +145,15 @@ Use strict multibeam wherever it exists. Elsewhere use
 `file_cells_1min_final_r2/` after filtering out rows whose
 `track_disposition` is `reject`.
 
+## Round-2 products (2026-09)
+
+| Product | Path | Status / how to use |
+|---|---|---|
+| Merged global 1-arcmin grid, round 2 | `ncei/derived/global_grid_1min_r2/` | Spec §2 product (script `31_build_global_grid_1min.py`); strict mb wins, non-rejected final sb fills; `product_manifest.json` records input hashes. |
+| Round-2 swath cruise three-layer set | `ncei/derived/mb_round2/<cruise>/{points_raw,points_checked,file_cells_1min}/` | L1/L2 for 12 complete cruises (10 × mb58 + 2 × mb21) + standalone L3 fragment `mb_round2_source_manifest_fragment.parquet`; **merge into production pending review** (`ncei/docs/step15_mb_round2_processing.md`). |
+| MBBDB increment value ranking | `ncei/derived/mbbdb_value_ranking/` | A/B/C order lists for the next download round (`ncei/docs/step16_mbbdb_value_ranking.md`). |
+| Round-2 raw sources | `ncei/raw_round2/{platforms_tree,r2r,mgd77t_static}/` | Raw swath archives + R2R products + static-tree MGD77T (in progress); provenance in `ncei/SOURCE.md`. |
+
 ---
 
 ## Repository layout
@@ -243,6 +252,13 @@ root: stage 01 manifest; stages 02–06 standardization and QC; stages 07–08 c
 products; stage 25 global bias; stage 26 global crossovers; stage 30 global
 disposition and final cells. Read each script's arguments before running it and
 keep existing derived rounds unchanged.
+
+Raw swath multibeam downloaded from the NCEI platforms tree / R2R (round 2,
+`ncei/raw_round2/`) follows the separate stage 32–37 chain: completeness audit
+(32) → format census (33) → L1 extraction (34) → L2 cells (35) → L3 fragment
+(36, standalone until reviewed) → coverage statistics (37). New source-side
+values (`ncei_mb58`/`ncei_mb21`) enter production only after the fragment
+merge is approved.
 
 ## Product rounds
 

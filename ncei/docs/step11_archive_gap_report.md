@@ -247,3 +247,94 @@ and [public payload schema](https://raw.githubusercontent.com/CI-CMG/pointstore-
   created or changed.
 - Part 2 remains stopped pending explicit user confirmation. No order was
   submitted and no trackline data were downloaded.
+
+## Round-2 download
+
+NCEI ordering documentation exposes only `POST /next-web/rest/orders` for
+trackline MGD77T/XYZ delivery. It requires an email address and creates an
+asynchronous order. No order was placed. No direct NCEI XYZ file was found.
+
+The first R2R pass fetched 169 processed `r2rbathy_geocsv` archives, covering
+169 surveys and 782,617,282 bytes. Three 302/Globus retries through 2080 still
+failed; `TN313` and `TN314` had already succeeded. The R2R dead-end survey list
+(no successful processed product) is:
+
+`EW0006, EW0008, EW0101, EW0106, EW0107, EW0108, EW0109, EW0110, EW0201, EW0202, EW0203, EW0204, EW0205, EW0206, EW0207, EW0208, EW0209, EW0210, EW0211, EW0212, EW0213, EW0301, EW0302, EW0303, EW0304, EW0305, EW0306, EW0307, EW0308, EW0310, EW0401, EW0402, EW0403, EW0404, EW0405, EW0406, EW0407, EW0408, EW0409, EW0410, EW0412, EW0501, EW9302, EW9303, EW9304, EW9401, EW9402, EW9404, EW9408, EW9411, EW9502, EW9504, EW9505, EW9506, EW9507, EW9508, EW9603, EW9609, EW9701A, EW9703, EW9706, EW9708, EW9802, EW9804, EW9805, EW9807, EW9808, EW9902, EW9907, EW9912, HLY17TA, SP1220, SP1221`.
+
+Platform-tree downloading was stopped after the 2085 worker completed the
+current file and left subsequent `.part` files intact. Before that stop,
+platform data contained 3,179 files from 24 surveys and 149,051,800,841 bytes.
+The five retained incomplete files are:
+
+`HLY1401/em122/0090_20140515_212210_HEALY.all.mb58.gz.part`,
+`HLY1402/em122/0076_20140707_084546_HEALY.all.mb58.gz.part`,
+`AR30-04/em122/0429_20180727_070024_Armstrong.all.mb58.gz.part`,
+`AR42-02/em122/0016_20200226_181820_Armstrong.all.mb58.gz.part`, and
+`HLY20TB/em122/0211_20200710_155449_Healy.all.mb58.gz.part`.
+
+A directory-only platform scan used 2085 with a 2-second request interval and
+did not download files. It found these archives that were not fully fetched:
+
+| Survey | Files listed | Files downloaded |
+| --- | ---: | ---: |
+| AR30-04 | 542 | 452 |
+| AR45 | 42 | 24 |
+| AR66-A | 74 | 44 |
+
+The scan stopped at `AR66-B` when 2085 could not establish a new connection.
+No other port was tried. Earlier confirmed 404 roots remain skipped. The
+directory archive inventory and all source URLs are retained in
+`ncei/manifests/round2_download_log.parquet`; status values beginning with
+`catalog_only_files:` identify the directory-only records.
+
+The previous port-disabled `curl_0` file list is recorded in the same log.
+Grouped by survey, it contains: `AR30-01 (157), AR30-04 (481), AR41 (1),
+AR45 (36), AR66-A (60), AR66-B (53), FK006B (2), HLY1102 (1144), HLY1401 (4),
+HLY1402 (4), HLY1403 (1468), HLY20TB (2)`. These are skipped file URLs, not
+additional survey classifications.
+
+Final Round-2 totals are 3,348 successful files, 193 surveys, and
+149,834,418,123 bytes: `r2r=169` files and `platforms_tree=3,179` files;
+`ncei_xyz=0`. The log is resumable and now includes `worker` and `port`
+columns. Surveys after the `AR66-B` 2085 failure remain unclassified for
+platform-tree availability and are not labelled email-only without another
+authorized NCEI route. No order was submitted.
+
+## Round-2 follow-up pointer (2026-09, step15/16)
+
+This section's totals are the 2026-09-03 snapshot. Later follow-ups, all
+readable from disk:
+
+- Completeness audit of the 24 platform-tree cruises, processing of the
+  complete ones (10 × mb58, 2 × mb21; mb57 blocked by a parser crash in
+  the fixed mbsystem build), and the strict-layer coverage delta:
+  `ncei/docs/step15_mb_round2_processing.md`.
+- Download-value ranking and A/B/C order lists for the remaining MBBDB
+  increment: `ncei/docs/step16_mbbdb_value_ranking.md`.
+- Static-tree MGD77T backfill (`ncei/raw_round2/mgd77t_static/`), the
+  10-cruise platform-tree completion, and the corrupted-gzip re-downloads
+  are running in an agent queue (as of this writing 369 survey directories
+  holding 362 `.m77t` files, 8.0 GB on disk); the totals in the
+  "Round-2 download" section above will be superseded when that queue
+  finishes and the download log is re-aggregated.
+
+### Static MGD77T tree — dead-end list (2026-09, task E)
+
+The `m77t_static` channel has 44 non-ok log rows, resolving to 15 surveys:
+
+- **No static m77t at all (11 surveys; 404 + parent-directory scan found
+  nothing, or plain 404 for both files)** — these remain true gaps:
+  `0C96, AE1028, AE1115, B270BS, HRS1713, KN210-05` (no_static_m77t) and
+  `OC456, SKQ201910S, SKQ201911T, SKQ201913T, WS0914` (http_404).
+- **Side-file-only misses (4 single curl_0 rows; the m77t data itself is on
+  disk)**: `EW9703` (.h77t), `NBP0808` (.h77t), `OC1404B` (.h77t),
+  `OC1405B` (one .m77t retry; an earlier copy succeeded).
+
+Net: 695 of the 706 gap surveys have a downloaded `.m77t` (98.4%);
+11 are dead ends pending another route (email order or R2R).
+
+Additionally, 3 of the 695 downloaded `.m77t` files carry navigation-only
+short-form rows (≤6 tab fields, no depth columns) and converted to empty
+xyz; they are recorded as no-bathymetry sources, not pipeline failures:
+`ALAR02RR, DNWH-BHO, DNWH-CHO`. Effective static-tree yield: 692 tracks
+with bathymetry-side xyz out of 706 gap surveys.

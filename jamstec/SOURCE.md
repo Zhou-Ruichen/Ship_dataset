@@ -10,8 +10,14 @@
 **JAMSTEC** (Japan Agency for Marine-Earth Science and Technology).
 Rock-solid attribution: every cruise ID extracted from the 5,083 active
 multibeam files matches a JAMSTEC research vessel prefix
-(`KY`, `KR`, `MR`, `KS`, `KH`) and the first source-zip enumerates 255
-unique JAMSTEC cruise IDs. Full evidence chain in
+(`KY`, `KR`, `MR`, `KS`, `KH`) and the corpus holds **649 unique cruise
+IDs** (2026-09 recount, `multibeam/manifests/subzip_cruise_map.parquet`;
+equals `cruise_summary_for_review.tsv` element-for-element). An earlier
+revision of this file claimed "the first source-zip enumerates 255 unique
+JAMSTEC cruise IDs" — that number is actually the KR-prefix-only count
+inside 国外水深第一部分.zip (first package) and undercounts the corpus;
+see `multibeam/docs/subzip_cruise_normalization_2026-09.md` for the
+full 255-vs-649 reconciliation. Full evidence chain in
 [`docs/experiments/2026-05_dataset-source-attribution.md`](../docs/experiments/2026-05_dataset-source-attribution.md).
 
 Historical naming note: this tree lived at `ship/NCEI_multibeam/` until

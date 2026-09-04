@@ -119,6 +119,22 @@ NOT more valid-depth points. Full corrected interpretation in PRD
 Finding 19c `[2026-05-20 correction]` block; root-cause writeup in
 `ncei/docs/step03_point_quality_check_report.md` §3b.
 
+## Round-2 raw downloads (`raw_round2/`, 2026-09)
+
+`ncei/raw_round2/` holds the round-2 acquisition (started 2026-09-03,
+download log `ncei/manifests/round2_download_log.parquet`):
+
+| Sub-path | Content | Route | Date |
+|---|---|---|---|
+| `platforms_tree/` (24 cruises, ~140 GB) | Raw swath multibeam (`.all.mb58.gz`, `.mb21.gz`, `.mb57.gz`) | NCEI platforms tree `https://data.ngdc.noaa.gov/platforms/ocean/ships/...` via the 127.0.0.1:2085 proxy (the only live NCEI egress at the time) | 2026-09 |
+| `r2r/` (169 `*.tar.gz`) | R2R processed `r2rbathy_geocsv` archives | `https://service.rvdata.us/...` | 2026-09 |
+| `mgd77t_static/` (in progress) | MGD77T files for missing trackline surveys from the static tree | NCEI static HTTPS tree via 2085 (agent-run queue; counts still growing) | 2026-09 |
+
+Completeness audit and the L1/L2/L3 processing of the complete swath
+cruises live in `ncei/docs/step15_mb_round2_processing.md`; download-value
+ranking of the remaining MBBDB increment in
+`ncei/docs/step16_mbbdb_value_ranking.md`.
+
 ## Layout map
 
 ```
@@ -128,7 +144,8 @@ ncei/
 │   └── SOURCE.md                        # detailed provenance + dual-content audit
 ├── tracklines_xyz/                      # 5,382 .xyz (NCEI raw, mb-mixed; classifier handoff to PR-D)
 │   └── SOURCE.md
-├── derived/                             # (planned PR-E) singlebeam/ + multibeam/ pipeline outputs
+├── raw_round2/                          # 2026-09 round-2 downloads: platforms_tree/ + r2r/ + mgd77t_static/
+├── derived/                             # singlebeam/ + multibeam/ + mb_round2/ + global_grid_1min_r2/ pipeline outputs
 ├── archive/
 │   ├── source_zips/                     # 2 raw zips (the .nc + the .xyz source)
 │   │   └── SOURCE.md

@@ -73,3 +73,33 @@ The adjusted SB cells are an upstream product. Downstream projects remain respon
 - `ncei/derived/singlebeam/file_cells_1min_adjusted/*.parquet`
 - `ncei/derived/global_sb_crossover_audit/*.parquet`
 - `ncei/figures/coverage_global/*.png`
+
+## Global merged 1-arcminute grid r2
+
+Generated: 2026-09-02T22:55:03Z
+Command: `/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python ncei/code/31_build_global_grid_1min.py`
+
+The merged product contains 15,245,229 unique 1-arcminute ship cells: 2,398,774 use strict multibeam and 12,846,455 are filled by non-rejected final singlebeam. There are 489,958 overlap cells; their primary depth is strict multibeam and their singlebeam median remains in `sb_median_depth_m`.
+
+| latitude band | rows |
+| ---: | ---: |
+| -90 | 1 |
+| -80 | 265,162 |
+| -70 | 651,077 |
+| -60 | 701,126 |
+| -50 | 658,243 |
+| -40 | 799,104 |
+| -30 | 785,394 |
+| -20 | 996,711 |
+| -10 | 956,231 |
+| 0 | 1,226,872 |
+| 10 | 1,509,259 |
+| 20 | 1,871,432 |
+| 30 | 1,816,778 |
+| 40 | 1,237,458 |
+| 50 | 765,865 |
+| 60 | 373,380 |
+| 70 | 345,395 |
+| 80 | 285,741 |
+
+All 15 fixed-seed spot checks passed: five strict-MB cells, five overlap cells, and five SB-only cells.
