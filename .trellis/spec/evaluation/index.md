@@ -1,150 +1,38 @@
 # Evaluation Guidelines
 
-Use these rules for validation, metrics, comparisons, figures, tables,
-diagnostics, and report artifacts.
+Use the repository's existing evaluation layout. An exploratory evaluation can
+stay in the script or notebook where the question is being investigated. Extract
+code only to simplify the current calculation or meet an explicit maintenance need.
 
-This file governs the evidence (what to write and where). The prose around that
-evidence -- captions, report text, result discussions -- is governed by
-[../shared/scientific-writing.md](../shared/scientific-writing.md).
+Evaluation should answer the stated scientific question. Keep the comparison
+fair: use the same data and conditions where the design requires them, state
+which parameters differ, and report units, sample set, split, and exclusions.
+Check only input assumptions that affect the calculation, such as shape, schema,
+dtype, units, coordinates, or data isolation. Let actual failures guide further
+debugging; do not add generic preflight validators or metric thresholds.
 
-## Evaluation Layout
+## Metrics And Results
 
-Keep scripts thin and move reusable evaluation logic to the project's source
-area.
+Choose the metrics and result form required by the question and by the existing
+project conventions. There is no required JSON schema or fixed metrics file.
+Record the actual values, conditions, definitions, and relevant output paths in
+the project's existing result record, log, configuration, notebook, or report.
 
-Typical structure:
-
-```text
-src/ or lib/
-  metrics.*
-  evaluation.*
-  plots.*
-scripts/
-  evaluate.*
-  make_figures.*
-```
-
-Existing projects may use different names. Follow their documented ownership
-boundaries.
-
-## Verification Boundaries
-
-Research code is exploratory: the result is discovered, not specified. Do not
-add TDD, coverage targets, or metric pass/fail thresholds to an experiment.
-
-Check execution and input assumptions:
-
-- the pipeline runs and shapes, schemas, and units are consistent;
-- errors fail loudly at boundaries instead of producing fake success;
-- sanity properties that hold by construction are checked (normalization
-  sums, no train/test leakage, coordinate conventions, a random-input
-  baseline in the expected range).
-
-Report scientific outcomes:
-
-- Do not assert metric values anywhere. "Error must be below X" encodes the
-  answer the experiment is meant to discover.
-- Expected outputs are unknown, so TDD does not apply. Sanity checks may be
-  written before the run (they verify the code); result assertions may not.
-- Regression checks are for maintained code with a retained baseline, not
-  for exploration.
-- A missed target is a finding to report (value, condition, gap to the
-  baseline or expectation, plausible explanation), not a task failure. A
-  task is complete when its evidence is traceable, not when a target is met.
-- Validation commands attached to a task check executability and sanity
-  only; they never assert metric values.
-
-## Metrics
-
-Retained evaluation runs write:
-
-```text
-outputs/<run_id>/metrics.json
-```
-
-Recommended schema:
-
-```json
-{
-  "run_id": "20260610-142233-sensitivity",
-  "split": "test",
-  "metrics": {
-    "rmse": 123.456,
-    "mae": 98.765
-  },
-  "n_samples": 100,
-  "data_manifest": "data/manifests/test_v1.json",
-  "parameters": "outputs/20260610-142233-sensitivity/config.yaml",
-  "notes": []
-}
-```
-
-Scratch and smoke evaluation runs may write lighter logs or metrics while
-debugging. Promote the run and write retained metrics before citing it in a
-comparison, report, or result claim.
-
-Do not report retained metrics only in stdout, screenshots, notebooks, or
-remote logging dashboards.
+A result that misses an expectation is still a scientific finding. Report the
+value, comparison conditions, and plausible interpretation without turning the
+expectation into a pass/fail criterion.
 
 ## Figures And Tables
 
-For retained generated figures and tables tied to a run, use:
-
-```text
-outputs/<run_id>/figures/
-outputs/<run_id>/tables/
-```
-
-Use:
-
-```text
-reports/
-```
-
-only for curated figures, tables, and summaries intended for papers,
-presentations, or human-facing review.
-
-Reports must point back to the retained run, manifest, or data product that
-created each result.
-
-## Comparisons
-
-Comparison tables must record:
-
-- compared run IDs or data manifests;
-- metric definitions;
-- sample set, split, condition, or grouping;
-- parameter differences that matter;
-- assumptions and exclusions.
-
-Do not compare numbers copied from dashboards, notebooks, or screenshots unless
-the underlying retained artifacts are available.
+Keep generated figures and tables with the run or analysis that produced them,
+using the project's existing paths. Put curated material for papers or review in
+the project's report area when one exists. Each comparison should make clear
+what was compared and under which conditions; do not rely on numbers copied from
+a dashboard or screenshot when the underlying evidence is unavailable.
 
 ## Diagnostic Code
 
-One parameterized diagnostic entrypoint is better than many copied scripts.
-
-Good:
-
-```text
-scripts/diagnose_run.py
-src/project/diagnostics.py
-```
-
-Bad:
-
-```text
-scripts/diagnose_run_v2.py
-scripts/evaluate_bad_case_final.py
-scripts/check_new_results.py
-```
-
-## Quality Check
-
-- [ ] Retained metrics are written to JSON with sample set or split.
-- [ ] Retained figures and tables are tied to a run ID or data manifest.
-- [ ] Comparison tables record what was compared and how.
-- [ ] Reports contain curated artifacts, not raw output dumps.
-- [ ] Report prose and captions follow scientific-writing.md: science-first, no
-      engineering terms, no over-ornamentation or empty adjectives.
-- [ ] New evaluation behavior did not create copied script variants.
+Parameterize a diagnostic when it is reused. For a one-off investigation, a
+small local script or notebook is enough. Keep variants as explicit parameters
+or configuration values rather than copied files with names such as `v2` or
+`final`.

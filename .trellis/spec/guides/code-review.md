@@ -1,26 +1,14 @@
-# Guide: Research Code Review
+# Research Code Review
 
-Review the change against the task, not against a generic production checklist.
+Review when the task needs it, against the requested calculation and evidence.
+This guide adds no separate review stage or reviewer agent.
 
-## Behavior And Evidence
+- Does the code perform the intended calculation on the stated data?
+- Could units, missing values, alignment, or data leakage change the result?
+- Do the reported observations come from the stated outputs?
+- Did the change add hypothetical-failure handling, wrappers, duplicated logic,
+  or unrelated work that the task does not need?
 
-- The code addresses the requested behavior or observed failure.
-- External data assumptions that affect the result are explicit at the boundary.
-- Result claims point to the command, inputs, parameters, environment record,
-  outputs, and assumptions that support them.
-- Errors are not hidden by fallback branches, swallowed exceptions, or fake
-  success messages.
-
-## Repository Maintenance
-
-- Existing code was reused when it already owned the behavior.
-- Variants are parameters, configs, or commands rather than copied scripts.
-- New shared code corresponds to repeated durable logic, not possible future use.
-- Tracked code replaced by this task was removed. Research evidence, data,
-  untracked files, and unrelated suspected-dead code were preserved.
-
-## Checks
-
-Use only checks authorized by the task, project, or user. Record what was checked
-or state that no executable verification was requested. Scientific metric values
-are observations, not software pass/fail thresholds.
+Use [research-minimal.md](../shared/research-minimal.md) for execution and testing.
+Missing unrequested tests are not a defect. Report actual problems with file
+references; do not manufacture findings to fill a checklist.

@@ -1,150 +1,58 @@
 # Reproducibility
 
-Every claimed result must be traceable to inputs, code, parameters,
-environment, assumptions, and outputs.
+A result should be traceable to the inputs, code, parameters, environment,
+assumptions, and outputs that produced it. Keep the record in the form that
+best fits the work: an existing log, configuration, notebook, `result.md`, an
+immutable source reference, or a short note is sufficient when it contains the
+needed information.
 
-## Run Retention Tiers
+## Temporary and retained work
 
-Use the lightest tier that preserves the scientific record:
+Temporary outputs include debugging attempts, failed runs, quick probes, and
+intermediate products that do not support a conclusion. Put them in a clearly
+temporary location and remove them when they stop being useful.
 
-- Scratch: debugging, failed runs, quick probes, and daily iteration. Put these
-  in `outputs/scratch/<run_id>/`, a temporary directory, or another clearly
-  disposable location. They may be deleted when no longer useful. No full
-  manifest or freeze file is required unless the run is promoted.
-- Smoke: tiny checks that prove the pipeline executes. Record enough command,
-  config, metric, or log evidence to debug a failure. No full manifest or
-  freeze file is required unless the smoke result is cited or promoted.
-- Retained: any run used in a comparison, report, paper, model handoff,
-  regression baseline, or result claim. Retained runs must have the full
-  manifest, parameter record, metrics or result files, data/source record,
-  assumptions, and enough environment information to reconstruct the run.
+Retain outputs used in a comparison, report, paper, handoff, baseline, or
+result claim. Alongside them, retain enough evidence to identify:
 
-Promote a scratch or smoke run before citing it: move or copy the selected
-artifacts into `outputs/<run_id>/`, add the missing retained-run evidence, and
-mark why it is retained.
+- the exact data source and version, including split or selection rules;
+- the command or notebook, parameters, and seed or deterministic setting;
+- the code state, including relevant uncommitted changes;
+- the environment record when it can affect the result;
+- metrics, figures, tables, logs, negative or null observations, assumptions,
+  and known limitations.
 
-## Run Manifest
+The evidence may be distributed across existing project files. Do not create a
+per-run manifest, duplicate a stable lockfile, or fill empty fields just to
+follow a template. If a configuration or script may change later, preserve the
+values and code changes used by the run, or record a revision that identifies
+them; a pointer to a mutable file alone is insufficient.
 
-Each retained computation, simulation, analysis, evaluation, prediction, or
-data-processing run must write:
+## Environment and randomness
 
-```text
-outputs/<run_id>/manifest.json
-```
+Use the project's existing environment record, such as `uv.lock`, `renv.lock`,
+a conda export, a container digest, or a module list. Record a per-run state
+only when no stable record exists or the environment itself can drift. Do not
+install unrecorded dependencies into a shared environment.
 
-or, for durable data products:
+When randomness is used, record the seed or seed schedule and any relevant RNG
+libraries or nondeterministic hardware or parallelism. If the computation has
+no randomness, state that. Deterministic algorithms may be enabled for a
+diagnostic run when supported, but do not impose them globally.
 
-```text
-data/manifests/<product>.json
-```
+## Protocol changes and claims
 
-Scratch and smoke runs may write lighter records, but they must be promoted to
-retained runs before they support a result claim.
+For a retained comparison, keep the question, method, data version, split,
+preprocessing, metric definition, baseline, and claim scope identifiable. If
+one changes, retain the earlier evidence and state what changed in the new
+record.
 
-## Required Manifest Fields
+Describe what was evaluated before claiming improvement, convergence,
+reproduction, or support for a hypothesis. Include the relevant outputs,
+evaluation group, parameters, randomness, data version, code state, and
+limitations. A successful command or task completion alone is not evidence for
+a scientific claim.
 
-```json
-{
-  "run_id": "20260610-142233-sensitivity",
-  "created_at": "2026-06-10T14:22:33Z",
-  "command": "python scripts/run_analysis.py --config configs/sensitivity.yaml",
-  "retention": "retained",
-  "retention_reason": "comparison table for report",
-  "git": {
-    "commit": "unknown",
-    "dirty": true
-  },
-  "parameters": {
-    "config_path": "configs/sensitivity.yaml",
-    "config_snapshot": "outputs/20260610-142233-sensitivity/config.yaml",
-    "seed": 42
-  },
-  "environment": {
-    "manager": "<uv|conda|renv|julia|system|...>",
-    "name": "<env-name-or-null>",
-    "language": "<python|r|julia|matlab|shell|...>",
-    "language_version": "<version>",
-    "record": "uv.lock"
-  },
-  "data": {
-    "manifest": "data/manifests/input_v1.json",
-    "source_snapshot": null
-  },
-  "outputs": {
-    "metrics": "outputs/20260610-142233-sensitivity/metrics.json",
-    "figures": [],
-    "tables": []
-  },
-  "assumptions": []
-}
-```
-
-This is a field template, not a concrete environment recommendation. Actual
-run manifests must replace placeholders with real values. Do not invent commit
-hashes, metrics, seeds, package versions, data sources, or assumptions.
-
-## Environment
-
-Each project declares one environment strategy in its own README or spec layer.
-This template does not pick the manager. A retained run points to the existing
-lockfile, container digest, environment file, module list, or other record that
-describes its software environment. Create a per-run freeze only when no stable
-project record exists or the run depends on environment state that can drift.
-
-Suitable records include `uv.lock`, `renv.lock`, `Manifest.toml`, a conda export,
-a container digest, a module list, or a dependency freeze. Do not duplicate an
-unchanged project lockfile into every run directory.
-
-Do not install packages ad hoc into a shared base environment for retained work.
-Add dependencies to the project's dependency file or record the exact
-environment snapshot.
-
-## Seed And Randomness Rule
-
-When a computation uses randomness, the retained manifest records:
-
-- the seed or seed schedule;
-- the libraries or tools whose RNGs were seeded;
-- whether deterministic algorithms were requested;
-- any known nondeterministic hardware, solver, or parallelism behavior.
-
-If the computation is deterministic and has no seed, state that explicitly.
-
-## Protocol Changes
-
-Once a retained run or comparison starts, keep its question or hypothesis,
-method, data source and version, split, preprocessing, metric definition,
-baseline, and claim scope fixed for that record. If any of them changes, create
-a new run or comparison record, preserve the earlier artifacts, and state what
-changed and why. Create a new Trellis task only when a separate work record is
-useful.
-
-Scratch work can change freely. If it is promoted, the retained record must
-describe the inputs and protocol that produced the promoted result.
-
-## Result Claims
-
-Do not say a method improved, converged, reproduced a number, supports a
-hypothesis, or generated a final dataset unless the supporting run was promoted
-to retained and:
-
-- metrics or result files exist in `outputs/<run_id>/`;
-- the evaluated split, sample set, simulation condition, or comparison group is
-  recorded;
-- parameters, command, seed/randomness state, and assumptions are recorded;
-- data manifest or source snapshot is recorded;
-- the software environment points to an existing reproducible record, or a
-  per-run snapshot when needed.
-
-If only a smoke test ran, say it was a smoke test.
-
-Completing a Trellis task means the requested work and evidence record are
-complete. It does not approve a scientific claim for a manuscript or external
-release. That decision requires human review of the retained evidence, claim
-scope, and limitations.
-
-## External Tools
-
-Remote dashboards, notebooks, lab notes, and experiment trackers are mirrors.
-The project-local retained run directory `outputs/<run_id>/` remains the source
-of truth.
+External dashboards, notebooks, lab notes, and experiment trackers can mirror
+the record. Keep enough project-local evidence to recover the inputs and
+decisions if those services change or disappear.

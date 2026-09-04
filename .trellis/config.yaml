@@ -88,8 +88,14 @@ max_journal_lines: 2000
 # Resolution precedence: per-task (task.json `workflow`) > personal
 # (`.developer` `workflow=`) > this `default_workflow` > global
 # `.trellis/workflow.md`.
-#
-# default_workflow: native
+default_workflow: research
+
+# Registry
+# Source used to install .trellis/spec.
+registry:
+  spec:
+    source: gh:Zhou-Ruichen/trellis-for-research/marketplace#v0.5.0
+    template: research-computational
 
 #-------------------------------------------------------------------------------
 # Channel worker OOM guard
@@ -141,8 +147,8 @@ channel:
 # hint lines in those files) — there is no config.yaml knob for this,
 # `trellis update` preserves your edits across regeneration.
 #
-# codex:
-#   dispatch_mode: auto  # or "inline"; legacy alias: "sub-agent"
+codex:
+  dispatch_mode: inline  # or "auto"; legacy alias: "sub-agent"
 
 #-------------------------------------------------------------------------------
 # Sub-agent context injection limits

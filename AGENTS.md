@@ -20,6 +20,17 @@ Managed by Trellis. Edits outside this block are preserved; edits inside may be 
 
 <!-- TRELLIS:END -->
 
+# Research Work
+
+Follow `.trellis/workflows/research.md` (research workflow) and the shared guidelines in
+`.trellis/spec/shared/research-minimal.md`. Work directly: do not invoke the
+native Trellis planning, check, or finish-work skills automatically; use the
+task CLI only when a durable task record is useful. Use other specs under
+`.trellis/spec/` for concrete coding questions. Run software verification
+(tests, builds) only when explicitly requested. Preserve the data-product
+definitions, source records, units, release boundaries and downstream
+interfaces described in the project documents.
+
 ## Python execution convention: run from repo root
 
 All Python scripts in this repo (pipeline steps under `jamstec/multibeam/code/`, future `ncei/code/`, calibration drivers and tests under `_common/`) are invoked from the **repo root** (`/mnt/data2/00-Data/ship/`). That puts cwd on `sys.path`, so any consumer can write `from _common.r2_classifier import classify` with no per-script `sys.path.insert(...)` hack and no `PYTHONPATH` plumbing.

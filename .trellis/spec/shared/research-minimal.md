@@ -1,43 +1,35 @@
-# Research Minimal Code (Highest Priority)
+# Minimal Research Work
 
-On conflict with any other spec file, this one wins for exploratory work.
+These rules take precedence over other specs for exploratory work, the default.
+Follow only the extra maintenance requirements the user explicitly requests.
+Reusing code or publishing a result does not change that default.
 
-Goal: validate ideas and get experiments running. This is not production
-code. Write the smallest change that answers the question; prefer existing
-project code or a library function over new code (see the reuse order in
-[anti-bloat.md](./anti-bloat.md)).
+Write the smallest change that answers the current question for the stated
+inputs. Reuse existing code and libraries. A direct script or notebook is enough;
+extract functions or modules only to remove real duplication or clarify the
+calculation. Do not add wrappers, config systems, compatibility paths, retries,
+or defensive branches for hypothetical needs. See [anti-bloat.md](./anti-bloat.md).
 
-Two independent questions are in play: the mode controls how code is written
-and checked (exploratory by default; durable means code the project keeps
-and maintains), and the evidence tier (scratch / smoke / retained, per
-[reproducibility.md](./reproducibility.md)) controls what the run records.
-A retained result does not make exploratory code durable.
+Check scientific assumptions that could silently change the result, such as
+units, coordinates, missing-value handling, and data isolation, once at the data
+boundary. Trust them afterward. Let file, indexing, and library errors propagate
+with their tracebacks. Diagnose an actual failure with the smallest useful check
+and remove temporary instrumentation when it has answered the question.
 
-In exploratory mode, validate external inputs once where they enter the
-project when schema, columns, units, coordinates, time, or missing values can
-change the result. Beyond that boundary, do not add defensive code,
-hash/checksum logic, exception handling, retries, unit tests, strict typing, or
-abstractions unless the task names a concrete, likely failure that needs one,
-or the user explicitly asks. In durable mode, apply the reliability the
-component actually needs.
+Software tests, lint, builds, type checks, and separate verification runs require
+an explicit task or user request. Use the requested experiment's own outputs to
+assess execution and observations. Do not repeat a successful command for
+reassurance or add tests merely because code was added, reused, or fixed.
 
-Before any verification step, be able to name the concrete, plausible
-failure it targets and how its result would change the next action. Use the
-cheapest check that answers that question; do not add another check for the
-same question once it is answered.
+Preserve the inputs, actual settings, code state, environment, and outputs needed
+to interpret results you keep. Reuse existing records; no manifest format or
+recording framework is required. See [reproducibility.md](./reproducibility.md).
 
-Retained runs record the command, inputs, configuration, and outputs needed to
-interpret or reproduce the result. Record a checksum only when exact byte
-identity matters; checksum logic never appears scattered through experiment
-code.
+Complete the runs required by the question. Scientific metrics are observations,
+not task pass/fail thresholds; do not invent outcome gates or inherit them from
+archived experiments. Negative and null results are evidence, and do not cancel
+the remaining planned runs. Changing the research plan follows the user.
 
-Stop condition: the task is done once the requested result is established,
-every run the design requires has completed, and the mode's sanity checks
-pass. Metric values are observations, not pass/fail criteria: a negative or
-null result is recorded as evidence and answered with the next run the task
-plan registered, not with a stop or a route-level conclusion. Completing a
-task or a full set of runs does not end exploration on its own: opening a
-sealed evaluation (final test period, held-out data) or freezing the
-explored configuration closes the exploratory phase, so take that step only
-when the task's registered decision is answered and the user confirms.
-Do not seek additional certainty without a concrete failure signal.
+Stop when the requested work and evidence are complete. Opening sealed final
+evaluation data or declaring exploration finished requires the user's
+confirmation. Fixing settings for one comparison does not end exploration.
