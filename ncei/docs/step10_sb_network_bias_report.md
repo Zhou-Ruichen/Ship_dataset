@@ -84,4 +84,4 @@ r3 决策问题（下游关于该平差是否改变其 GGM 结论的敏感性分
 2. **剔除臂**：按 r2 `track_disposition` 剔除 reject 航线（控制与检核同时剔）后重拟合，在距离档未变的共同检核点上，近场 |ΔG| 中位数 0.006，判定改变 2/28（吕宋 whole_cruise 0–2 km：+0.065→+0.069）。方法学警示：剔除 reject 使约 10% 检核点离最近控制变远（吕宋 whole_cruise 840,814 个共同点中 88,929 个换距离档），任何“剔除后收益上升”的比较必须按距离档控制，否则会把距离变远误读成收益上升。本仓第 4 节的过滤规则（`track_disposition != 'reject'`）本身不受影响，此条只约束收益类对比实验的解释。
 3. **对 r3 的净含义**：全球逐航线相对偏差表维持“暂不实施”；留出评估作为其若实施的前置条件写入问题 1。
 
-证据：`/mnt/data2/06-Projects/12-ggm_scs/outputs/20260913T172704Z_ggm_leveled_analysis/`（平差臂）、`/mnt/data2/06-Projects/12-ggm_scs/outputs/20260913T181412Z_ggm_r2_filter_analysis/`（剔除臂）、`/mnt/data2/06-Projects/12-ggm_scs/.trellis/tasks/09-13-ggm-conditional-gain/review_batch2.md`（检核）。
+证据：`/mnt/data2/06-Projects/12-ggm_scs/outputs/20260913T172704Z_ggm_leveled_analysis/`（平差臂）、`/mnt/data2/06-Projects/12-ggm_scs/outputs/20260913T183609Z_ggm_r2_filter_analysis/`（剔除臂；2026-09-13 修订报告文字后重新生成，替代已删除的 20260913T181412Z 目录，数值文件逐位一致）、`/mnt/data2/06-Projects/12-ggm_scs/.trellis/tasks/09-13-ggm-conditional-gain/review_batch2.md`（检核）。
