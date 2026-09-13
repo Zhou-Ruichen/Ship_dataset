@@ -471,3 +471,24 @@ Completed and archived one source-internal development-only Stage C rerun with i
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: 补记下游平差敏感性结论到 step10 网络报告
+
+**Date**: 2026-09-14
+**Task**: 补记下游平差敏感性结论到 step10 网络报告
+**Branch**: `main`
+
+### Summary
+
+12-ggm_scs 敏感性结论（Kimi 检核）补记进 step10_sb_network_bias_report.md：平差对 GGM 条件收益基本无影响（近场 ΔG 中位 +0.0004，2/28 判定改变）；剔除 reject 需按距离档控制比较（约 10% 检核点换档）；全球逐航线偏差表维持暂不实施，留出评估为前置条件。证据三处路径已列入。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8a3af93` | (see git log) |
+
+### Status
+
+[OK] **Completed**
