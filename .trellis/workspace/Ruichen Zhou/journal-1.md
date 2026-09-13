@@ -450,3 +450,24 @@ Completed and archived one source-internal development-only Stage C rerun with i
 ### Next Steps
 
 - Upstream task complete; downstream model work remains outside this repository.
+
+
+## Session 8: 下游交付契约补全：manifest 回填与点层引用规则
+
+**Date**: 2026-09-13
+**Task**: 下游交付契约补全：manifest 回填与点层引用规则
+**Branch**: `main`
+
+### Summary
+
+12-ggm_scs 五条交付需求逐条判定：final_r2/严格多波束/点层 manifest 回填（42 号脚本，final_r2 输出哈希与 global_grid_1min_r2 记录 5365/5365 一致）；规范第 1/4/5/6 节定点层为可引用层；step10 网络报告记录下游平差对照与 r3 决策三问；consumers.yaml 两条登记审核提交。全球逐航线相对偏差表留待 r3。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e584737` | (see git log) |
+
+### Status
+
+[OK] **Completed**

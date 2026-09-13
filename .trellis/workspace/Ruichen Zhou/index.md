@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
-- **Last Active**: 2026-08-09
+- **Total Sessions**: 8
+- **Last Active**: 2026-09-13
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~449 | Active |
+| `journal-1.md` | ~473 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-09-13 | 下游交付契约补全：manifest 回填与点层引用规则 | `e584737` | `main` |
 | 7 | 2026-08-09 | SCS v2 development-only Stage C rerun | `501b491`, `18446ac`, `f1cb6f1` | `main` |
 | 6 | 2026-08-07 | SCS v2 Stage C source-internal processing | `0e7d8b3`, `75c66d2` | `main` |
 | 5 | 2026-08-06 | SCS v2 Stage B opaque sealed acquisition | `84287ac` | `main` |
