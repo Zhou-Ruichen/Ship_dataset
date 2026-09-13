@@ -23,4 +23,23 @@
 #   consuming_agent_or_workspace: fill-me-in
 #   registered_at: "2026-09-03"
 
-consumers: []
+consumers:
+  # 12-ggm_scs：经典 GGM 相对同控制插值的适用性研究。各次实验按 sha256 钉住所读文件
+  # （见该仓库 .trellis/tasks/09-13-ggm-conditional-gain/upstream_snapshot.tsv）。
+  # 已冻结的区域队列另读中间层 ncei/derived/singlebeam/points_checked/ 与
+  # ncei/manifests/bathymetry_entry_manifest.parquet，敏感性实验读
+  # ncei/derived/validation_cells_1min/regional_mrar_experiment_cells.parquet；
+  # 这些位置若有变动，也请在新轮次通知中一并说明。
+  # 通知目标：该仓库的 paseo 工作区（cwd /mnt/data2/06-Projects/12-ggm_scs）。
+  - repo_name: 12-ggm_scs
+    repo_path: /mnt/data2/06-Projects/12-ggm_scs
+    product: file_cells_1min_final_r2
+    round: _r2
+    consuming_agent_or_workspace: wks_9bb5b84f15a2f91e
+    registered_at: "2026-09-13"
+  - repo_name: 12-ggm_scs
+    repo_path: /mnt/data2/06-Projects/12-ggm_scs
+    product: strict_primary_multibeam_cells
+    round: latest
+    consuming_agent_or_workspace: wks_9bb5b84f15a2f91e
+    registered_at: "2026-09-13"
