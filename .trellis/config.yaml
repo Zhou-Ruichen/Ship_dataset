@@ -94,7 +94,7 @@ default_workflow: research
 # Source used to install .trellis/spec.
 registry:
   spec:
-    source: gh:Zhou-Ruichen/trellis-for-research/marketplace#v0.5.0
+    source: gh:Zhou-Ruichen/trellis-for-research/marketplace#v0.6.0
     template: research-computational
 
 #-------------------------------------------------------------------------------

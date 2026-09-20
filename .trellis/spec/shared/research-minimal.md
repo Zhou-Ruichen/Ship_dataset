@@ -1,35 +1,11 @@
 # Minimal Research Work
 
-These rules take precedence over other specs for exploratory work, the default.
-Follow only the extra maintenance requirements the user explicitly requests.
-Reusing code or publishing a result does not change that default.
+Use these rules for exploratory work; domain guides add relevant scientific details, not extra procedure.
 
-Write the smallest change that answers the current question for the stated
-inputs. Reuse existing code and libraries. A direct script or notebook is enough;
-extract functions or modules only to remove real duplication or clarify the
-calculation. Do not add wrappers, config systems, compatibility paths, retries,
-or defensive branches for hypothetical needs. See [anti-bloat.md](./anti-bloat.md).
-
-Check scientific assumptions that could silently change the result, such as
-units, coordinates, missing-value handling, and data isolation, once at the data
-boundary. Trust them afterward. Let file, indexing, and library errors propagate
-with their tracebacks. Diagnose an actual failure with the smallest useful check
-and remove temporary instrumentation when it has answered the question.
-
-Software tests, lint, builds, type checks, and separate verification runs require
-an explicit task or user request. Use the requested experiment's own outputs to
-assess execution and observations. Do not repeat a successful command for
-reassurance or add tests merely because code was added, reused, or fixed.
-
-Preserve the inputs, actual settings, code state, environment, and outputs needed
-to interpret results you keep. Reuse existing records; no manifest format or
-recording framework is required. See [reproducibility.md](./reproducibility.md).
-
-Complete the runs required by the question. Scientific metrics are observations,
-not task pass/fail thresholds; do not invent outcome gates or inherit them from
-archived experiments. Negative and null results are evidence, and do not cancel
-the remaining planned runs. Changing the research plan follows the user.
-
-Stop when the requested work and evidence are complete. Opening sealed final
-evaluation data or declaring exploration finished requires the user's
-confirmation. Fixing settings for one comparison does not end exploration.
+- Current user instructions override skills and old records. Skills add methods, not tasks or approval gates. Preserve planning-only scope, explicit checkpoints, and stated data-access restrictions.
+- Carry action requests through necessary edits, debugging, proportionate checks, and delivery. Authorization persists across turns and stages. Decide routine details; ask only for consequential information you cannot reasonably infer or missing access or authority. Continue independent work while dependencies are blocked.
+- Reuse existing code or direct scripts and notebooks. Add structure only for real duplication or clarity; no speculative defensive handling, retries, logging, or infrastructure. Let failures show tracebacks and diagnose actual errors. See [anti-bloat.md](./anti-bloat.md).
+- Check assumptions that can silently change conclusions once at the relevant boundary, then trust established preconditions. Reuse run evidence; add focused checks when needed, not default suites or reviewer agents. Repeat checks only for changed code or inputs, failures, or unresolved concerns; respect explicit execution and cost limits.
+- Complete planned comparisons, seeds, and folds, preserving data isolation. Negative and null results are evidence, not task failure thresholds. Do not silently change scientific scope or declare exploration finished when one task ends. Stop adding work when the requested outcome and necessary evidence are delivered.
+- Retain inputs, actual settings, code state, relevant environment, and outputs needed to interpret results in existing records; no prescribed manifest or schema. Remove disposable diagnostics, preserving retained evidence and useful recovery records. See [reproducibility.md](./reproducibility.md).
+- Research-facing prose states one main claim with its evidence in the field's terms; a workflow word names a concrete referent or is replaced by it, and a limitation sits next to the claim it weakens. See [scientific-writing.md](./scientific-writing.md).
