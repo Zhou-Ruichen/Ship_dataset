@@ -3,9 +3,8 @@
 Use [scientific-writing.md](../shared/scientific-writing.md) for
 manuscripts, abstracts, captions, and research-facing reports.
 
-Read the available analysis, tables, figures, or cited sources, then draft
-the supported finding, evidence, and interpretation. Do not create a new
-experiment just to complete a writing task; identify missing evidence when
-it limits a requested claim. Commands, settings, software versions, and
-checkpoints belong in Methods or the existing evidence record, not in place
-of the finding.
+Read the available analysis, tables, figures, or cited sources, then state the
+result, its condition, and the interpretation it supports. Use the available
+analysis for a writing task and identify any missing evidence that limits the
+claim. Keep the command or settings needed to
+rerun it in the existing result record or Methods section.

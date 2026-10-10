@@ -1,39 +1,22 @@
 # Data Guidelines
 
 Keep external or shared sources read-only by default. Write temporary or
-rebuildable products to the project's existing interim or output location;
-the evidence a retained output keeps is defined in
-[reproducibility.md](../shared/reproducibility.md). Do not rename an
-existing layout to match the raw, interim, processed, and output concepts.
+rebuildable products to the project's existing interim or output location.
+Keep only the source pointer and facts needed to rerun a reported result.
+Keep existing names and adapt the pointers to the project's layout.
 
-For data too large to version, record a reproducible pointer: configured
-root or access URL, upstream version or retrieval date, resolution rule, and
-the variables or extent consumed. Use a checksum only when exact byte
-identity affects transfer integrity, deduplication, or reproduction.
+For data too large to version, record a pointer and the upstream version or
+retrieval date. Add the variables, extent, resolution, or checksum when
+they affect the reported result or its reproduction.
 
-## Checks at the data boundary
+## Checks when data are read
 
-Check once, where data enters the analysis, only conditions whose failure
-could silently change the scientific result:
-
-- units, coordinate reference and key conventions, shapes, dimensions, and
-  dtypes;
-- missing values, NaN, fill values, and sentinel conversion;
-- split or join rules and leakage across entities, subjects, groups, time,
-  regions, or records, including through labels or augmentation;
-- variable or label meanings, filtering, interpolation, resampling,
-  masking, and augmentation parameters.
-
-Let the data library report missing files, unsupported formats, malformed
-syntax, and ordinary I/O errors; no generic validator or preflight
-checklist.
+Inspect the units, split, labels, missing-value handling, or other input fact
+when getting it wrong could silently change the result. Let the data
+library report missing files, unsupported formats, malformed syntax, and
+ordinary I/O errors.
 
 ## Format details
 
-For netCDF, Zarr, HDF5, Parquet, JSON, or similar structured data, record
-the fields consumed and metadata needed to interpret them; preserve units
-and coordinate conventions for physical fields, and note fill-value handling
-and encoding or chunking only when they affect the computation. For
-geospatial data, record CRS, longitude convention, grid definition, and
-reprojection or resampling parameters when used. For time series, record
-time encoding, timezone, aggregation, and join tolerance when relevant.
+For structured, geospatial, or time-series data, record a field, coordinate,
+time, or encoding detail when it affects the calculation.

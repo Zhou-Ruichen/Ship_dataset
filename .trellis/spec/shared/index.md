@@ -1,7 +1,7 @@
 # Research References
 
 Start with [research-minimal.md](./research-minimal.md) and the project's relevant
-facts. Other files are references for concrete questions, not a reading checklist.
+facts. Consult the other files when a concrete question calls for them.
 
 | Question | Reference |
 | --- | --- |

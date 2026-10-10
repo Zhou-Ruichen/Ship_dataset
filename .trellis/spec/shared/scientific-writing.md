@@ -1,89 +1,68 @@
 # Scientific Writing
 
-Use for manuscripts, abstracts, reviewer responses, captions, and
-research-facing reports; routine task updates need no manuscript workflow.
+Use this guide for manuscripts, abstracts, captions, reviewer responses,
+research reports, and replies in the working session. A routine update stays
+brief and uses the same vocabulary as the manuscript.
 
-## Main Claim
+## Main finding
 
-A paper answers one question with one main claim; every section, figure,
-and comparison serves it. Choose comparisons because they test the claim
-and report each planned one as an observation, including those the
-method loses. Do not add comparisons to win every metric, or passages
-rebutting objections that no reviewer or result has raised.
+State the question and the main finding early. Let each section, figure, and
+comparison serve that question. Give each finding its value, units, data
+scope, method, and conditions.
 
-## Findings And Evidence
+Lead with one clear question and the evidence that answers it directly. Add a
+comparison or further detail when it changes how the result is interpreted,
+and state the scope the presented data cover; leave cases unrelated to the
+current question to later work.
 
-Organize Results and Discussion as finding, evidence, and interpretation:
-what data were used, what was compared, what stayed the same, what changed,
-and the observed result. Do not substitute internal experiment names or
-software completion status for the finding.
+## Results and interpretation
 
-Place numbers with their units, data scope, split, or experimental
-condition. Report uncertainty when the conclusion depends on it; a single
-run does not establish a distribution. Negative and null results receive the
-same treatment.
+For each result, write what was measured, what was compared, what stayed the
+same, what changed, and what the result supports. Include a lower, zero, or
+unexpected result when the question included that comparison.
 
-State a mechanism as a finding only when the evidence tests it; otherwise
-identify it as an explanation or hypothesis. Do not invent results,
-citations, versions, or implications, and cite the source that actually
-supports the claim. State a limitation next to the claim it weakens, in
-the terms of the evidence ("observed only on dataset D"). A scope
-statement says what was studied; a disclaimer denies a claim nobody made,
-and is cut. Do not repeat a minor limitation across sections or add
-hypothetical concerns. Preserve the author's intended certainty when
-editing, and flag suspected scientific errors instead of silently
-changing them.
+Separate an observation, an explanation, and a hypothesis. State the
+explanation at the strength the result supports. Place the data range or
+other limit beside the finding it limits. Give uncertainty when it changes how
+the result should be read.
+
+Describe the analysis and state plainly what was observed. State a
+limitation once, beside the claim it affects and in proportion to its
+effect. A favorable result carries that one limitation and no further scope
+qualifiers; an objection nobody raised gets no hedge.
 
 ## Methods
 
-Describe data, comparison design, processing, settings, software, and
-analysis in the order needed to reproduce the work, using exact technical
-terms. Keep necessary commands, equations, and implementation details;
-Methods need not follow the finding-first order of Results. Reference
-existing evidence records without requiring a new file format.
+Describe data, processing, settings, software, command, and analysis in the
+order needed to rerun the calculation. Keep exact technical terms, equations,
+and parameter values. The narrative names the data, method, and settings;
+the repository address with its version and the data product versions go in
+the availability statement, and a run identifier stays in the result record.
 
-Methods describe what a reader needs to reproduce or obtain the work; how
-code was pushed, checked, or hosted appears only when it affects
-reproduction. Commit hashes, run identifiers, and links go in a footnote
-or table, outside the sentence.
+## Structure and language
 
-## Figures And Tables
+Use headings in order and give a distinct topic its own heading. Keep one main
+fact, procedure, reason, or qualification in each sentence. Use short
+paragraphs that move from the result to its interpretation.
 
-Captions explain what is shown, on which data, and under which conditions,
-with axes and units in domain terms. Result figures state the finding they
-support; coverage or method figures need not claim a result. Comparisons
-make clear which scientific question they address.
+Use terms established in the field or defined in the manuscript. Name the
+data, method, settings, and result directly. Keep internal labels in working
+notes. Preserve the author's certainty when editing and flag a suspected
+scientific error for review. A modifier stays when it adds information or
+has an established technical meaning (严格递增, 统计显著); emphasis-only
+modifiers such as 深刻, 深入, or 严格 are dropped.
 
-## Language
+Use the field's term for every scientific concept, procedure, comparison,
+and result. This holds in prose, in a reply, and in a new identifier,
+comment, docstring, log line, file name, or figure label in code and
+configuration, which take the field's term or its standard abbreviation.
+Borrowed engineering or software words, workflow labels, coined terms, and
+internal codenames are replaced by the quantity, data, method, or result
+they stand for.
 
-Write directly in the requested language and register, using one term for
-one concept. Say what a thing is in one direct sentence, and state a
-claim in one step ("X does Y") instead of routing it through a second
-noun ("X is a mechanism; this mechanism ...", "X 是一种机制，该机制……").
-Use a negation only to correct a specific misreading a reader could draw
-from the reported result; a chain of what something is not ("不是 A，
-不是 B，也不是 C") does not define it.
+The established wording of the field's published literature decides the
+term. A project terminology file records those choices.
 
-Use only terms established in the field or defined in the manuscript; do
-not coin a term or capitalize a concept. If the workflow labels something
-a run or task, describe it by its content: the data, settings, method,
-and result. Workflow words such as 冻结/freeze, 基线/baseline,
-协议/protocol, pipeline, manifest, retained or promoted run, and dry run
-are replaced by the concrete action or object: which settings were fixed
-and when, which named method or run is the reference, which data, split,
-and metric were used. Such a word stays only when it names a published
-method or standard ("the ResNet-50 baseline", "the CONSORT protocol").
-
-Avoid filler such as "it is worth noting", "not just X but Y", "本质上",
-"底层逻辑", and "不是 X，而是 Y". Do not replace evidence with praise for
-the method or manufacture a three-part list. For example, "代码运行成功，
-因此方法有效" confuses execution with a scientific finding; state the
-observed comparison instead. Judge each sentence by whether it names its
-referent.
-
-One sentence carries one fact, reason, procedure, or qualification; split
-a sentence that nests more than one qualification. Parallel parts use the
-same heading form. Do not add a closing paragraph that repeats the
-answer. Preserve quotations and established technical names; code and
-identifiers follow the project's language conventions. Apply these rules
-by reading; do not add a checker script to the project.
+Illustrations from geodesy: 正则化 not 阻尼, 参考模型 not 基线, 核对 not 验收,
+方法与设置 not 方案, 补充 not 补齐; a run is completed, not 跑通 or 落地;
+say where the data are read, not 边界 or boundary.
