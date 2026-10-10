@@ -7,7 +7,8 @@ number, units, and a short condition in the existing result file, notebook, or
 lab record. Reuse the project's existing record.
 
 Use an existing lockfile, container digest, environment note, or immutable
-source reference when one exists. Record per-run environment details when
+source reference when one exists. Install dependencies only into a recorded
+environment. Record per-run environment details when
 the environment can drift and change the number. Record a seed when
 randomness affects the result.
 
