@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -16,8 +17,22 @@ from .verify import verify
 def parser():
     ap = argparse.ArgumentParser(
         prog="python -m ncei.download",
-        description="Inventory, fetch, merge, and verify NCEI round-2 files.")
-    ap.add_argument("command", choices=["inventory", "diff", "fetch", "merge", "verify", "run"])
+        description="Inventory, fetch, merge, verify, and plan NCEI round-2 files.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Commands (in data-flow order):\n"
+            "  rank (38)  Rank cruises by estimated new coverage per download size.\n"
+            "  inventory  List remote multibeam trees.\n"
+            "  diff       Compare a cached inventory with local files.\n"
+            "  fetch      Download missing files and resume partial transfers.\n"
+            "  merge      Merge successful downloads into the source log.\n"
+            "  verify     Check completeness and gzip integrity.\n"
+            "  run        Repeat inventory, diff, fetch, and merge."
+        ))
+    ap.add_argument(
+        "command",
+        choices=["rank", "38", "inventory", "diff", "fetch", "merge", "verify", "run"],
+    )
     ap.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG,
                     help="survey catalog TSV for platforms_tree")
     ap.add_argument("--plan", type=Path,
@@ -65,6 +80,10 @@ def report_errors(trees):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in {"rank", "38"}:
+        from .rank import main as rank
+        return rank(argv[1:])
     ap = parser()
     args = ap.parse_args(argv)
     if min(args.workers, args.inventory_workers, args.attempts) < 1:

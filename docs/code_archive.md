@@ -45,6 +45,35 @@ resolve old paths found in historical reports and product manifests.
 | `ncei/code/22_step08_publication_summary.py` | `ncei/analysis/22_step08_publication_summary.py` |
 | `ncei/code/27_sb_crossover_network_bias_1min.py` | `ncei/analysis/27_sb_crossover_network_bias_1min.py` |
 | `ncei/code/29_sb_interpolation_holdout.py` | `ncei/analysis/29_sb_interpolation_holdout.py` |
+| `ncei/code/01_build_trackline_source_manifest.py` | `ncei/trackline/manifest.py` (`manifest`, alias `01`) |
+| `ncei/code/02_standardize_singlebeam.py` | `ncei/trackline/standardize_singlebeam.py` (`standardize-nc`, alias `02`) |
+| `ncei/code/03_standardize_xyz.py` | `ncei/trackline/standardize_xyz.py` (`standardize-xyz`, alias `03`) |
+| `ncei/code/04_clean_mrar.py` | `ncei/trackline/clean_mrar.py` (`clean-mrar`, alias `04`) |
+| `ncei/code/05_point_quality_check.py` | `ncei/trackline/point_qc.py` (`point-qc`, alias `05`) |
+| `ncei/code/06_supplementary_quality_check.py` | `ncei/trackline/supplementary_qc.py` (`supplementary-qc`, alias `06`) |
+| `ncei/code/07_aggregate_file_cells_1min.py` | `ncei/trackline/file_cells.py` (`file-cells`, alias `07`) |
+| `ncei/code/08_merge_branch_cells_1min.py` | `ncei/trackline/merge_cells.py` (`merge-cells`, alias `08`) |
+| `ncei/code/09_source_specific_overlap_residuals.py` | `ncei/trackline/source_overlap.py` (`source-overlap`, alias `09`) |
+| `ncei/code/10_cross_branch_overlap_audit.py` | `ncei/trackline/branch_overlap.py` (`branch-overlap`, alias `10`) |
+| `ncei/code/11_quality_policy_calibration_audit.py` | `ncei/trackline/policy_audit.py` (`policy-audit`, alias `11`) |
+| `ncei/code/12_apply_quality_policy.py` | `ncei/trackline/apply_policy.py` (`apply-policy`, alias `12`) |
+| `ncei/code/13_build_validation_cells.py` | `ncei/trackline/validation_cells.py` (`validation-cells`, alias `13`) |
+| `ncei/code/23_estimate_singlebeam_track_bias_1min.py` | `ncei/trackline/track_bias.py` (`track-bias`, alias `23`) |
+| `ncei/code/24_true_crossover_audit.py` | `ncei/trackline/crossover.py` (`crossover`, alias `24`) |
+| `ncei/code/25_global_singlebeam_track_bias.py` | `ncei/trackline/global_bias.py` (`global-bias`, alias `25`) |
+| `ncei/code/26_global_singlebeam_crossover_audit.py` | `ncei/trackline/global_crossover.py` (`global-crossover`, alias `26`) |
+| `ncei/code/28_sb_track_quality_disposition_1min.py` | `ncei/trackline/disposition.py` (`disposition`, alias `28`) |
+| `ncei/code/30_global_sb_track_disposition.py` | `ncei/trackline/global_disposition.py` (`global-disposition`, alias `30`) |
+| `ncei/code/31_build_global_grid_1min.py` | `ncei/trackline/global_grid.py` (`global-grid`, alias `31`) |
+| `ncei/code/33_mb_round2_format_survey.py` | `ncei/swath/census.py` (`census`, alias `33`) |
+| `ncei/code/34_mb_round2_extract_points.py` | `ncei/swath/extract.py` (`extract`, alias `34`) |
+| `ncei/code/35_mb_round2_file_cells.py` | `ncei/swath/file_cells.py` (`file-cells`, alias `35`) |
+| `ncei/code/36_mb_round2_source_manifest_fragment.py` | `ncei/swath/manifest_fragment.py` (`manifest`, alias `36`) |
+| `ncei/code/37_mb_round2_coverage_stats.py` | `ncei/swath/coverage.py` (`coverage`, alias `37`) |
+| `ncei/code/38_mbbdb_value_ranking.py` | `ncei/download/rank.py` (`rank`, alias `38`) |
+| `ncei/code/39_m77t_to_xyz.py` | `ncei/trackline/mgd77t_xyz.py` (`mgd77t-xyz`, alias `39`) |
+| `ncei/code/40_m77t_static_fragments.py` | `ncei/trackline/mgd77t_fragments.py` (`mgd77t-fragments`, alias `40`) |
+| `ncei/code/43_mb_round2_quality_revision.py` | `ncei/swath/quality_revision.py` (`quality-revision`, alias `43`) |
 | `jamstec/multibeam/code/06d_compare_original_vs_qcfiltered_cells.py` | `jamstec/multibeam/analysis/06d_compare_original_vs_qcfiltered_cells.py` |
 | `jamstec/multibeam/code/08_validate_gridded_products_against_ship_cells.py` | `jamstec/multibeam/analysis/08_validate_gridded_products_against_ship_cells.py` |
 | `jamstec/multibeam/code/09_analyze_model_validation_errors_T1.py` | `jamstec/multibeam/analysis/09_analyze_model_validation_errors_T1.py` |

@@ -1,6 +1,6 @@
 """mblist U3/U0 listing parser and join for round-2 swath extraction.
 
-The round-2 L1 extraction (``ncei/code/34_mb_round2_extract_points.py``)
+The round-2 L1 extraction (``ncei/swath/extract.py``)
 parses each decompressed raw swath file twice with the fixed-version
 ``mblist`` (5.8.3beta16) from the sealed MB-System environment under
 ``ncei/derived/scs_v2_sealed_confirmation/environments/``: once with

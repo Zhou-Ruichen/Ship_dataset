@@ -23,6 +23,18 @@ and the unmetered proxy `http://127.0.0.1:2085`. Override them with `--raw`,
 
 ## Run one stage
 
+Inspect download-value planning (legacy stage 38):
+
+```bash
+python -m ncei.download rank --help
+```
+
+`rank` and alias `38` retain the original `--fetch-trackline` and `--compute`
+options. Do not run either operation while the active Tier-B download relies
+on `ncei/derived/mbbdb_value_ranking/order_tier_*.tsv`: computation rewrites
+those lists, and metadata fetching uses the download proxy. The package
+migration checks this command by help and import only.
+
 List the remote multibeam trees. `--refresh` refetches successful caches too:
 
 ```bash

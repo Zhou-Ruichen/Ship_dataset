@@ -1,6 +1,5 @@
 """Regression checks for native quality, record lineage, and cell coverage."""
 
-import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,24 +10,19 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ncei.swath import extract, manifest_fragment, quality_revision
+from ncei.trackline import file_cells
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def load(filename):
-    spec = importlib.util.spec_from_file_location(filename, ROOT / "ncei/code" / filename)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 class QualityRevisionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.extract = load("34_mb_round2_extract_points.py")
-        cls.aggregate = load("07_aggregate_file_cells_1min.py")
-        cls.sources = load("36_mb_round2_source_manifest_fragment.py")
-        cls.revision = load("43_mb_round2_quality_revision.py")
+        cls.extract = extract
+        cls.aggregate = file_cells
+        cls.sources = manifest_fragment
+        cls.revision = quality_revision
 
     def test_rr1412_known_shard(self):
         path = ROOT / "ncei/derived/mb_round2/RR1412/_staging/761d2c6f1c51988d.parquet"
