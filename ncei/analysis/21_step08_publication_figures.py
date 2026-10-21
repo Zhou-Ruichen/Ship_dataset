@@ -32,8 +32,8 @@ Writes (one TSV + one PNG + one PDF per figure):
   - ncei/derived/model_validation_1min_step08_pub/d_figures/d_figures_safety_checks.tsv
 
 Usage:
-    python ncei/code/21_step08_publication_figures.py --check-only
-    python ncei/code/21_step08_publication_figures.py \
+    python ncei/analysis/21_step08_publication_figures.py --check-only
+    python ncei/analysis/21_step08_publication_figures.py \
       --run-label d_figures --confirm-figures --overwrite
 """
 

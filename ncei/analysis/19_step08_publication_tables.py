@@ -24,8 +24,8 @@ Writes (publish mode):
   - ncei/output/logs/19_step08_publication_tables_<run_label>.log
 
 Usage:
-    python ncei/code/19_step08_publication_tables.py --check-only
-    python ncei/code/19_step08_publication_tables.py --run-label b_pub_tables --confirm-publish --overwrite
+    python ncei/analysis/19_step08_publication_tables.py --check-only
+    python ncei/analysis/19_step08_publication_tables.py --run-label b_pub_tables --confirm-publish --overwrite
 """
 
 from __future__ import annotations

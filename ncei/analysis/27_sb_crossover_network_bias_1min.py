@@ -644,7 +644,7 @@ def build_manifest() -> dict[str, object]:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "command": (
             "/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python "
-            "ncei/code/27_sb_crossover_network_bias_1min.py"
+            "ncei/analysis/27_sb_crossover_network_bias_1min.py"
         ),
         "retention": "retained",
         "retention_reason": "predeclared six-region method comparison",

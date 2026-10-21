@@ -91,7 +91,7 @@ Full numbers in
 
 ## Provenance / reproducibility
 
-- Source scripts: `jamstec/multibeam/code/{09,10,10b,11}_*.py`
+- Source scripts: `jamstec/multibeam/analysis/{09,10,10b,11}_*.py`
 - Inputs:
   - `derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet`
   - `derived/swot_t1_batch_validation/` (Step 09 batch outputs)

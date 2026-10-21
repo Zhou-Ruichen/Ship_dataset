@@ -28,11 +28,11 @@ Writes:
   - ncei/output/logs/18_step08_ranking_bootstrap_<run-label>.log
 
 Usage:
-    python ncei/code/18_step08_ranking_bootstrap.py --check-only
-    python ncei/code/18_step08_ranking_bootstrap.py \
+    python ncei/analysis/18_step08_ranking_bootstrap.py --check-only
+    python ncei/analysis/18_step08_ranking_bootstrap.py \
       --run-label a_ranking --bootstrap-iters 1000 --seed 20260528 \
       --confirm-bootstrap --overwrite
-    python ncei/code/18_step08_ranking_bootstrap.py \
+    python ncei/analysis/18_step08_ranking_bootstrap.py \
       --run-label a_ranking_diag --bootstrap-iters 1000 --seed 20260528 \
       --diagnose-convergence --confirm-bootstrap --overwrite
 """

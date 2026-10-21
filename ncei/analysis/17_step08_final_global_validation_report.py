@@ -26,7 +26,7 @@ Writes:
   - ncei/output/logs/17_step08_final_global_validation_report_<run-label>.log
 
 Usage:
-    python ncei/code/17_step08_final_global_validation_report.py \
+    python ncei/analysis/17_step08_final_global_validation_report.py \
       --run-label stage6_final --confirm-final --overwrite
 """
 

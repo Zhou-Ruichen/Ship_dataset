@@ -1,7 +1,7 @@
 # Model Validation Configuration Guide
 
 Configuration file: `configs/gridded_products_validation.yaml`
-Script: `code/08_validate_gridded_products_against_ship_cells.py`
+Script: `analysis/08_validate_gridded_products_against_ship_cells.py`
 
 ---
 
@@ -122,7 +122,7 @@ When `cell_median` or `cell_mean` is configured, the script also runs a `center_
 When comparing a local model against global products, you want all products evaluated against the same ship cells. Otherwise the local model gets 500 cells while GEBCO gets 2.4 million — the metrics are incomparable.
 
 ```bash
-python3 code/08_validate_gridded_products_against_ship_cells.py \
+python3 analysis/08_validate_gridded_products_against_ship_cells.py \
   --config configs/gridded_products_validation.yaml \
   --comparison-footprint MY_LOCAL_MODEL \
   --overwrite
@@ -143,7 +143,7 @@ Requirements:
 Example: validating a SWOT model in the South Pacific (R1: lon -115 to -105, lat -25 to -15):
 
 ```bash
-python3 code/08_validate_gridded_products_against_ship_cells.py \
+python3 analysis/08_validate_gridded_products_against_ship_cells.py \
   --config configs/gridded_products_validation.yaml \
   --comparison-footprint SWOT_R1 \
   --overwrite

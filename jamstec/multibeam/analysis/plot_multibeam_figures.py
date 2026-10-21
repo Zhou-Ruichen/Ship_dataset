@@ -17,7 +17,7 @@ Figures:
   8. 6-product RMSE by depth bin comparison
 
 Usage:
-    python3 code/plot_multibeam_figures.py
+    python3 analysis/plot_multibeam_figures.py
 """
 
 import os

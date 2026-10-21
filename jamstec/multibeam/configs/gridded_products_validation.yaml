@@ -1,6 +1,6 @@
 # gridded_products_validation.yaml
 #
-# Configuration for 08_validate_gridded_products_against_ship_cells.py
+# Configuration for analysis/08_validate_gridded_products_against_ship_cells.py
 #
 # Full documentation: docs/model_validation_config_guide.md
 #

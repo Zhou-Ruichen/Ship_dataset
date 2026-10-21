@@ -14,7 +14,7 @@ Variants per region:
 
 Run from repo root:
   /mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python \
-      ncei/code/29_sb_interpolation_holdout.py
+      ncei/analysis/29_sb_interpolation_holdout.py
 
 All existing products are read-only; outputs are additive under
 ncei/derived/sb_interpolation_holdout/.

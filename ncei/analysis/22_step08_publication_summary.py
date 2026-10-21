@@ -26,8 +26,8 @@ Writes:
   - ncei/output/logs/22_step08_publication_summary_<run-label>.log
 
 Usage:
-    python ncei/code/22_step08_publication_summary.py --check-only
-    python ncei/code/22_step08_publication_summary.py \
+    python ncei/analysis/22_step08_publication_summary.py --check-only
+    python ncei/analysis/22_step08_publication_summary.py \
       --run-label step08_pub_summary --confirm-final --overwrite
 """
 

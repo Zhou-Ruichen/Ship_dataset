@@ -10,10 +10,10 @@ Workflow:
   5. Output ranked comparison table + parquet with per-model metrics
 
 Usage:
-  python code/09_batch_validate_swot_t1.py
-  python code/09_batch_validate_swot_t1.py --skip-reconstruct   # use existing reconstructed files
-  python code/09_batch_validate_swot_t1.py --experiments-dir /path/to/3-evaluations
-  python code/09_batch_validate_swot_t1.py --top-n 10           # only process top-N by prior RMSE
+  python analysis/09_batch_validate_swot_t1.py
+  python analysis/09_batch_validate_swot_t1.py --skip-reconstruct   # use existing reconstructed files
+  python analysis/09_batch_validate_swot_t1.py --experiments-dir /path/to/3-evaluations
+  python analysis/09_batch_validate_swot_t1.py --top-n 10           # only process top-N by prior RMSE
 """
 
 import argparse

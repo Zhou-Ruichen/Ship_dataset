@@ -10,13 +10,13 @@ each step's report names the script that produced its products.
   supplementary QC, 1′ cell aggregation and branch merge.
 - 09–12: overlap residuals, cross-branch audit, quality-policy calibration,
   policy application.
-- 13–22: validation cells, step08 global validation / publication products.
+- 13: validation cells.
 - 23–24: singlebeam per-track bias estimation and true crossover audit
   (task 09-02, currently scoped to the six downstream nested regions).
-- 25–30: global singlebeam production chain — per-track bias (25), global
-  crossover audit (26), network bias (27), track disposition (28),
-  interpolation holdout evidence (29), global disposition + final cells
-  `file_cells_1min_final_r2` (30; task 09-03-global-sb-final-product).
+- 25–26, 28, 30: global singlebeam production chain — per-track bias (25),
+  global crossover audit (26), track disposition (28), and global
+  disposition + final cells `file_cells_1min_final_r2` (30; task
+  09-03-global-sb-final-product).
 - 31: round-2 merged global 1-arcmin grid `global_grid_1min_r2`
   (spec §2 product; strict mb wins, non-rejected final sb fills).
 - 32–37: `raw_round2` swath-cruise ingestion (task step15): completeness
@@ -50,3 +50,11 @@ python ncei/code/scs_confirmation/verify_scs_v2_stage_c_processing.py [args...]
 
 `__init__.py` at this level makes `ncei.code` a package; both conventions
 (file execution and package import) are supported.
+
+## Moved to `ncei/analysis/`
+
+The frozen Step 08 validation pack (14–22), the six-region network-bias
+prototype (27) and the interpolation holdout evidence run (29) moved to
+`ncei/analysis/` on 2026-10-21 (commit after `bc4cd36`); reports and
+manifests written before that date reference the old `ncei/code/` paths.
+See `docs/code_archive.md` for the old-path → new-path table.

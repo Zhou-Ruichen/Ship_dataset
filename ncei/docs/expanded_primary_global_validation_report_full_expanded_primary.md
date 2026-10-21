@@ -60,4 +60,4 @@ Output directory: `/mnt/data2/00-Data/ship/ncei/derived/model_validation_1min_fu
 
 ## 6. Recommendation
 
-Expanded-primary sensitivity outputs are available. Run `ncei/code/15_strict_vs_expanded_compare_step08.py` to compute strict-vs-expanded deltas and coverage gain; expanded_primary remains a sensitivity product and does not replace strict_primary as the main global baseline.
+Expanded-primary sensitivity outputs are available. Run `ncei/analysis/15_strict_vs_expanded_compare_step08.py` to compute strict-vs-expanded deltas and coverage gain; expanded_primary remains a sensitivity product and does not replace strict_primary as the main global baseline.

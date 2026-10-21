@@ -33,7 +33,7 @@ interfaces described in the project documents.
 
 ## Python execution convention: run from repo root
 
-All Python scripts in this repo (pipeline steps under `jamstec/multibeam/code/`, future `ncei/code/`, calibration drivers and tests under `_common/`) are invoked from the **repo root** (`/mnt/data2/00-Data/ship/`). That puts cwd on `sys.path`, so any consumer can write `from _common.r2_classifier import classify` with no per-script `sys.path.insert(...)` hack and no `PYTHONPATH` plumbing.
+All Python scripts in this repo (pipeline steps under `jamstec/multibeam/code/` and `ncei/code/`, analyses under `*/analysis/`, calibration drivers and tests under `_common/`) are invoked from the **repo root** (`/mnt/data2/00-Data/ship/`). That puts cwd on `sys.path`, so any consumer can write `from _common.r2_classifier import classify` with no per-script `sys.path.insert(...)` hack and no `PYTHONPATH` plumbing.
 
 The alternative — packaging `_common/` via `pyproject.toml` + `pip install -e .` — was considered and deferred. Current single-user / single-machine setup doesn't benefit from it, and the convention below costs zero infrastructure.
 

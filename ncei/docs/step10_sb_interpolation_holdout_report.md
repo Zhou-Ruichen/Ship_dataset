@@ -1,6 +1,6 @@
 # Step 10 report: interpolation-level singlebeam value test (GMT surface pseudo-outer holdout)
 
-Run date: 2026-09-03. Script: `ncei/code/29_sb_interpolation_holdout.py`.
+Run date: 2026-09-03. Script: `ncei/analysis/29_sb_interpolation_holdout.py`.
 Outputs: `ncei/derived/sb_interpolation_holdout/` (per region × variant: `surface.nc`,
 `gmt_log.json`, `predictions.parquet`; plus `result_table.{json,csv}` and `run_manifest.json`).
 

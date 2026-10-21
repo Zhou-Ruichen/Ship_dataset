@@ -213,7 +213,7 @@ lat_center = -90 + (lat_bin + 0.5) * cell_deg
 
 ---
 
-## Step 06d: `06d_compare_original_vs_qcfiltered_cells.py`
+## Step 06d: `analysis/06d_compare_original_vs_qcfiltered_cells.py`
 
 **做什么**: 对比 QC 前后差异，确认质量改进。
 
@@ -242,7 +242,7 @@ lat_center = -90 + (lat_bin + 0.5) * cell_deg
 
 ---
 
-## Step 08: `08_validate_gridded_products_against_ship_cells.py`
+## Step 08: `analysis/08_validate_gridded_products_against_ship_cells.py`
 
 **做什么**: 用船测 cell 验证全球海底地形模型（gridded bathymetry products）。
 
@@ -343,7 +343,7 @@ lat_center = -90 + (lat_bin + 0.5) * cell_deg
 ### 命令
 
 ```bash
-python3 /mnt/data2/00-Data/ship/jamstec/multibeam/code/08_validate_gridded_products_against_ship_cells.py \
+python3 /mnt/data2/00-Data/ship/jamstec/multibeam/analysis/08_validate_gridded_products_against_ship_cells.py \
   --config /mnt/data2/00-Data/ship/jamstec/multibeam/configs/gridded_products_validation.yaml \
   --overwrite
 ```

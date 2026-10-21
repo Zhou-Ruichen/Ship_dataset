@@ -132,7 +132,7 @@ CUBE 不适合直接作用于本仓库现有 1′ 单元格。当前多数 NCEI 
 | 分支间 1′ 重叠差 | `ncei/code/10_cross_branch_overlap_audit.py`（Step 05B） | have | 已比较 MB、SB、MRAR 的同格差。继续作为来源间诊断，不替代轨线网络。 |
 | 质量等级和单元格权重 | `ncei/code/11_quality_policy_calibration_audit.py`、`12_apply_quality_policy.py`（Step 06A/06B） | partial | 已有等级、权重和主验证资格；权重尚未包含可解释的随水深单波束不确定度。增加元数据完整性和深度项，但先校准，不追认 S-44 等级。 |
 | 来源优先级和严格验证集 | `ncei/code/13_build_validation_cells.py`（Step 07B） | have | 已实施 JAMSTEC MB > NCEI MB > NCEI SB 填空，严格基线只用 MB。轨线调整只能改变 SB 补充或扩展产品，不改严格 MB 基线。 |
-| GEBCO/全球格网残差筛选 | `ncei/code/14-22`（Step 08） | have（禁止项） | 已明确不按模型残差过滤、改级或提升船测。保持 GEBCO 仅作诊断分层，符合本任务边界。 |
+| GEBCO/全球格网残差筛选 | `ncei/analysis/14-22`（Step 08） | have（禁止项） | 已明确不按模型残差过滤、改级或提升船测。保持 GEBCO 仅作诊断分层，符合本任务边界。 |
 | 区域 SB 轨线常数偏移 | `ncei/code/23_estimate_singlebeam_track_bias_1min.py`（Step 09） | partial | 已用严格 MB 优先、否则同格其他 SB 的参考估计偏移，至少 5 个参考格且偏移达到 2 NMAD 才应用；仅六个区域，且不是交叉网络联立解。作为对照臂保留。 |
 | 真正 SB×SB 交叉点与时间 QC | `ncei/code/24_true_crossover_audit.py`（Step 09） | partial | 已在六个区域计算成对交叉差和 nc 时间 QC；未使用深度质量过滤，未与轨线偏移对照，未形成全球网络。应作为网络观测生产者，而不是终点。 |
 | 轨线偏移网络最小二乘 | 建议接在 `ncei/code/24` 后、进入 `ncei/code/12/13` 前 | missing | 按连通分量求常数偏移；MB 支撑分量固定绝对基准，无 MB 分量用偏移和为零并标记为相对解。先在冻结区域与 Step 23 对照，再决定是否全球化。方法依据 GMT（2026）和 Wessel（2010）。 |

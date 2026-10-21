@@ -23,7 +23,7 @@ per-track pipeline by task `.trellis/tasks/05-11-singlebeam-integration`
 | 12 | `code/12_apply_quality_policy.py` (Step 06B) | `derived/quality_flags_1min/cell_quality_flags_1min.parquet` (23.6M cells, 31 cols) |
 | 13 | `code/13_build_validation_cells.py` (Step 07B) | `derived/validation_cells_1min/` (5 final products) |
 
-Run any step from repo root: `python ncei/code/<NN>_*.py --run-label sample|test100|full` (full requires `--confirm-full`).
+Run any production step from repo root: `python ncei/code/<NN>_*.py --run-label sample|test100|full` (full requires `--confirm-full`). Frozen analyses (Step 08 pack 14–22, 27, 29) live under `ncei/analysis/`.
 
 ## Three branches (do not collapse)
 

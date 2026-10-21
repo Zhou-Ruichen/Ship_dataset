@@ -28,16 +28,16 @@ Writes (smoke mode):
   - ncei/output/logs/14_validate_gridded_products_step08_<run-label>.log
 
 Usage:
-    python3 ncei/code/14_validate_gridded_products_step08.py \
+    python3 ncei/analysis/14_validate_gridded_products_step08.py \
       --stage preflight --run-label smoke --overwrite
 
-    python3 ncei/code/14_validate_gridded_products_step08.py \
+    python3 ncei/analysis/14_validate_gridded_products_step08.py \
       --stage smoke --run-label smoke --product-name GEBCO_2024 \
       --product-name ETOPO_2022 --sample-n-cells 2000 --overwrite
 
     # Full production validation is intentionally gated and must not be run
     # without explicit approval:
-    python3 ncei/code/14_validate_gridded_products_step08.py \
+    python3 ncei/analysis/14_validate_gridded_products_step08.py \
       --stage full --run-label full --confirm-full
 """
 
@@ -69,7 +69,7 @@ JAMSTEC_ROOT = REPO_ROOT / "jamstec" / "multibeam"
 VALIDATION_ROOT = ROOT_DIR / "derived" / "validation_cells_1min"
 QUALITY_FLAGS_PATH = ROOT_DIR / "derived" / "quality_flags_1min" / "cell_quality_flags_1min.parquet"
 DEFAULT_CONFIG = JAMSTEC_ROOT / "configs" / "gridded_products_validation.yaml"
-LEGACY_STEP08_PATH = JAMSTEC_ROOT / "code" / "08_validate_gridded_products_against_ship_cells.py"
+LEGACY_STEP08_PATH = JAMSTEC_ROOT / "analysis" / "08_validate_gridded_products_against_ship_cells.py"
 DOCS_DIR = ROOT_DIR / "docs"
 LOG_DIR = ROOT_DIR / "output" / "logs"
 
@@ -1178,7 +1178,7 @@ def make_full_report(metrics: dict[str, pd.DataFrame], diagnostics: pd.DataFrame
             lines.append("Do not proceed to expanded_primary sensitivity validation until the failed strict-primary checks/products are reviewed.")
     else:
         if status == "PASS":
-            lines.append("Expanded-primary sensitivity outputs are available. Run `ncei/code/15_strict_vs_expanded_compare_step08.py` to compute strict-vs-expanded deltas and coverage gain; expanded_primary remains a sensitivity product and does not replace strict_primary as the main global baseline.")
+            lines.append("Expanded-primary sensitivity outputs are available. Run `ncei/analysis/15_strict_vs_expanded_compare_step08.py` to compute strict-vs-expanded deltas and coverage gain; expanded_primary remains a sensitivity product and does not replace strict_primary as the main global baseline.")
         else:
             lines.append("Do not interpret expanded_primary as a sensitivity comparison until the failed expanded-primary checks are resolved.")
     lines.append("")

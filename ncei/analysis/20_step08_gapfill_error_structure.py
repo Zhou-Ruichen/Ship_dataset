@@ -22,8 +22,8 @@ Writes (full mode):
   - ncei/output/logs/20_step08_gapfill_error_structure_<run-label>.log
 
 Usage:
-    python ncei/code/20_step08_gapfill_error_structure.py --check-only
-    python ncei/code/20_step08_gapfill_error_structure.py \
+    python ncei/analysis/20_step08_gapfill_error_structure.py --check-only
+    python ncei/analysis/20_step08_gapfill_error_structure.py \
       --run-label c_gapfill --confirm-analyze --overwrite
 """
 

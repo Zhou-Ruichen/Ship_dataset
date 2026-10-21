@@ -17,7 +17,7 @@ exact exclusion list.
 
 | Tracked | Not tracked (regenerable or external) |
 |---|---|
-| `jamstec/multibeam/code/` — 11-stage pipeline scripts | `**/raw/` (124 GB) — extracted `.dat` files |
+| `jamstec/multibeam/code/` + `jamstec/multibeam/analysis/` — pipeline + analysis scripts | `**/raw/` (124 GB) — extracted `.dat` files |
 | `jamstec/multibeam/configs/` — YAML configs | `**/derived/` (178 GB) — points / cells / models |
 | `jamstec/multibeam/manifests/*.tsv` — small inventories | `**/archive/` (52 GB) — source zip / 7z |
 | `jamstec/multibeam/figures/*.png` — paper figures | `*.parquet`, `*.zip`, `*.7z`, `*.nc`, `*.npz`, ... |
@@ -162,7 +162,8 @@ Use strict multibeam wherever it exists. Elsewhere use
 ship/
 ├── jamstec/                  # All JAMSTEC data (unified 2026-05-16 in PR-A)
 │   ├── multibeam/            # JAMSTEC multibeam pipeline (formerly NCEI_multibeam/)
-│   │   ├── code/             # 11-stage Python + shell scripts (tracked)
+│   │   ├── code/             # Production-chain Python + shell scripts (tracked)
+│   │   ├── analysis/         # One-off analyses: 06d, 08, 09–11, plot_multibeam_figures
 │   │   ├── configs/          # YAML for Step 08 product validation
 │   │   ├── docs/             # Per-stage reports + schemas + cruise inventory
 │   │   ├── figures/          # Paper figures (PNG)
@@ -177,6 +178,7 @@ ship/
 │       └── bathymetry_data/  # 776 cruise zips (same source as multibeam/raw/subzips)
 ├── ncei/                     # NCEI ship-data processing and retained products
 │   ├── code/                 # Standardization, QC, cell, bias, crossover, and disposition stages
+│   ├── analysis/             # Step 08 validation pack (14–22), 27 network bias, 29 holdout
 │   │   └── scs_confirmation/ # Archived SCS/TN352 confirmation chain, not an active pipeline stage
 │   ├── docs/                 # Stage reports and product guidance
 │   ├── manifests/            # Track identity and source records
