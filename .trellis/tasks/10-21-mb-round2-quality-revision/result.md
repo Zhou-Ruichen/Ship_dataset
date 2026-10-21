@@ -460,3 +460,148 @@ F1 记录原生为 null、深度为 NaN，不在有限深度大于 5,000 m 的�
 其机制仍须按文件和舷侧区分，不能把共同的深度尾部解释成统一的左舷故障。
 逐点成员关系和逐文件汇总保存在 `previous_5603_tail_membership` 和
 `previous_5603_tail_membership_summary`，38 格中的点数核对见 `diagnosis_membership_summary`。
+
+## 58 个候选的点级与 90 km 网格交付
+
+输出目录为 `ncei/derived/mb_round2/_runs/20261021_quality_revision/candidate_points/`。
+本次交付日本海 V006、V018、V029，以及保留版 `run_summary.json` 中伊豆
+`begin_depth_measurement_ids` 的 55 个候选。候选位置来自下游两个
+`outputs/20261019-vgg-pick-vs-ship-{japan-sea,izu-bonin}/candidates.csv`，实际完整路径保存在
+`candidates.parquet/.tsv`，下游仓库保持只读。
+
+### 12.5 km 内的点及原始质量状态
+
+按点实际位置的大圆距离取完整 12.5 km 邻域，球面半径为 6371.0088 km。
+保留版 NCEI L1 的 good、flagged、null、unknown 和基础检查未通过点均可进入
+交付，由三列布尔标志分别表达三版选择，不修改深度、位置或时间。
+JAMSTEC 使用 `derived/points_qc`，保留全部点级 QC 字段、实际 `file_id`、
+航次和 06b 文件质量状态，包括文件被 06b 排除的邻域点。
+`selected_jamstec_qcfiltered` 表示原 QC 点检查和 06b 处置共同决定的选择。
+
+| 区域 | 来源 | 唯一点数 | 候选-点行数 |
+|---|---|---:|---:|
+| 日本海 | NCEI round-2 | 0 | 0 |
+| 日本海 | JAMSTEC | 189,263 | 189,263 |
+| 伊豆 | NCEI round-2 | 2,004,200 | 2,016,319 |
+| 伊豆 | JAMSTEC | 27,162,760 | 28,750,520 |
+
+日本海三个候选的 JAMSTEC 点数分别为 V006：48,378，V018：82,465，
+V029：58,420；首批 13 个 NCEI 航次没有落在这三个 12.5 km 邻域内的点。
+伊豆 NCEI 点来自 RR1412：535,238，NT05-06：1,245,762，
+NT05-16：19,404，AII8L18：203,796。
+伊豆 NCEI 唯一点中，1,666,528 点进入三版选择，185,202 点水深缺失并保留为空。
+伊豆 JAMSTEC 唯一点中，26,825,713 点进入 `qcfiltered` 选择；
+337,047 点来自 06b 不纳入主网格的文件，交付仍保留它们及原处置。
+
+三版 NCEI 选点在这 58 个 12.5 km 邻域内相同。JAMSTEC 不提供的原生质量、
+NCEI staging 字段和 UTC 时间留空；strict 层不作为独立来源重复交付。
+
+数据采用唯一点表与候选归属表：
+
+```text
+l1/<region>/<source>/<cruise>/points.parquet
+l1/<region>/<source>/<cruise>/memberships.parquet
+```
+
+两张表通过 `(region, source, cruise, delivery_point_id)` 连接。
+长表会重复保存约 160 万条点记录中的坐标、时间、质量和来源字段；
+归属表只重复候选 ID、点 ID 和距离。全批为 29,356,223 个唯一点、
+30,956,102 条候选-点关系，实际生成 79 个非空来源-航次分区。
+没有点的分区不生成空 parquet，汇总表保留零计数。
+
+### 90 km 范围内完整的 1′ 网格
+
+按格中心的大圆距离取 90 km 邻域，保留内侧 12.5 km，不计算背景统计量。
+采用 `grid_cells.parquet` 与 `memberships.parquet` 保存完整格子并集和候选归属；
+每个来源表都保留缺测行，水深为空、点数为 0，另有 `is_missing`。
+
+| 区域 | 唯一格数 | 候选-格行数 | 区外格数 | 所有来源均缺测的格数 |
+|---|---:|---:|---:|---:|
+| 日本海 | 18,099 | 27,873 | 4,020 | 6,143 |
+| 伊豆 | 65,688 | 470,549 | 17,929 | 4,170 |
+
+各区域 `l2/<region>/` 中分别给出：
+
+- NCEI 三版逐 `(cruise, cell)` 表，每格都列出全部 13 航次；
+  三版合并表仍使用航次中位数的中位数，点数为各航次点数之和。
+- JAMSTEC 的 `cells_1min_qcfiltered`，保留其文件均衡水深估计量、点数和来源字段。
+- 单波束的逐 `(track_id, cell)` 表，来自
+  `ncei/derived/singlebeam/file_cells_1min_final_r2/`，保留全部 `track_disposition`、
+  `track_bias_m`、`bias_applied` 等字段，不额外合并水深。
+- `cell_availability.parquet` 按来源和版本记录缺测，完整格表包括没有任何来源的格子。
+
+本次 90 km 范围中 NCEI 三版相同：
+日本海 922 个有观测格、1,788,993 点；伊豆 11,530 个有观测格、13,967,686 点。
+单波束扫描全部 5,365 个输入文件，113 个文件在交付范围内贡献格子。
+日本海保留 5,417 条测线-格记录，其中 `reject` 399 条；
+伊豆保留 46,390 条，其中 `reject` 6,903 条。未替下游过滤这些处置。
+
+### 点距、完整格计数与溯源核对
+
+58 个候选的 12.5 km 邻域均在原研究区边框内，点表没有区外点。
+球面邻域包围框距边框的最小经纬度余量为日本海 0.03338°、伊豆 0.04587°。
+提取程序不裁剪研究区边框，90 km 表中实际保留的区外格验证了这一读取范围。
+
+7,074 项按候选、来源、航次及版本进行的完整格计数核对全部一致。
+完整格计数用同一选点策略重读 L1，等于 L2 中格中心位于半径内的点数。
+点半径与格中心半径的差异单独保留，没有将两种口径强行设为相等。
+以下为候选关系计数，各行可能重复计算重叠邻域中的同一点：
+
+| 区域与来源 | 点半径选入数 | 格中心半径 L2 点数 | 圈内点/圈外格 | 圈外点/圈内格 |
+|---|---:|---:|---:|---:|
+| 日本海 JAMSTEC qcfiltered | 189,263 | 186,000 | 5,666 | 2,403 |
+| 伊豆 NCEI，三版共同值 | 1,675,209 | 1,674,703 | 13,472 | 12,966 |
+| 伊豆 JAMSTEC qcfiltered | 28,372,839 | 28,365,664 | 801,408 | 794,233 |
+
+逐项满足“点半径数 − L2 数 = 圈内点/圈外格 − 圈外点/圈内格”。
+完整序列见 `l1_l2_radius_count_checks.parquet/.tsv`。
+
+全部 29,356,223 个交付点通过键唯一性、来源行范围和有限经纬度检查；
+243 个持久化点样本、246 条归属关系经过原 L1 数值及独立距离复算。
+16 张 L2 来源表通过完整格集合、逐航次行数和缺测深度/零点数检查。
+1,923 个 NCEI 和 289 个 JAMSTEC 原始文件路径均存在；
+其中分别有 48 和 213 个文件贡献邻域点。
+
+抽查识别出 JAMSTEC 原 `point_index_in_file` 在部分文件中重复。
+例如 `KM17-01_bathymetry_dmo__KM17-01_t.parquet` 的索引 314438
+分别出现在原 QC parquet 行 314438、1314438、2314438，位置不同。
+交付保留原索引，并增加绝对、0 起始的 `qc_row`；
+JAMSTEC 点的唯一溯源键为 `(file_id, qc_row)`。
+NCEI 仍用 `(filekey, file_ordinal, staging_row)`。
+该处理不修改 JAMSTEC 生产数据，实例保存在 `jamstec_repeated_index_example`。
+
+### 入口、清单与执行记录
+
+新增分析入口 `ncei/analysis/seamount_candidate_delivery.py`，
+普通 import 复用 `ncei.swath.quality_revision` 和正式选点函数。
+没有修改 swath 包、下载链、已有产品或下游仓库。
+在 Ship 根目录执行：
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+python -m ncei.analysis.seamount_candidate_delivery \
+  --point-radius-km 12.5 --cell-radius-km 90
+```
+
+完整提取后，对已写入表执行全量键与缺测表核对：
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python - <<'PY'
+from ncei.analysis.seamount_candidate_delivery import verify_delivery
+from ncei.swath.quality_revision import RUN_ROOT
+print(verify_delivery(RUN_ROOT / "candidate_points"))
+PY
+```
+
+当前完整入口已包含这一核对，也支持按路径执行；两种半径均为参数。
+初次抽查因 JAMSTEC 原点索引重复而停止，增加 `qc_row` 后重新提取并完成全部核对。
+本次未提交代码。
+
+交付目录约 1.1 GiB。`README.md` 提供列说明、单位、原始标识、
+两类邻域定义、三版选点含义和实际读取示例。
+`l1_source_files`、`l2_source_files` 给出来源路径、存在性和点数；
+`candidate_point_counts` 与 `candidate_cell_counts` 给出全部候选的来源分层统计；
+区域汇总见 `region_source_point_counts`、`l1_summary.json`、`l2_summary.json`。
+抽样和全量形状核对分别见 `sample_check_summary.json`、
+`delivery_verification.json`、`point_partition_checks`、`grid_table_checks`。
+本次交付没有待完成的数据部分，JAMSTEC 既有重复索引通过 `qc_row` 消除追溯歧义。
