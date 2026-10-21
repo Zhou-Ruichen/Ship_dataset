@@ -61,7 +61,7 @@
 
 ## 4. 阶段 2：L1 点提取
 
-- 提取链：固定版本 mbsystem 环境 `ncei/derived/scs_v2_sealed_confirmation/environments/mbsystem-5.8.3beta16-1d9a52ce/`（gzip 1.14 + mblist 5.8.3beta16，commit 1d9a52ce），命令行与 `ncei/code/scs_confirmation/process_scs_v2_stage_c_source_internal.py` 逐字一致：gunzip -dc → `mblist -I<file> -F58 -P1 -L0 -MA -U3 -OMN#XYzH -X<u3>` 与 `-U0` 同款；U3/U0 连接复用 `scs_v2_stage_c_processing._raw_from_object`（import，未复制）。逐文件命令台账（argv、返回码、stdout/stderr sha256）在各航次 `_work/<filekey>/command_ledger.jsonl`。
+- 提取链：固定版本 mbsystem 环境 `ncei/derived/scs_v2_sealed_confirmation/environments/mbsystem-5.8.3beta16-1d9a52ce/`（gzip 1.14 + mblist 5.8.3beta16，commit 1d9a52ce）：gunzip -dc → `mblist -I<file> -F58 -P1 -L0 -MA -U3/-U0 -OMN#XYzH -X<u3/u0>`；U3/U0 连接用 `_common/mbsystem.py` 的 `raw_from_object`（从已归档的 SCS Stage C 处理模块抽出，命令行语义与封存链逐字一致，见 `docs/code_archive.md`）。逐文件命令台账（argv、返回码、stdout/stderr sha256）在各航次 `_work/<filekey>/command_ledger.jsonl`。
 - L1 列数说明：规范 §1.1 正文写“17 列”，但其列表现有产品实列 16 列（已对 `ncei/derived/multibeam/points_raw/ra028-09__xyz.parquet` 核对）；本阶段按现有产品 16 列 + points_checked 质检 6 列落地，未自行加列。
 - 处理对象：10 个完整 mb58 航次、1,239 个文件，10 进程并行耗时约 3.5 小时。
 

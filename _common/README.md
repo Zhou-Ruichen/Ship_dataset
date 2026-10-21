@@ -17,6 +17,9 @@ reusable algorithm primitives.
 - `r2_classifier.py` — pure R2 classifier (threshold + spatial-spread).
   Routes NCEI tracklines to sb vs mb based on point count + bbox area +
   density. Single entry-point: `classify(lon, lat) -> R2Result`.
+- `mbsystem.py` — mblist U3/U0 listing parser and SQLite join used by the
+  round-2 swath L1 extraction (`ncei/code/34_*`). Entry point:
+  `raw_from_object(object_id, u3_path, u0_path, sqlite_path, raw_path)`.
 - `io_helpers.py` — tiny readers for `.xyz` and `.nc` lon/lat arrays.
 - `r2_calibration.py` — runnable driver that scans
   `ncei/tracklines_{nc,xyz}/`, writes the per-file classification, and

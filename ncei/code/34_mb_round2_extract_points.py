@@ -9,11 +9,10 @@ recorded and skipped. For each target cruise, every file is:
   1. decompressed with the fixed-version gzip from the sealed SCS
      mbsystem environment;
   2. parsed twice by the fixed-version mblist (5.8.3beta16) with the
-     exact command lines used by
-     ncei/code/scs_confirmation/process_scs_v2_stage_c_source_internal.py
-     (-F58 -P1 -L0 -MA -U3/-U0 -OMN#XYzH);
+     command lines -F<fmt> -P1 -L0 -MA -U3/-U0 -OMN#XYzH;
   3. joined U3(left)/U0(good-beams) via
-     scs_v2_stage_c_processing._raw_from_object (imported, not copied);
+     _common.mbsystem.raw_from_object (extracted from the archived SCS
+     Stage C processing module; see docs/code_archive.md);
   4. converted to a per-file staging shard; at cruise end the shards are
      merged into the L1 points_raw contract with native quality and
      staging-record lineage, plus the points_checked QC extension.
@@ -48,7 +47,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
-from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import numpy as np
@@ -57,6 +55,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
+
+from _common.mbsystem import raw_from_object  # noqa: E402
+
 RAW_ROOT = REPO_ROOT / "ncei/raw_round2/platforms_tree"
 COMP_PATH = REPO_ROOT / "ncei/derived/mb_round2/completeness_manifest.parquet"
 FMT_PATH = REPO_ROOT / "ncei/derived/mb_round2/formats_manifest.parquet"
@@ -138,16 +140,6 @@ def resolve_mb_format(rel: Path) -> tuple[int | None, str]:
     return None, f"unknown format: head={head!r}"
 
 
-def _load_scs_processing():
-    sys.path.insert(0, str(REPO_ROOT))
-    mod_path = REPO_ROOT / "ncei/code/scs_confirmation/scs_v2_stage_c_processing.py"
-    spec = spec_from_file_location("scs_v2_stage_c_processing", mod_path)
-    module = module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 def file_key(rel: Path) -> str:
     text = rel.as_posix()
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
@@ -213,7 +205,7 @@ def run_command(argv: list[str], *, stdout_path: Path | None, stderr_path: Path,
     return completed
 
 
-def process_one_file(cruise: str, ordinal: int, rel: Path, scs, mb_format: int, format_note: str) -> dict:
+def process_one_file(cruise: str, ordinal: int, rel: Path, mb_format: int, format_note: str) -> dict:
     """Extract one raw swath file into a staging shard. Returns a manifest row."""
     out_cruise_dir = OUT_ROOT / cruise
     staging_dir = out_cruise_dir / "_staging"
@@ -260,7 +252,7 @@ def process_one_file(cruise: str, ordinal: int, rel: Path, scs, mb_format: int, 
         u0_argv = [str(MBLIST), f"-I{decompressed}", f"-F{mb_format}", "-P1", "-L0", "-MA", "-U0", "-OMN#XYzH", f"-X{u0}"]
         run_command(u3_argv, stdout_path=None, stderr_path=work / "u3.stderr", ledger_path=ledger, object_id=object_id, role="mblist_u3")
         run_command(u0_argv, stdout_path=None, stderr_path=work / "u0.stderr", ledger_path=ledger, object_id=object_id, role="mblist_u0")
-        total_rows, good_rows, error_code, error_detail = scs._raw_from_object(object_id, u3, u0, work / "u0.sqlite", raw_path)
+        total_rows, good_rows, error_code, error_detail = raw_from_object(object_id, u3, u0, work / "u0.sqlite", raw_path)
         if error_code:
             return {
                 "cruise": cruise, "file_ordinal": ordinal, "relpath": rel.as_posix(),
@@ -522,7 +514,6 @@ def main() -> int:
         print("no target cruises")
         return 1
 
-    scs = _load_scs_processing()
     import multiprocessing as mp
 
     for cruise in targets:
@@ -565,14 +556,8 @@ def main() -> int:
     return 0
 
 
-_WRAPPER_SCS = None
-
-
 def _process_wrapper(cruise: str, ordinal: int, rel_str: str, mb_format: int, format_note: str) -> dict:
-    global _WRAPPER_SCS
-    if _WRAPPER_SCS is None:
-        _WRAPPER_SCS = _load_scs_processing()
-    return process_one_file(cruise, ordinal, Path(rel_str), _WRAPPER_SCS, mb_format, format_note)
+    return process_one_file(cruise, ordinal, Path(rel_str), mb_format, format_note)
 
 
 if __name__ == "__main__":

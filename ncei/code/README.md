@@ -21,11 +21,10 @@ each step's report names the script that produced its products.
   (spec §2 product; strict mb wins, non-rejected final sb fills).
 - 32–37: `raw_round2` swath-cruise ingestion (task step15): completeness
   audit (32), format census (33), L1 point extraction via the sealed
-  mbsystem environment's mblist U3/U0 join (34; imports
-  `scs_confirmation/scs_v2_stage_c_processing._raw_from_object`),
-  L2 1-arcmin cells via `07.aggregate_track_file` (35), standalone L3
-  source-manifest fragment (36; production manifest NOT touched), and
-  read-only coverage statistics vs the strict layer (37).
+  mbsystem environment's mblist U3/U0 join (34; the parser/join lives in
+  `_common/mbsystem.py`), L2 1-arcmin cells via `07.aggregate_track_file`
+  (35), standalone L3 source-manifest fragment (36; production manifest
+  NOT touched), and read-only coverage statistics vs the strict layer (37).
 - 38: MBBDB increment download-value ranking and A/B/C order lists
   (task step16; catalog metadata fetch + pure computation). Dependencies:
   pandas/numpy/pyarrow, the local `ncei/manifests/round2_download_log.parquet`
@@ -34,19 +33,12 @@ each step's report names the script that produced its products.
 
 ## Archived one-off chains
 
-`scs_confirmation/` holds the 37-script SCS/TN352 sealed-confirmation audit
-chain (audit_*, verify_*, discover_*, prepare_*, acquire_*, finalize_*,
-freeze_*, authorize_*, process_*, plus the scs_tn352/scs_v2 shared modules).
-It was moved here on 2026-09-02 from the flat `ncei/code/` listing; reports
-and journals written before that date reference the old flat paths
-(`ncei/code/verify_scs_*.py`). Package imports were rewritten to
-`ncei.code.scs_confirmation.*` and repo-root path computation was updated;
-tests live in `_common/tests/scs_confirmation/`. Run any of them from the
-repo root exactly like the pipeline scripts:
-
-```bash
-python ncei/code/scs_confirmation/verify_scs_v2_stage_c_processing.py [args...]
-```
+The 37-script SCS/TN352 sealed-confirmation audit chain that used to live
+in `scs_confirmation/` (with its 14 tests and the Stage C.1 oracle) was
+removed from the working tree on 2026-10-21. See `docs/code_archive.md`
+for the removal index and the old-path resolution table; the mblist
+parsing/join helpers that `34_mb_round2_extract_points.py` still needs
+now live in `_common/mbsystem.py`.
 
 `__init__.py` at this level makes `ncei.code` a package; both conventions
 (file execution and package import) are supported.

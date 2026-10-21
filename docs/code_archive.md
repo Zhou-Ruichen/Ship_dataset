@@ -16,6 +16,16 @@ checkpoint).
 | `jamstec/multibeam/code/05_cleanup.sh` | Delete intermediate `.dat` scratch files after extraction | none (disk cleanup only) | `bc4cd36` |
 | `scripts/refactor/rewrite_paths.py` | One-shot path-string rewriter for the 2026-05 JAMSTEC/NCEI directory rename (task 05-11) | renamed doc/config paths during PR-A/PR-B; no data products | `bc4cd36` |
 | `ncei/code/42_backfill_product_manifests.py` | One-shot backfill of `product_manifest.json` into first-delivery product directories | `ncei/derived/{file_cells_1min_final_r2,points_checked,...}/product_manifest.json` (`backfilled_by` fields); documented in `docs/数据产品规范与下游接入.md` §manifest 回填说明 | `bc4cd36` |
+| `ncei/code/scs_confirmation/` (37 scripts + shared modules + README, ≈21,800 lines) | SCS/TN352 sealed-confirmation audit chain: discovery, acquisition, lineage/QC/consistency audits, Stage C source-internal processing and authorization, and their verifiers | sealed evidence under `ncei/derived/scs_v2_sealed_confirmation/` (63 GB, kept) and `ncei/archive/scs_v2_sealed_confirmation/`; reports in `.trellis/tasks/archive/2026-08/*scs*`; `ncei/docs/step14_next_step_decision_memo.md` records the chain's outcome | `bc4cd36` |
+| `_common/tests/scs_confirmation/` (14 tests + `__init__.py`, ≈3,500 lines) | Unit tests for the SCS confirmation chain above | kept the chain's verifiers honest during 2026-08; no data products | `bc4cd36` |
+| `_common/scs_v2_stage_c1_oracle.py` (166 lines) | Format-58 fixture oracle for Stage C.1 readiness verification | fixture verification records inside `ncei/derived/scs_v2_sealed_confirmation/stage_c_readiness/` | `bc4cd36` |
+| `ncei/configs/scs_*.yaml` (7 files) | Run configuration for the SCS confirmation chain scripts | same sealed evidence as above; no other consumer | `bc4cd36` |
+
+The mblist parsing/join helpers that `ncei/code/34_mb_round2_extract_points.py`
+needed (`_raw_from_object`, `iter_mblist_rows`, `scan_time_contract`,
+`ParquetAppender`, `RAW_SCHEMA`/`RawRow`, and `normalize_longitude` from the
+Stage C.1 contract) were extracted before removal and now live in
+`_common/mbsystem.py` (`raw_from_object`); behaviour is unchanged.
 
 ## Moved paths
 

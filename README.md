@@ -179,7 +179,6 @@ ship/
 ├── ncei/                     # NCEI ship-data processing and retained products
 │   ├── code/                 # Standardization, QC, cell, bias, crossover, and disposition stages
 │   ├── analysis/             # Step 08 validation pack (14–22), 27 network bias, 29 holdout
-│   │   └── scs_confirmation/ # Archived SCS/TN352 confirmation chain, not an active pipeline stage
 │   ├── docs/                 # Stage reports and product guidance
 │   ├── manifests/            # Track identity and source records
 │   └── derived/              # Generated products (ignored)
@@ -282,9 +281,11 @@ Active and queued tasks live under `.trellis/tasks/`. See
 [`AGENTS.md`](AGENTS.md) and [`.trellis/workflow.md`](.trellis/workflow.md)
 for the full workflow.
 
-The completed SCS/TN352 confirmation scripts were moved from the flat
-`ncei/code/` listing to `ncei/code/scs_confirmation/`. They are retained for
-provenance and are not part of the active ingestion pipeline.
+The completed SCS/TN352 confirmation chain was removed from the working
+tree on 2026-10-21 and is indexed in
+[`docs/code_archive.md`](docs/code_archive.md); its sealed environments
+and evidence remain under `ncei/derived/scs_v2_sealed_confirmation/` and
+`ncei/archive/scs_v2_sealed_confirmation/`.
 
 ---
 
