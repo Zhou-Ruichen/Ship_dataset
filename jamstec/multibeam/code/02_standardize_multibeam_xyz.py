@@ -66,6 +66,10 @@ import pyarrow.parquet as pq
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent
+REPO_ROOT = ROOT_DIR.parent.parent  # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import write_errors_tsv  # noqa: E402
 
 CURATED_MANIFEST_PQ = ROOT_DIR / "manifests" / "file_manifest_points_raw.parquet"
 ORIGINAL_MANIFEST_PQ = ROOT_DIR / "manifests" / "file_manifest.parquet"
@@ -600,14 +604,6 @@ def atomic_write_df(
 # ---------------------------------------------------------------------------
 # Write errors TSV
 # ---------------------------------------------------------------------------
-def write_errors_tsv(errors: list[dict], errors_path: Path, logger: logging.Logger):
-    if not errors:
-        return
-    errors_path.parent.mkdir(parents=True, exist_ok=True)
-    df_err = pd.DataFrame(errors)
-    df_err.to_csv(errors_path, sep="\t", index=False)
-    logger.info(f"Wrote {len(errors)} errors to {errors_path}")
-
 
 
 # ---------------------------------------------------------------------------

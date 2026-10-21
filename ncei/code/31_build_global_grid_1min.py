@@ -20,6 +20,9 @@ import pyarrow.dataset as ds
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_text  # noqa: E402
 NCEI_ROOT = REPO_ROOT / "ncei"
 MB_PATH = NCEI_ROOT / "derived/validation_cells_1min/strict_primary_multibeam_cells.parquet"
 SB_ROOT = NCEI_ROOT / "derived/singlebeam/file_cells_1min_final_r2"
@@ -40,13 +43,6 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def atomic_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
 
 
 def load_inputs() -> tuple[pd.DataFrame, pd.DataFrame, list[Path]]:
@@ -196,7 +192,7 @@ def append_report(manifest: dict) -> None:
     for band, count in sorted(manifest["latitude_band_rows"].items(), key=lambda item: int(item[0])):
         lines.append(f"| {band} | {count:,} |")
     lines.extend(["", "All 15 fixed-seed spot checks passed: five strict-MB cells, five overlap cells, and five SB-only cells.", ""])
-    atomic_text(current.rstrip() + "\n" + "\n".join(lines), REPORT_PATH)
+    atomic_write_text(current.rstrip() + "\n" + "\n".join(lines), REPORT_PATH)
 
 
 def main() -> int:
@@ -235,7 +231,7 @@ def main() -> int:
         "gebco": "not used", "regional_mrar": "excluded",
     }
     append_report(manifest)
-    atomic_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", MANIFEST_PATH)
+    atomic_write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", MANIFEST_PATH)
     print(json.dumps(manifest["counts"], sort_keys=True))
     return 0
 

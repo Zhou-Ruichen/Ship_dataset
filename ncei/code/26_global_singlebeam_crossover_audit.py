@@ -4,6 +4,20 @@
 The exact segment-intersection, interpolation, ordering, time-QC, and gap rules
 are imported from step 09 script 24. Existing manifests and derived products are
 read-only. GEBCO and multibeam data are never opened.
+
+Inputs:
+  - ncei/manifests/trackline_source_manifest.parquet (track selection)
+  - ncei/derived/singlebeam/points_raw/*__nc.parquet and *__xyz.parquet
+
+Outputs (ncei/derived/global_sb_crossover_audit/):
+  - crossovers.parquet, pair_stats.parquet, track_stats.parquet,
+    nc_time_qc.parquet, source_pair_summary.parquet,
+    sign_convention_summary.parquet, six_region_spot_check.parquet,
+    tile_summary.parquet, tiles/crossovers_<tile>.parquet
+  - report: ncei/docs/step10_global_sb_products_report.md
+
+Run from repo root:
+    python ncei/code/26_global_singlebeam_crossover_audit.py [--overwrite]
 """
 
 from __future__ import annotations
@@ -23,6 +37,9 @@ import pandas as pd
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
 NCEI_ROOT = REPO_ROOT / "ncei"
 SCRIPT24_PATH = NCEI_ROOT / "code/24_true_crossover_audit.py"
 MANIFEST_PATH = NCEI_ROOT / "manifests/trackline_source_manifest.parquet"
@@ -66,20 +83,6 @@ def logger() -> logging.Logger:
     handler.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
     log.addHandler(handler)
     return log
-
-
-def atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    frame.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, path)
-
-
-def atomic_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
 
 
 def global_tiles(manifest: pd.DataFrame) -> list[tuple[str, tuple[float, float, float, float]]]:
@@ -151,7 +154,7 @@ def process_tile(name: str, bbox, manifest, time_qc, log, allow_split: bool = Tr
             raw, parallel = STEP09.exact_intersections(tracks, ci, cj, log)
             intersecting = len(raw["cx"])
             events, counts = STEP09.orient_and_filter(raw, tracks, bbox, log)
-    atomic_parquet(events, TILE_ROOT / f"crossovers_{name}.parquet")
+    atomic_write_parquet(events, TILE_ROOT / f"crossovers_{name}.parquet")
     return {
         "tile": name, "west": bbox[0], "east": bbox[1], "south": bbox[2], "north": bbox[3],
         "n_tracks_used": tracks.n_tracks_used, "n_nc": tracks.n_nc, "n_xyz": tracks.n_xyz,
@@ -405,7 +408,7 @@ def write_report(events, pair_summary, time_qc, spot, sign, runtime_s) -> None:
         "- `ncei/figures/coverage_global/*.png`",
         "",
     ])
-    atomic_text("\n".join(lines), REPORT_PATH)
+    atomic_write_text("\n".join(lines), REPORT_PATH)
 
 
 def pq_rows(path: Path) -> int:
@@ -450,17 +453,17 @@ def main() -> int:
     qc = pd.DataFrame(list(time_qc.values())).sort_values("track_id").reset_index(drop=True)
     spot = six_region_check(manifest, time_qc, log)
 
-    atomic_parquet(events, OUT_ROOT / "crossovers.parquet")
-    atomic_parquet(pair, OUT_ROOT / "pair_stats.parquet")
-    atomic_parquet(track, OUT_ROOT / "track_stats.parquet")
-    atomic_parquet(qc, OUT_ROOT / "nc_time_qc.parquet")
-    atomic_parquet(summary, OUT_ROOT / "source_pair_summary.parquet")
-    atomic_parquet(sign, OUT_ROOT / "sign_convention_summary.parquet")
-    atomic_parquet(spot, OUT_ROOT / "six_region_spot_check.parquet")
-    atomic_parquet(pd.DataFrame(tile_rows), OUT_ROOT / "tile_summary.parquet")
+    atomic_write_parquet(events, OUT_ROOT / "crossovers.parquet")
+    atomic_write_parquet(pair, OUT_ROOT / "pair_stats.parquet")
+    atomic_write_parquet(track, OUT_ROOT / "track_stats.parquet")
+    atomic_write_parquet(qc, OUT_ROOT / "nc_time_qc.parquet")
+    atomic_write_parquet(summary, OUT_ROOT / "source_pair_summary.parquet")
+    atomic_write_parquet(sign, OUT_ROOT / "sign_convention_summary.parquet")
+    atomic_write_parquet(spot, OUT_ROOT / "six_region_spot_check.parquet")
+    atomic_write_parquet(pd.DataFrame(tile_rows), OUT_ROOT / "tile_summary.parquet")
     runtime_s = time.time() - start
     write_report(events, summary, qc, spot, sign, runtime_s)
-    atomic_text(json.dumps({
+    atomic_write_text(json.dumps({
         "name": "global_singlebeam_crossover_audit",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": f"{sys.executable} ncei/code/26_global_singlebeam_crossover_audit.py --overwrite",

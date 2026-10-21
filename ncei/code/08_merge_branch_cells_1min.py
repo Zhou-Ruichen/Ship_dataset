@@ -59,6 +59,10 @@ import pyarrow.parquet as pq
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent          # ncei/
 REPO_ROOT = ROOT_DIR.parent           # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
+from _common.script_utils import markdown_table, setup_logging  # noqa: E402
 
 MANIFEST_DIR = ROOT_DIR / "manifests"
 DOCS_DIR = ROOT_DIR / "docs"
@@ -203,39 +207,6 @@ def get_output_paths(run_label: str) -> dict[str, Path]:
 
 def repo_path(rel_path: str) -> Path:
     return REPO_ROOT / rel_path
-
-
-def atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, target)
-
-
-def atomic_write_text(text: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, target)
-
-
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("ncei_cells_1min_merge")
-    logger.handlers.clear()
-    logger.setLevel(logging.DEBUG)
-
-    fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    logger.addHandler(fh)
-
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
 
 
 # ---------------------------------------------------------------------------
@@ -632,30 +603,6 @@ def write_partitioned_cells(df: pd.DataFrame, target_dir: Path, *, overwrite: bo
     )
 
 
-def markdown_table(df: pd.DataFrame, max_rows: int = 30) -> list[str]:
-    if df is None or len(df) == 0:
-        return ["_None_", ""]
-    preview = df.head(max_rows).copy()
-    cols = list(preview.columns)
-    lines = [
-        "| " + " | ".join(cols) + " |",
-        "| " + " | ".join(["---"] * len(cols)) + " |",
-    ]
-    for _, row in preview.iterrows():
-        vals = []
-        for col in cols:
-            val = row[col]
-            if isinstance(val, (float, np.floating)):
-                vals.append(f"{val:.4f}" if np.isfinite(val) else "")
-            elif pd.isna(val):
-                vals.append("")
-            else:
-                vals.append(str(val))
-        lines.append("| " + " | ".join(vals) + " |")
-    lines.append("")
-    return lines
-
-
 def percentile_row(branch: str, s: pd.Series, name: str) -> dict:
     q = s.quantile([0.0, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0]) if len(s) else pd.Series([np.nan] * 7)
     return {
@@ -836,7 +783,7 @@ def main() -> int:
     args = parser.parse_args()
 
     paths = get_output_paths(args.run_label)
-    logger = setup_logging(paths["log"])
+    logger = setup_logging(paths["log"], "ncei_cells_1min_merge")
     t0 = datetime.now()
 
     logger.info("=" * 60)

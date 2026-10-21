@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-# 03_recursive_extract.py
-# Recursively extracts sub-zips to raw/dat_by_subzip
-# Handles nested zips by extracting them in-place and deleting the intermediate zip.
+"""Recursively extract nested sub-zips from the JAMSTEC raw archive.
+
+Reads every zip under jamstec/multibeam/raw/subzips, extracts inner zips
+in place (deleting each intermediate zip after extraction), and writes the
+final .dat payload files to jamstec/multibeam/raw/dat_by_subzip. Zips that
+fail extraction are quarantined in jamstec/multibeam/raw/subzips_bad.
+
+Run from repo root:
+    python jamstec/multibeam/code/03_recursive_extract.py
+"""
 
 import os
 import subprocess

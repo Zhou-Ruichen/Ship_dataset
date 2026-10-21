@@ -67,6 +67,10 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
+from _common.singlebeam_bias import nmad  # noqa: E402
 NCEI_ROOT = REPO_ROOT / "ncei"
 MANIFEST_PATH = NCEI_ROOT / "manifests/trackline_source_manifest.parquet"
 POINTS_DIR = NCEI_ROOT / "derived/singlebeam/points_raw"
@@ -148,31 +152,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    frame.to_parquet(tmp, index=False)
-    os.replace(tmp, path)
-
-
-def atomic_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-
-
 def output_paths() -> list[Path]:
     paths = [REPORT_PATH]
     for tile in TILES:
         paths.append(OUTPUT_ROOT / f"track_quality_{tile}.parquet")
         paths.append(STEP23_ROOT / f"controls_mb_sb_reject_{tile}.parquet")
     return paths
-
-
-def nmad(values: np.ndarray) -> float:
-    median = np.median(values)
-    return float(1.4826 * np.median(np.abs(values - median)))
 
 
 def audit_track_universe(script24, manifest: pd.DataFrame) -> pd.DataFrame:
@@ -845,8 +830,8 @@ def main() -> None:
             script23, tile, sb_region, quality, adjusted_table, mb_only_table
         )
         control_stats[tile] = stats
-        atomic_parquet(controls, STEP23_ROOT / f"controls_mb_sb_reject_{tile}.parquet")
-        atomic_parquet(quality, OUTPUT_ROOT / f"track_quality_{tile}.parquet")
+        atomic_write_parquet(controls, STEP23_ROOT / f"controls_mb_sb_reject_{tile}.parquet")
+        atomic_write_parquet(quality, OUTPUT_ROOT / f"track_quality_{tile}.parquet")
         print(
             f"{tile}: {len(quality)} tracks, rejects "
             f"{int(quality['disposition'].eq('reject').sum())}, "
@@ -858,7 +843,7 @@ def main() -> None:
     if quality_all[["region", "track_id"]].duplicated().any():
         raise ValueError("duplicate quality rows")
     report = build_report(quality_all, control_stats, region_nmad, region_events)
-    atomic_text(report, REPORT_PATH)
+    atomic_write_text(report, REPORT_PATH)
     print(
         f"Wrote {len(expected)} Step 28 files: {len(quality_all)} quality rows, "
         f"{int(quality_all['disposition'].eq('reject').sum())} rejected tracks."

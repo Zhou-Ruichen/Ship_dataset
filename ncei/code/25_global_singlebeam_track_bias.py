@@ -24,6 +24,9 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
 NCEI_ROOT = REPO_ROOT / "ncei"
 _BIAS_SPEC = importlib.util.spec_from_file_location(
     "singlebeam_bias", REPO_ROOT / "_common/singlebeam_bias.py"
@@ -66,20 +69,6 @@ def parse_args() -> argparse.Namespace:
         help="replace only this script's global outputs",
     )
     return parser.parse_args()
-
-
-def atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    frame.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, path)
-
-
-def atomic_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
 
 
 def read_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -169,7 +158,7 @@ def write_adjusted_files(biases: pd.DataFrame) -> tuple[int, int]:
             frame["track_bias_m"] = np.nan
             frame["bias_applied"] = False
             frame["bias_n_support"] = 0
-        atomic_parquet(frame, ADJUSTED_ROOT / input_path.name)
+        atomic_write_parquet(frame, ADJUSTED_ROOT / input_path.name)
         n_files += 1
         n_rows += len(frame)
     return n_files, n_rows
@@ -263,7 +252,7 @@ def write_manifest(biases: pd.DataFrame, n_files: int, n_rows: int) -> None:
         "gebco": "not used",
         "randomness": "none",
     }
-    atomic_text(json.dumps(payload, indent=2) + "\n", PRODUCT_MANIFEST_PATH)
+    atomic_write_text(json.dumps(payload, indent=2) + "\n", PRODUCT_MANIFEST_PATH)
 
 
 def main() -> int:
@@ -274,10 +263,10 @@ def main() -> int:
 
     sb, mb, manifest = read_inputs()
     biases = estimate_biases(sb, mb, manifest)
-    atomic_parquet(biases, BIAS_PATH)
+    atomic_write_parquet(biases, BIAS_PATH)
     n_files, n_rows = write_adjusted_files(biases)
     coverage = build_coverage(sb)
-    atomic_parquet(coverage, COVERAGE_STATS_PATH)
+    atomic_write_parquet(coverage, COVERAGE_STATS_PATH)
     write_manifest(biases, n_files, n_rows)
     print(
         f"Wrote {len(biases)} bias rows, {n_files} adjusted files / {n_rows} cells, "

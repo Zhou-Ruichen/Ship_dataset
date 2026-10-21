@@ -50,6 +50,10 @@ import pyarrow.parquet as pq
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent          # ncei/
 REPO_ROOT = ROOT_DIR.parent           # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv  # noqa: E402
+from _common.script_utils import ensure_columns, markdown_table, setup_logging  # noqa: E402
 
 MANIFEST_DIR = ROOT_DIR / "manifests"
 DOCS_DIR = ROOT_DIR / "docs"
@@ -229,46 +233,6 @@ def branch_cells_dir(branch: str) -> Path:
     return BRANCH_DERIVED_DIRS[branch] / "cells_1min"
 
 
-def atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, target)
-
-
-def atomic_write_tsv(df: pd.DataFrame, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    df.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, target)
-
-
-def atomic_write_text(text: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, target)
-
-
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("ncei_quality_policy_calibration")
-    logger.handlers.clear()
-    logger.setLevel(logging.DEBUG)
-
-    fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    logger.addHandler(fh)
-
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
-
-
 # ---------------------------------------------------------------------------
 # Generic statistics / binning helpers
 # ---------------------------------------------------------------------------
@@ -315,38 +279,6 @@ def add_depth_bins(df: pd.DataFrame, depth_col: str) -> pd.DataFrame:
     out["depth_bin_lo"] = bins["lo"]
     out["depth_bin_hi"] = bins["hi"]
     return out
-
-
-def ensure_columns(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
-    out = df.copy()
-    for col in columns:
-        if col not in out.columns:
-            out[col] = pd.NA
-    return out[list(columns)]
-
-
-def markdown_table(df: pd.DataFrame, max_rows: int = 30) -> list[str]:
-    if df is None or len(df) == 0:
-        return ["_None_", ""]
-    preview = df.head(max_rows).copy()
-    cols = list(preview.columns)
-    lines = [
-        "| " + " | ".join(cols) + " |",
-        "| " + " | ".join(["---"] * len(cols)) + " |",
-    ]
-    for _, row in preview.iterrows():
-        vals: list[str] = []
-        for col in cols:
-            val = row[col]
-            if isinstance(val, (float, np.floating)):
-                vals.append(f"{val:.4f}" if np.isfinite(val) else "")
-            elif pd.isna(val):
-                vals.append("")
-            else:
-                vals.append(str(val))
-        lines.append("| " + " | ".join(vals) + " |")
-    lines.append("")
-    return lines
 
 
 def sample_df_by_strata(df: pd.DataFrame, run_label: str, strata_cols: list[str]) -> pd.DataFrame:
@@ -1143,7 +1075,7 @@ def main() -> int:
     args = parser.parse_args()
 
     paths = get_output_paths(args.run_label)
-    logger = setup_logging(paths["log"])
+    logger = setup_logging(paths["log"], "ncei_quality_policy_calibration")
     t0 = datetime.now()
 
     logger.info("=" * 60)

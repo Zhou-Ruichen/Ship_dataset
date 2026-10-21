@@ -48,6 +48,10 @@ import pandas as pd
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent
+REPO_ROOT = ROOT_DIR.parent.parent  # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import write_errors_tsv  # noqa: E402
 
 # Input paths — fixed regardless of run_label
 FC_DIR = ROOT_DIR / "derived" / "file_cells_1min"
@@ -126,15 +130,6 @@ def atomic_write_tsv(df: pd.DataFrame, target: Path, logger: logging.Logger):
     df.to_csv(tmp, sep="\t", index=False)
     os.replace(tmp, target)
     logger.info(f"  Wrote manifest TSV: {target.name}")
-
-
-def write_errors_tsv(errors: list[dict], errors_path: Path, logger: logging.Logger):
-    if not errors:
-        return
-    errors_path.parent.mkdir(parents=True, exist_ok=True)
-    df_err = pd.DataFrame(errors)
-    df_err.to_csv(errors_path, sep="\t", index=False)
-    logger.info(f"Wrote {len(errors)} errors to {errors_path}")
 
 
 # ---------------------------------------------------------------------------

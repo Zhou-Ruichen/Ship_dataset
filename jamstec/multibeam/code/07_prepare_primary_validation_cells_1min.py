@@ -20,6 +20,9 @@ Output:
   - derived/validation_cells_1min/sensitivity_original_ship_cells_1min.parquet
   - derived/validation_cells_1min/validation_cells_1min_summary.parquet
   - derived/validation_cells_1min/validation_cells_1min_report.md
+
+Run from repo root:
+    python jamstec/multibeam/code/07_prepare_primary_validation_cells_1min.py [--overwrite]
 """
 
 import argparse
@@ -34,6 +37,10 @@ import numpy as np
 import pandas as pd
 
 PROJECT = Path(__file__).resolve().parent.parent
+REPO_ROOT = PROJECT.parent.parent  # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv  # noqa: E402
 
 INPUTS = {
     "qcfiltered_cells": PROJECT / "derived" / "cells_1min_qcfiltered" / "cells.parquet",
@@ -60,27 +67,6 @@ TSV_MAX_ROWS = 10000
 # ---------------------------------------------------------------------------
 # Atomic write helpers
 # ---------------------------------------------------------------------------
-
-def atomic_write_parquet(df: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, path)
-
-
-def atomic_write_tsv(df: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    df.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, path)
-
-
-def atomic_write_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(tmp, path)
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +443,7 @@ def generate_report(data: dict, summary: pd.DataFrame, elapsed: float) -> str:
     lines.append("")
 
     # ── Section 12 ────────────────────────────────────────────────────────
-    lines.append("## 12. 是否可以进入 08_validate_gridded_products_against_ship_cells.py")
+    lines.append("## 12. 是否可以进入 analysis/08_validate_gridded_products_against_ship_cells.py")
     lines.append("")
     lines.append("**✅ 可以。** Primary validation table 已就绪：")
     lines.append(f"- {n_primary:,} primary validation cells")

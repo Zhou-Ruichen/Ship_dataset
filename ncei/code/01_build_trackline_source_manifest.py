@@ -42,15 +42,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from _common.r2_classifier import (
+SCRIPT_DIR = Path(__file__).parent.resolve()
+ROOT_DIR = SCRIPT_DIR.parent
+REPO_ROOT = ROOT_DIR.parent  # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv  # noqa: E402
+from _common.r2_classifier import (  # noqa: E402
     R2_BBOX_KM2_CUTOFF,
     R2_DENSITY_PPKM2_CUTOFF,
     R2_HARD_SB_POINTS,
     classify_from_arrays,
 )
-
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
+from _common.script_utils import setup_logging  # noqa: E402
 
 NC_DIR = ROOT_DIR / "tracklines_nc"
 XYZ_DIR = ROOT_DIR / "tracklines_xyz"
@@ -77,46 +81,6 @@ def get_output_paths(run_label: str) -> dict[str, Path]:
         "log": LOG_DIR / f"01_build_trackline_source_manifest{suffix}.log",
         "errors_tsv": LOG_DIR / f"01_build_trackline_source_manifest_errors{suffix}.tsv",
     }
-
-
-def atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, target)
-
-
-def atomic_write_tsv(df: pd.DataFrame, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    df.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, target)
-
-
-def atomic_write_text(text: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, target)
-
-
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("ncei_trackline_manifest")
-    logger.handlers.clear()
-    logger.setLevel(logging.DEBUG)
-
-    fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    logger.addHandler(fh)
-
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
 
 
 # ---------------------------------------------------------------------------
@@ -481,7 +445,7 @@ def main() -> int:
     args = parser.parse_args()
 
     paths = get_output_paths(args.run_label)
-    logger = setup_logging(paths["log"])
+    logger = setup_logging(paths["log"], "ncei_trackline_manifest")
     t0 = datetime.now()
 
     logger.info("=" * 60)

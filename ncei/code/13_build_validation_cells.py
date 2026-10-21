@@ -40,6 +40,10 @@ import pyarrow.parquet as pq
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent          # ncei/
 REPO_ROOT = ROOT_DIR.parent           # ship/
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
+from _common.script_utils import ensure_columns, setup_logging  # noqa: E402
 
 DERIVED_DIR = ROOT_DIR / "derived"
 DOCS_DIR = ROOT_DIR / "docs"
@@ -240,46 +244,8 @@ def output_paths(run_label: str) -> dict[str, Path]:
     }
 
 
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("ncei_build_validation_cells")
-    logger.handlers.clear()
-    logger.setLevel(logging.DEBUG)
-
-    fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    logger.addHandler(fh)
-
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
-
-
 def existing_outputs(paths: dict[str, Path]) -> list[Path]:
     return [p for k, p in paths.items() if k not in {"root", "log"} and p.exists()]
-
-
-def atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    if tmp.exists():
-        if tmp.is_dir():
-            shutil.rmtree(tmp)
-        else:
-            tmp.unlink()
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, target)
-
-
-def atomic_write_text(text: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, target)
 
 
 def write_hive_dataset(df: pd.DataFrame, target: Path, partition_cols: list[str], *, overwrite: bool) -> None:
@@ -359,14 +325,6 @@ def sample_by_lat_band(df: pd.DataFrame, label: str, run_label: str) -> pd.DataF
         rest = df.loc[~df["cell_id"].isin(sampled["cell_id"])].sort_values("cell_id")
         sampled = pd.concat([sampled, rest.head(target - len(sampled))], ignore_index=True)
     return sampled.reset_index(drop=True)
-
-
-def ensure_columns(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
-    out = df.copy()
-    for col in columns:
-        if col not in out.columns:
-            out[col] = pd.NA
-    return out[list(columns)]
 
 
 def normalize_common_dtypes(df: pd.DataFrame) -> pd.DataFrame:
@@ -909,7 +867,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     paths = output_paths(args.run_label)
-    logger = setup_logging(paths["log"])
+    logger = setup_logging(paths["log"], "ncei_build_validation_cells")
     t0 = datetime.now()
 
     logger.info("=" * 72)

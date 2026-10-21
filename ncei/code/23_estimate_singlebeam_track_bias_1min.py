@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import sys
 from pathlib import Path
 
 import netCDF4
@@ -24,6 +25,9 @@ import pyarrow.parquet as pq
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
 NCEI_ROOT = REPO_ROOT / "ncei"
 _BIAS_SPEC = importlib.util.spec_from_file_location(
     "singlebeam_bias", REPO_ROOT / "_common/singlebeam_bias.py"
@@ -73,20 +77,6 @@ def parse_args() -> argparse.Namespace:
         help="Replace this script's existing D1 outputs. Without it, a complete prior run is left unchanged.",
     )
     return parser.parse_args()
-
-
-def atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    frame.to_parquet(tmp, index=False)
-    os.replace(tmp, path)
-
-
-def atomic_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
 
 
 def output_paths() -> list[Path]:
@@ -538,9 +528,9 @@ def main() -> None:
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     for (region, arm), frame in controls.items():
-        atomic_parquet(frame[CONTROL_COLUMNS], OUTPUT_ROOT / f"controls_{arm}_{region}.parquet")
-    atomic_parquet(summary, OUTPUT_ROOT / "track_bias_summary.parquet")
-    atomic_text(report, REPORT_PATH)
+        atomic_write_parquet(frame[CONTROL_COLUMNS], OUTPUT_ROOT / f"controls_{arm}_{region}.parquet")
+    atomic_write_parquet(summary, OUTPUT_ROOT / "track_bias_summary.parquet")
+    atomic_write_text(report, REPORT_PATH)
     print(f"Wrote {len(expected)} D1 files for {len(TILES)} frozen regions.")
 
 

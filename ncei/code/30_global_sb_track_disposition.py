@@ -23,6 +23,10 @@ import pyarrow.dataset as ds
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet, atomic_write_text  # noqa: E402
+from _common.singlebeam_bias import nmad  # noqa: E402
 NCEI_ROOT = REPO_ROOT / "ncei"
 MANIFEST_PATH = NCEI_ROOT / "manifests/trackline_source_manifest.parquet"
 BIAS_PATH = NCEI_ROOT / "derived/sb_track_bias_global/track_bias_summary.parquet"
@@ -74,32 +78,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def atomic_parquet(frame: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    frame.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, path)
-
-
-def atomic_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-
-
 def manifest_sha256() -> str:
     digest = hashlib.sha256()
     with MANIFEST_PATH.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def nmad(values: pd.Series) -> float:
-    array = values.to_numpy(dtype=float)
-    center = np.median(array)
-    return float(1.4826 * np.median(np.abs(array - center)))
 
 
 def load_track_universe() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -288,7 +272,7 @@ def write_final_files(quality: pd.DataFrame) -> tuple[int, int, int]:
             frame["median_depth_m"] = frame["median_depth_m"] + float(frame["track_bias_m"].iloc[0])
             n_reverted += len(frame)
         frame["track_disposition"] = disposition
-        atomic_parquet(frame, FINAL_ROOT / path.name)
+        atomic_write_parquet(frame, FINAL_ROOT / path.name)
         n_files += 1
         n_rows += len(frame)
     return n_files, n_rows, n_reverted
@@ -315,7 +299,7 @@ def build_controls() -> dict[str, dict[str, int]]:
         sb["control_source"] = "singlebeam_final"
         mb = pd.read_parquet(CONTROL_ROOT / f"controls_mb_only_{tile}.parquet")[CONTROL_COLUMNS]
         controls = SCRIPT23.combine_controls(mb, sb[CONTROL_COLUMNS])
-        atomic_parquet(controls, CONTROL_ROOT / f"controls_mb_sb_final_{tile}.parquet")
+        atomic_write_parquet(controls, CONTROL_ROOT / f"controls_mb_sb_final_{tile}.parquet")
         stats[tile] = {"mb_rows": len(mb), "sb_rows": len(sb), "total_rows": len(controls)}
     return stats
 
@@ -397,7 +381,7 @@ def write_report(quality: pd.DataFrame, comparison: pd.DataFrame, controls: dict
         "有严格多波束格子的地方使用严格多波束；其余位置读取 `ncei/derived/singlebeam/file_cells_1min_final_r2/`，并过滤 `track_disposition != 'reject'`。",
         "最终格子产品没有删除任何输入行。`correct` 保留偏差改正，`revert_to_raw` 恢复原始深度，其他处置保留进入本阶段时的适用值；被拒航迹仍在产品内，供审计和重新判断。",
     ])
-    atomic_text("\n".join(lines) + "\n", REPORT_PATH)
+    atomic_write_text("\n".join(lines) + "\n", REPORT_PATH)
 
 
 def main() -> int:
@@ -415,11 +399,11 @@ def main() -> int:
     if not args.overwrite and any([QUALITY_PATH.exists(), PRODUCT_MANIFEST_PATH.exists(), REPORT_PATH.exists(), FINAL_ROOT.exists()]):
         raise SystemExit("Partial global SB final r2 outputs exist; inspect and rerun with --overwrite.")
     quality, reference = build_quality()
-    atomic_parquet(quality, QUALITY_PATH)
+    atomic_write_parquet(quality, QUALITY_PATH)
     n_files, n_rows, n_reverted = write_final_files(quality)
     controls = build_controls()
     comparison = validate_regions(quality, reference)
-    atomic_parquet(comparison, QUALITY_ROOT / "six_region_validation.parquet")
+    atomic_write_parquet(comparison, QUALITY_ROOT / "six_region_validation.parquet")
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     manifest = {
         "name": "global_singlebeam_final_r2", "round": "r2", "created_at": created_at,
@@ -432,7 +416,7 @@ def main() -> int:
         "depth_unit": "m, positive down", "randomness": "none", "gebco": "not used", "regional_mrar": "excluded",
     }
     write_report(quality, comparison, controls, manifest)
-    atomic_text(json.dumps(manifest, indent=2) + "\n", PRODUCT_MANIFEST_PATH)
+    atomic_write_text(json.dumps(manifest, indent=2) + "\n", PRODUCT_MANIFEST_PATH)
     print(f"Wrote {len(quality)} quality rows, {n_files} final files / {n_rows} cells; named validation passed.")
     return 0
 

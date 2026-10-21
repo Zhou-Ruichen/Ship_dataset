@@ -75,6 +75,11 @@ import pandas as pd
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent.parent.resolve()
+sys.path.insert(0, str(ROOT_DIR))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet  # noqa: E402
+from _common.script_utils import setup_logging  # noqa: E402
+from _common.singlebeam_bias import nmad  # noqa: E402
 
 MANIFEST_PATH = ROOT_DIR / "ncei" / "manifests" / "trackline_source_manifest.parquet"
 POINTS_DIR = ROOT_DIR / "ncei" / "derived" / "singlebeam" / "points_raw"
@@ -155,39 +160,6 @@ EVENT_COLUMNS = [
     "time_second",
     "ordering_basis",
 ]
-
-
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("ncei_true_crossover_audit")
-    logger.handlers.clear()
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(message)s"))
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-    return logger
-
-
-def atomic_write_parquet(df: pd.DataFrame, target: Path, logger: logging.Logger) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, target)
-    logger.info("wrote %s (%d rows)", target, len(df))
-
-
-def nmad(x) -> float:
-    """1.4826 * median(|x - median(x)|); NaN for empty input."""
-    x = np.asarray(x, dtype=np.float64)
-    if len(x) == 0:
-        return float("nan")
-    med = np.median(x)
-    return float(1.4826 * np.median(np.abs(x - med)))
 
 
 def verify_region_bbox(tile: str, bbox: tuple[float, float, float, float], logger: logging.Logger) -> bool:
@@ -1036,7 +1008,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     t_start = _time.time()
-    logger = setup_logging(LOG_DIR / "24_true_crossover_audit.log")
+    logger = setup_logging(LOG_DIR / "24_true_crossover_audit.log", "ncei_true_crossover_audit")
     logger.info("true crossover audit start (overwrite=%s)", args.overwrite)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
