@@ -66,3 +66,5 @@ Dependency tracing corrected the inventory's analysis labels: ncei 12 reads 10/1
 - Duplicated helpers (atomic writes, logging setup, markdown tables, error TSV, sha256, nmad) move into `_common/` for production scripts only, identical bodies only. Analysis scripts are moved, not edited. cell_id implementations are reported, not unified.
 
 Owners: E1 (moves, archive, doc references), E2 (helper consolidation in production scripts), D (downloader, starts when an astra slot frees). Phase 3b after R1 lands: decouple 34 from the SCS module, archive the SCS chain, consolidate helpers in R1's files. Phase 3c: README and docs overview.
+- 2026-10-21: E1 dispatched as paseo agent adaa7916 (pi glm-5.3), E2 as b9d19611 (pi glm-5.3). D waits for an astra slot (R2 still running).
+- 2026-10-21: D dispatched as paseo agent 81e077a3 (codex gpt-6-astra, full-access) after R2 finished.
