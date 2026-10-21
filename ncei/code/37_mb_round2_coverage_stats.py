@@ -21,7 +21,7 @@ Run from repo root:
 
 from __future__ import annotations
 
-import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +29,10 @@ import pandas as pd
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet  # noqa: E402
+
 OUT_ROOT = REPO_ROOT / "ncei/derived/mb_round2"
 STRICT_PATH = REPO_ROOT / "ncei/derived/validation_cells_1min/strict_primary_multibeam_cells.parquet"
 REGIONS_YAML = Path("/mnt/data2/06-Projects/15-swot_feature_physics_bathy/configs/feasibility/final_data_round.yaml")
@@ -100,9 +104,7 @@ def main() -> int:
 
     out = pd.DataFrame(rows)
     out_path = OUT_ROOT / "coverage_vs_strict_primary.parquet"
-    tmp = out_path.with_suffix(".parquet.tmp")
-    out.to_parquet(tmp, index=False)
-    os.replace(tmp, out_path)
+    atomic_write_parquet(out, out_path)
 
     print("== per-cruise unique cells ==")
     print(per_track_counts.to_string())

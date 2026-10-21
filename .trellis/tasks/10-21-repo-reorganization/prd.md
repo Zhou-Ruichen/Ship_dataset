@@ -76,3 +76,18 @@ Owners: E1 (moves, archive, doc references), E2 (helper consolidation in product
 - 2026-10-21 E2 done: `_common/file_io.py` (atomic writers, write_errors_tsv) and `_common/script_utils.py` (setup_logging, markdown_table, ensure_columns); 26 production scripts -904/+195 lines; repo-root bootstrap added to every script importing `_common`; local copies kept where behaviour differs (jamstec setup_logging, several markdown_table, compute_lat_band dtypes, logger-aware writers). cell_id: jamstec 04a and ncei 07 share the `1min_<lat>_<lon>` string; analysis 29 uses its own integer key. Main agent: 49 tests OK, 31 scripts isolated-import OK from /tmp, script 40's borrowed functions present.
 - 2026-10-21 E3 done: `_common/mbsystem.py` (451 lines: mblist adapter, raw_from_object, raw schema) replaces 34's importlib load of the SCS module; 62 tracked files removed (SCS chain 21,824 lines, its tests 3,500, oracle 166, 7 SCS configs) and indexed in docs/code_archive.md. HNRO05RR (mb41) and AR40 (mb58) re-extracted in /tmp identical to production staging.
 - Next: E2 round-2 helper pass (07, 34-37, 43) after R1's union run; phase 3c docs by E1.
+- 2026-10-21: E1 re-prompted for phase 3c (README, AGENTS.md execution convention and --help rule, ncei/code/README.md stage index, ncei/docs/README.md status grouping, _common/README.md). E2's round-2 helper pass (07, 34-37, 43) waits until R1's union run finishes, so code under a running job does not change.
+
+## Processing packages (user request 2026-10-21: "做成下载器和计算器的形式，不再是满屏的脚本")
+
+Decision: turn the NCEI processing scripts into packages run like the downloader (`python -m ncei.<package> <command>`), one package per data line:
+- trackline chain (stages 01-31 production, plus 39/40 MGD77T static) -> e.g. `ncei/trackline/`;
+- round-2 swath chain (33-37, 43) -> e.g. `ncei/swath/`, with one command that processes a list of downloaded cruises end to end;
+- 38 (MBBDB value ranking) is download planning -> a command in `ncei/download/`;
+- 32, 41_gzip_preflight, 41_tier_a_gapfill, download_tier_a_round2 are already replaced by `ncei.download` and are archived at the switchover.
+Reasons: one entry per data line; `python -m` puts the repo root on sys.path, so the per-script sys.path bootstrap and the importlib-by-file-path loading (35, 40, 43 load 01/03/05/07) become ordinary imports; the swath chain has immediate use (see below).
+Not packaged: JAMSTEC multibeam (chain finished 2026-05, no new data) and `*/analysis/` (frozen one-off results).
+Sequencing: starts after E2's round-2 helper pass (E2 owns 07, 34-37, 43 now). Owner: one gpt-6-astra agent for both packages (they share 07).
+
+Finding 2026-10-21: production L1 under `ncei/derived/mb_round2/<cruise>/points_checked/` exists for 94 cruises (13 first batch + 81 tier-A); none carries `native_quality_state` (old 34). 56 have L2. All 94 keep `_staging/`. The isolated quality revision covered only the 13. Next after packaging: rebuild all 94 with `basic_native_good` into a new round directory (no overwrite, not merged into production).
+- 2026-10-21 E2 round-2 pass done: 07/35/36/37 use _common writers/logging (07 -70 lines); 34 unchanged; 43 split rebuild_cruise, quality_tables, inspect_izu_sampling along call boundaries (local nmad kept: it drops NaN first). Main agent: 5 test modules OK, 5 scripts isolated-import OK. Downstream repos reference ship code paths only in prose (15-swot 69_ship_crossover_noise.py docstring, 05-SWOT2TOPO docs, 12-ggm_scs provenance notes); no runtime imports.

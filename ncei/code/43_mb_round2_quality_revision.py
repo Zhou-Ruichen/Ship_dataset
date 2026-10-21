@@ -1,9 +1,31 @@
 #!/usr/bin/env python3
 """Rebuild round-2 L1/L2 and source-separated coverage in an isolated run.
 
-Run from the repository root. Existing staging, production outputs, and
-historical runs are read-only. NCEI combined depth remains the median of
-cruise-cell medians, not a point-weighted statistic.
+Re-extracts each cruise's L1 (via 34_mb_round2_extract_points), aggregates
+L2 1-arcmin cells (via 07_aggregate_file_cells_1min), and compares coverage,
+residuals, and candidate-seamount geometry against the JAMSTEC qcfiltered
+cells and the strict primary layer. All outputs stay inside the isolated
+run directory; production and historical runs are read-only.
+
+Inputs (read-only):
+  - ncei/derived/mb_round2/<CRUISE>/ (staging + extraction manifests from stage 2)
+  - jamstec/multibeam/derived/cells_1min_qcfiltered/cells.parquet
+  - ncei/derived/validation_cells_1min/strict_primary_multibeam_cells.parquet
+  - candidate lists under /mnt/data2/06-Projects/14-seamounts/outputs
+  - optional record-list parquets (--exclude-records/--diagnosis-records)
+
+Outputs (under ncei/derived/mb_round2/_runs/20261021_quality_revision/):
+  - <CRUISE>/ L1+L2 rebuilds, run_status, l2_file_cells_manifest,
+    source_manifest_fragment, file/cruise quality summaries,
+    combined_ncei_cells, per-region residual and candidate tables,
+    run_parameters.json, run_summary.json
+
+Run from repo root:
+    python ncei/code/43_mb_round2_quality_revision.py [--resume] [--workers N]
+        [--exclude-records P] [--diagnosis-records P] [--baseline-diagnosis-records P]
+
+NCEI combined depth remains the median of cruise-cell medians, not a
+point-weighted statistic.
 """
 
 from __future__ import annotations
@@ -76,14 +98,10 @@ def read_record_list(path: Path | None) -> pd.DataFrame | None:
     return records
 
 
-def rebuild_cruise(task: tuple) -> dict:
-    cruise, run, l1_root, exclusion_path, resume = task
-    pa.set_cpu_count(1)
-    pa.set_io_thread_count(1)
+def rebuild_l1(cruise: str, run: Path, l1_root: Path, resume: bool) -> tuple[dict, pd.DataFrame]:
+    """Rebuild (or resume) one cruise's L1 extraction and validate it."""
     extract = load_module("34_mb_round2_extract_points.py")
-    aggregate = load_module("07_aggregate_file_cells_1min.py")
     sources = load_module("36_mb_round2_source_manifest_fragment.py")
-    output = run / cruise
     l1_dir = l1_root / cruise
     summary_path = l1_dir / "extraction_summary.json"
     if (resume or l1_root != run) and summary_path.exists():
@@ -103,20 +121,34 @@ def rebuild_cruise(task: tuple) -> dict:
         raise ValueError(f"{cruise}: L1 row count differs from its merge summary")
     if "native_quality_state" not in pq.read_schema(checked).names:
         raise ValueError(f"{cruise}: L1 has not been rebuilt with native quality")
-    exclusions = None
-    if exclusion_path is not None:
-        exclusions = read_record_list(exclusion_path)
-        exclusions = exclusions[exclusions["filekey"].isin(manifest["filekey"])].copy()
-        keys = ["filekey", "file_ordinal", "staging_row"]
-        exclusions = exclusions[keys].drop_duplicates()
-        limits = manifest[["filekey", "file_ordinal", "n_rows"]]
-        located = exclusions.merge(limits, on=["filekey", "file_ordinal"], how="left", validate="many_to_one")
-        if located["n_rows"].isna().any() or not (
-            (located["staging_row"] >= 0) & (located["staging_row"] < located["n_rows"])
-        ).all():
-            raise ValueError(f"{cruise}: exclusion keys are not in the staging inputs")
-    l2_path = output / "file_cells_1min" / checked.name
-    agg_summary_path = output / "aggregation_summary.json"
+    return summary, manifest
+
+
+def locate_exclusions(cruise: str, manifest: pd.DataFrame, exclusion_path: Path | None) -> pd.DataFrame | None:
+    """Load the record list, restrict it to the cruise's files, and verify every key exists."""
+    if exclusion_path is None:
+        return None
+    exclusions = read_record_list(exclusion_path)
+    exclusions = exclusions[exclusions["filekey"].isin(manifest["filekey"])].copy()
+    keys = ["filekey", "file_ordinal", "staging_row"]
+    exclusions = exclusions[keys].drop_duplicates()
+    limits = manifest[["filekey", "file_ordinal", "n_rows"]]
+    located = exclusions.merge(limits, on=["filekey", "file_ordinal"], how="left", validate="many_to_one")
+    if located["n_rows"].isna().any() or not (
+        (located["staging_row"] >= 0) & (located["staging_row"] < located["n_rows"])
+    ).all():
+        raise ValueError(f"{cruise}: exclusion keys are not in the staging inputs")
+    return exclusions
+
+
+def aggregate_l2(
+    cruise: str, run: Path, l1_root: Path, l1_dir: Path, checked: Path,
+    summary: dict, exclusions: pd.DataFrame | None, resume: bool,
+) -> tuple[Path, dict]:
+    """Aggregate (or reuse) one cruise's L2 cells with the shared aggregator."""
+    aggregate = load_module("07_aggregate_file_cells_1min.py")
+    l2_path = run / cruise / "file_cells_1min" / checked.name
+    agg_summary_path = run / cruise / "aggregation_summary.json"
     if resume and agg_summary_path.exists():
         result = json.loads(agg_summary_path.read_text())
     elif l1_root != run and (exclusions is None or exclusions.empty):
@@ -142,13 +174,27 @@ def rebuild_cruise(task: tuple) -> dict:
             excluded_records=exclusions,
         )
         write_json(result, agg_summary_path)
+    return l2_path, result
+
+
+def rebuild_cruise(task: tuple) -> dict:
+    """Worker entry: rebuild L1 + L2 for one cruise and cross-check the counts."""
+    cruise, run, l1_root, exclusion_path, resume = task
+    pa.set_cpu_count(1)
+    pa.set_io_thread_count(1)
+    summary, manifest = rebuild_l1(cruise, run, l1_root, resume)
+    checked = ROOT / summary["points_checked_path"]
+    exclusions = locate_exclusions(cruise, manifest, exclusion_path)
+    l2_path, result = aggregate_l2(
+        cruise, run, l1_root, l1_root / cruise, checked, summary, exclusions, resume
+    )
     expected = summary["n_selected_basic_native_good"] - result["n_excluded_selected_records"]
     l2_points = int(pd.read_parquet(l2_path, columns=["n_points_pass"])["n_points_pass"].sum())
     if expected != result["n_selected"] or expected != l2_points:
         raise AssertionError(f"{cruise}: L1 selected {expected} != L2 {l2_points}")
     print(f"{cruise}: basic={summary['n_pass_basic']:,}; selected={expected:,}; cells={result['n_cells']:,}", flush=True)
     return {
-        **summary, **result, "cruise": cruise, "l1_dir": str(l1_dir.relative_to(ROOT)),
+        **summary, **result, "cruise": cruise, "l1_dir": str((l1_root / cruise).relative_to(ROOT)),
         "n_input_files": len(manifest), "status": "completed",
     }
 
@@ -330,12 +376,8 @@ def nmad(values: pd.Series) -> float:
     return float(1.4826 * np.median(np.abs(values.to_numpy() - median)))
 
 
-def quality_tables(
-    run: Path, cruises: list[str], l1_root: Path, exclusion_path: Path | None,
-    diagnosis_path: Path | None,
-    baseline_diagnosis_path: Path | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Write descriptive file/cruise quality tables without threshold labels."""
+def reference_residuals(run: Path, cruises: list[str]) -> tuple[pd.DataFrame, dict]:
+    """Join L2 cruise cells with JAMSTEC/strict depths and summarize per cruise."""
     l2 = read_cells(run, cruises)
     jam = pd.read_parquet(JAM, columns=["cell_id", "median_depth_file_balanced"]).rename(
         columns={"median_depth_file_balanced": "jam_depth_m"}
@@ -356,114 +398,173 @@ def quality_tables(
             residual_rows[cruise][f"{prefix}_n"] = len(values)
             residual_rows[cruise][f"{prefix}_median_m"] = float(values.median()) if len(values) else np.nan
             residual_rows[cruise][f"{prefix}_nmad_m"] = nmad(values)
+    return l2, joined, residual_rows
 
+
+def replay_file_selection(
+    checked: Path, cruise_excluded: pd.DataFrame | None,
+) -> tuple[dict, dict]:
+    """Replay the point selection over L1 and collect per-file cell sets and counts."""
+    aggregate = load_module("07_aggregate_file_cells_1min.py")
+    file_cells = {}
+    file_selected = {}
+    pf = pq.ParquetFile(checked)
+    for batch in pf.iter_batches(
+        batch_size=500_000,
+        columns=["filekey", "file_ordinal", "staging_row", "lon", "lat",
+                 "depth_m_positive_down", "point_check_pass_basic", "native_quality_state"],
+    ):
+        frame = batch.to_pandas()
+        mask = aggregate.point_selection_mask(frame, SELECTION_POLICY)
+        mask &= ~aggregate.record_exclusion_mask(frame, cruise_excluded)
+        selected = frame[mask].copy()
+        if selected.empty:
+            continue
+        selected["cell_key"] = (
+            np.floor((selected["lat"].to_numpy() + 90) * 60).astype(np.int64) * 21601
+            + np.floor((selected["lon"].to_numpy() + 180) * 60).astype(np.int64)
+        )
+        for (filekey, ordinal), group in selected.groupby(["filekey", "file_ordinal"]):
+            file_cells[(filekey, ordinal)] = file_cells.get((filekey, ordinal), set())
+            file_cells[(filekey, ordinal)].update(group["cell_key"].unique())
+            file_selected[(filekey, ordinal)] = file_selected.get((filekey, ordinal), 0) + len(group)
+    return file_cells, file_selected
+
+
+def file_quality_rows(
+    cruise: str, manifest: pd.DataFrame, file_cells: dict, file_selected: dict,
+    residual: dict, diagnosis_counts: dict, diagnosed_is_none: bool,
+) -> list[dict]:
+    """Build one descriptive row per input file without threshold labels."""
+    rows = []
+    for record in manifest.itertuples():
+        n_rows = int(record.n_rows)
+        counts = {
+            "n_good": int(record.n_good or 0), "n_flagged": int(record.n_flagged or 0),
+            "n_null": int(record.n_null or 0), "n_unknown": int(getattr(record, "n_unknown", 0) or 0),
+            "n_pass_basic": int(getattr(record, "n_pass_basic", 0) or 0),
+            "n_selected": file_selected.get((record.filekey, record.file_ordinal), 0),
+        }
+        before_exclusion = int(record.n_selected_basic_native_good)
+        denom = n_rows if n_rows else np.nan
+        has_flag = True if counts["n_flagged"] > 0 else None
+        basis = (
+            "observed native_quality_state=flagged"
+            if counts["n_flagged"] > 0
+            else "no flagged rows observed; good/null alone do not establish recorded editing information"
+        )
+        rows.append({
+            "cruise": cruise, "filekey": record.filekey, "file_ordinal": record.file_ordinal,
+            "source_relpath": record.source_relpath, "mb_format": record.mb_format,
+            "n_rows": n_rows, **counts,
+            "n_selected_before_record_exclusion": before_exclusion,
+            "n_excluded_selected_records": before_exclusion - counts["n_selected"],
+            **{f"{key.removeprefix('n_')}_proportion": value / denom for key, value in counts.items()
+               if key.startswith("n_") and key not in {"n_rows", "n_pass_basic", "n_selected"}},
+            "basic_pass_proportion": counts["n_pass_basic"] / denom,
+            "selected_proportion": counts["n_selected"] / denom,
+            "has_native_edit_flag": has_flag, "native_edit_flag_basis": basis,
+            "n_cells_1min": len(file_cells.get((record.filekey, record.file_ordinal), set())),
+            "jam_residual_scope": "cruise-cell rows; file point contributions not isolated",
+            "strict_residual_scope": "cruise-cell rows; file point contributions not isolated",
+            "r2_affected_record_count": (
+                diagnosis_counts.get((record.filekey, record.file_ordinal), 0) if not diagnosed_is_none else np.nan
+            ),
+            "r2_count_scope": "located record list only; zero is not a source-quality assessment",
+            **residual,
+        })
+    return rows
+
+
+def cruise_quality_summary(
+    cruise: str, file_df: pd.DataFrame, l2: pd.DataFrame, joined: pd.DataFrame,
+) -> dict:
+    """Aggregate one cruise's file rows into its summary row."""
+    summary = {
+        "cruise": cruise, "status": "processed", "n_files": len(file_df),
+        "n_rows": int(file_df["n_rows"].sum()), "n_good": int(file_df["n_good"].sum()),
+        "n_flagged": int(file_df["n_flagged"].sum()), "n_null": int(file_df["n_null"].sum()),
+        "n_unknown": int(file_df["n_unknown"].sum()), "n_pass_basic": int(file_df["n_pass_basic"].sum()),
+        "n_selected": int(file_df["n_selected"].sum()),
+        "n_selected_before_record_exclusion": int(file_df["n_selected_before_record_exclusion"].sum()),
+        "n_excluded_selected_records": int(file_df["n_excluded_selected_records"].sum()),
+        "n_cells_1min": int(l2["track_id"].eq(cruise.lower()).sum()),
+        "good_proportion": float(file_df["n_good"].sum() / file_df["n_rows"].sum()),
+        "flagged_proportion": float(file_df["n_flagged"].sum() / file_df["n_rows"].sum()),
+        "null_proportion": float(file_df["n_null"].sum() / file_df["n_rows"].sum()),
+        "unknown_proportion": float(file_df["n_unknown"].sum() / file_df["n_rows"].sum()),
+        "file_flagged_proportion_median": float(file_df["flagged_proportion"].median()),
+        "file_flagged_proportion_p90": float(file_df["flagged_proportion"].quantile(.9)),
+        "file_flagged_proportion_max": float(file_df["flagged_proportion"].max()),
+        "n_files_without_flagged": int((file_df["n_flagged"] == 0).sum()),
+        "n_files_with_observed_flagged": int(file_df["n_flagged"].gt(0).sum()),
+        "n_files_edit_information_unestablished": int(file_df["has_native_edit_flag"].isna().sum()),
+        "r2_affected_record_count": float(file_df["r2_affected_record_count"].sum(min_count=1)),
+        "r2_count_scope": "located record list only; zero is not a source-quality assessment",
+        "residual_scope": "all (cruise, cell) rows; combined estimate is not point-weighted",
+    }
+    l2_selected = int(l2.loc[l2["track_id"].eq(cruise.lower()), "n_points_pass"].sum())
+    if summary["n_selected"] != l2_selected:
+        raise AssertionError(f"{cruise}: file quality selection count differs from L2")
+    for prefix in ("jam", "strict"):
+        values = joined.loc[joined["track_id"].eq(cruise.lower()), f"{prefix}_residual_m"].dropna()
+        summary[f"{prefix}_residual_n"] = len(values)
+        summary[f"{prefix}_residual_median_m"] = float(values.median()) if len(values) else np.nan
+        summary[f"{prefix}_residual_nmad_m"] = nmad(values)
+    return summary
+
+
+def apply_baseline_diagnosis(
+    file_df: pd.DataFrame, cruise_df: pd.DataFrame,
+    baseline_diagnosis_path: Path, diagnosis_path: Path | None,
+) -> None:
+    """Split the v1 counts from the active v1-union-v2 counts in place."""
+    baseline = read_record_list(baseline_diagnosis_path)
+    baseline_counts = baseline.groupby(["filekey", "file_ordinal"]).size()
+    file_df["r2_union_affected_record_count"] = file_df["r2_affected_record_count"]
+    file_df["r2_affected_record_count"] = [
+        baseline_counts.get((row.filekey, row.file_ordinal), 0)
+        for row in file_df.itertuples()
+    ]
+    cruise_df["r2_union_affected_record_count"] = cruise_df["r2_affected_record_count"]
+    cruise_df["r2_affected_record_count"] = cruise_df["cruise"].map(
+        file_df.groupby("cruise")["r2_affected_record_count"].sum()
+    )
+    for frame in (file_df, cruise_df):
+        frame["r2_count_scope"] = f"v1 located list: {baseline_diagnosis_path}"
+        frame["r2_union_count_scope"] = (
+            f"v1 union v2: {diagnosis_path}; both G1 pair members included; "
+            "sensitivity upper bound, not an adjudicated bad-sounding count"
+        )
+
+
+def quality_tables(
+    run: Path, cruises: list[str], l1_root: Path, exclusion_path: Path | None,
+    diagnosis_path: Path | None,
+    baseline_diagnosis_path: Path | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Write descriptive file/cruise quality tables without threshold labels."""
+    l2, joined, residual_rows = reference_residuals(run, cruises)
     diagnosed = read_record_list(diagnosis_path)
     diagnosis_counts = {} if diagnosed is None else diagnosed.groupby(["filekey", "file_ordinal"]).size().to_dict()
     excluded = read_record_list(exclusion_path)
-    aggregate = load_module("07_aggregate_file_cells_1min.py")
 
     file_rows = []
     cruise_rows = []
     for cruise in cruises:
         manifest = pd.read_parquet(l1_root / cruise / "extraction_manifest.parquet")
         checked = next((l1_root / cruise / "points_checked").glob("*.parquet"))
-        file_cells = {}
-        file_selected = {}
         cruise_excluded = None if excluded is None else excluded[excluded["filekey"].isin(manifest["filekey"])]
-        pf = pq.ParquetFile(checked)
-        for batch in pf.iter_batches(
-            batch_size=500_000,
-            columns=["filekey", "file_ordinal", "staging_row", "lon", "lat",
-                     "depth_m_positive_down", "point_check_pass_basic", "native_quality_state"],
-        ):
-            frame = batch.to_pandas()
-            mask = aggregate.point_selection_mask(frame, SELECTION_POLICY)
-            mask &= ~aggregate.record_exclusion_mask(frame, cruise_excluded)
-            selected = frame[mask].copy()
-            if selected.empty:
-                continue
-            selected["cell_key"] = (
-                np.floor((selected["lat"].to_numpy() + 90) * 60).astype(np.int64) * 21601
-                + np.floor((selected["lon"].to_numpy() + 180) * 60).astype(np.int64)
-            )
-            for (filekey, ordinal), group in selected.groupby(["filekey", "file_ordinal"]):
-                file_cells[(filekey, ordinal)] = file_cells.get((filekey, ordinal), set())
-                file_cells[(filekey, ordinal)].update(group["cell_key"].unique())
-                file_selected[(filekey, ordinal)] = file_selected.get((filekey, ordinal), 0) + len(group)
-        rows = []
-        for record in manifest.itertuples():
-            n_rows = int(record.n_rows)
-            counts = {
-                "n_good": int(record.n_good or 0), "n_flagged": int(record.n_flagged or 0),
-                "n_null": int(record.n_null or 0), "n_unknown": int(getattr(record, "n_unknown", 0) or 0),
-                "n_pass_basic": int(getattr(record, "n_pass_basic", 0) or 0),
-                "n_selected": file_selected.get((record.filekey, record.file_ordinal), 0),
-            }
-            before_exclusion = int(record.n_selected_basic_native_good)
-            denom = n_rows if n_rows else np.nan
-            has_flag = True if counts["n_flagged"] > 0 else None
-            basis = (
-                "observed native_quality_state=flagged"
-                if counts["n_flagged"] > 0
-                else "no flagged rows observed; good/null alone do not establish recorded editing information"
-            )
-            residual = residual_rows.get(cruise.lower(), {})
-            rows.append({
-                "cruise": cruise, "filekey": record.filekey, "file_ordinal": record.file_ordinal,
-                "source_relpath": record.source_relpath, "mb_format": record.mb_format,
-                "n_rows": n_rows, **counts,
-                "n_selected_before_record_exclusion": before_exclusion,
-                "n_excluded_selected_records": before_exclusion - counts["n_selected"],
-                **{f"{key.removeprefix('n_')}_proportion": value / denom for key, value in counts.items()
-                   if key.startswith("n_") and key not in {"n_rows", "n_pass_basic", "n_selected"}},
-                "basic_pass_proportion": counts["n_pass_basic"] / denom,
-                "selected_proportion": counts["n_selected"] / denom,
-                "has_native_edit_flag": has_flag, "native_edit_flag_basis": basis,
-                "n_cells_1min": len(file_cells.get((record.filekey, record.file_ordinal), set())),
-                "jam_residual_scope": "cruise-cell rows; file point contributions not isolated",
-                "strict_residual_scope": "cruise-cell rows; file point contributions not isolated",
-                "r2_affected_record_count": (
-                    diagnosis_counts.get((record.filekey, record.file_ordinal), 0) if diagnosed is not None else np.nan
-                ),
-                "r2_count_scope": "located record list only; zero is not a source-quality assessment",
-                **residual,
-            })
+        file_cells, file_selected = replay_file_selection(checked, cruise_excluded)
+        rows = file_quality_rows(
+            cruise, manifest, file_cells, file_selected,
+            residual_rows.get(cruise.lower(), {}), diagnosis_counts, diagnosed is None,
+        )
         file_df = pd.DataFrame(rows)
         file_rows.extend(rows)
         if file_df.empty:
             continue
-        summary = {
-            "cruise": cruise, "status": "processed", "n_files": len(file_df),
-            "n_rows": int(file_df["n_rows"].sum()), "n_good": int(file_df["n_good"].sum()),
-            "n_flagged": int(file_df["n_flagged"].sum()), "n_null": int(file_df["n_null"].sum()),
-            "n_unknown": int(file_df["n_unknown"].sum()), "n_pass_basic": int(file_df["n_pass_basic"].sum()),
-            "n_selected": int(file_df["n_selected"].sum()),
-            "n_selected_before_record_exclusion": int(file_df["n_selected_before_record_exclusion"].sum()),
-            "n_excluded_selected_records": int(file_df["n_excluded_selected_records"].sum()),
-            "n_cells_1min": int(l2["track_id"].eq(cruise.lower()).sum()),
-            "good_proportion": float(file_df["n_good"].sum() / file_df["n_rows"].sum()),
-            "flagged_proportion": float(file_df["n_flagged"].sum() / file_df["n_rows"].sum()),
-            "null_proportion": float(file_df["n_null"].sum() / file_df["n_rows"].sum()),
-            "unknown_proportion": float(file_df["n_unknown"].sum() / file_df["n_rows"].sum()),
-            "file_flagged_proportion_median": float(file_df["flagged_proportion"].median()),
-            "file_flagged_proportion_p90": float(file_df["flagged_proportion"].quantile(.9)),
-            "file_flagged_proportion_max": float(file_df["flagged_proportion"].max()),
-            "n_files_without_flagged": int((file_df["n_flagged"] == 0).sum()),
-            "n_files_with_observed_flagged": int(file_df["n_flagged"].gt(0).sum()),
-            "n_files_edit_information_unestablished": int(file_df["has_native_edit_flag"].isna().sum()),
-            "r2_affected_record_count": float(file_df["r2_affected_record_count"].sum(min_count=1)),
-            "r2_count_scope": "located record list only; zero is not a source-quality assessment",
-            "residual_scope": "all (cruise, cell) rows; combined estimate is not point-weighted",
-        }
-        l2_selected = int(l2.loc[l2["track_id"].eq(cruise.lower()), "n_points_pass"].sum())
-        if summary["n_selected"] != l2_selected:
-            raise AssertionError(f"{cruise}: file quality selection count differs from L2")
-        for prefix in ("jam", "strict"):
-            values = joined.loc[joined["track_id"].eq(cruise.lower()), f"{prefix}_residual_m"].dropna()
-            summary[f"{prefix}_residual_n"] = len(values)
-            summary[f"{prefix}_residual_median_m"] = float(values.median()) if len(values) else np.nan
-            summary[f"{prefix}_residual_nmad_m"] = nmad(values)
-        cruise_rows.append(summary)
+        cruise_rows.append(cruise_quality_summary(cruise, file_df, l2, joined))
     # Explicitly preserve the parser state for the unprocessed cruise.
     cruise_rows.append({
         "cruise": "NT06-21", "status": "unprocessed_by_current_parser",
@@ -472,23 +573,7 @@ def quality_tables(
     file_df = pd.DataFrame(file_rows)
     cruise_df = pd.DataFrame(cruise_rows)
     if baseline_diagnosis_path is not None:
-        baseline = read_record_list(baseline_diagnosis_path)
-        baseline_counts = baseline.groupby(["filekey", "file_ordinal"]).size()
-        file_df["r2_union_affected_record_count"] = file_df["r2_affected_record_count"]
-        file_df["r2_affected_record_count"] = [
-            baseline_counts.get((row.filekey, row.file_ordinal), 0)
-            for row in file_df.itertuples()
-        ]
-        cruise_df["r2_union_affected_record_count"] = cruise_df["r2_affected_record_count"]
-        cruise_df["r2_affected_record_count"] = cruise_df["cruise"].map(
-            file_df.groupby("cruise")["r2_affected_record_count"].sum()
-        )
-        for frame in (file_df, cruise_df):
-            frame["r2_count_scope"] = f"v1 located list: {baseline_diagnosis_path}"
-            frame["r2_union_count_scope"] = (
-                f"v1 union v2: {diagnosis_path}; both G1 pair members included; "
-                "sensitivity upper bound, not an adjudicated bad-sounding count"
-            )
+        apply_baseline_diagnosis(file_df, cruise_df, baseline_diagnosis_path, diagnosis_path)
     write_table(file_df, run / "file_quality_summary")
     write_table(cruise_df, run / "cruise_quality_summary")
     return file_df, cruise_df
@@ -618,12 +703,11 @@ def position_summary(points: pd.DataFrame, source: str, cruise: str, cell: str, 
     }
 
 
-def inspect_izu_sampling(run: Path, l1_root: Path, exclusion_path: Path | None) -> None:
-    """Inspect positions for the ten largest Izu cruise-cell differences."""
-    focus = pd.read_parquet(run / "izu_bonin_largest_cruise_residual_cells.parquet")
-    target_ids = set(focus["cell_id"])
+def ncei_focus_points(
+    focus: pd.DataFrame, l1_root: Path, exclusions: pd.DataFrame | None,
+) -> tuple[list[dict], pd.DataFrame]:
+    """Position summaries and raw selected points for the NCEI side of the focus cells."""
     aggregate = load_module("07_aggregate_file_cells_1min.py")
-    exclusions = read_record_list(exclusion_path)
     summaries, all_points = [], []
     for cruise, targets in focus.groupby("track_id"):
         checked = next((l1_root / cruise.upper() / "points_checked").glob("*.parquet"))
@@ -644,6 +728,11 @@ def inspect_izu_sampling(run: Path, l1_root: Path, exclusion_path: Path | None) 
         for cell, sub in points.groupby("cell_id"):
             summaries.append(position_summary(sub, "ncei", cruise, cell, "all_files"))
         all_points.append(points.assign(source="ncei", cruise=cruise))
+    return summaries, all_points
+
+
+def jam_focus_points(target_ids: set[str]) -> tuple[list[dict], pd.DataFrame]:
+    """Position summaries and selected points for the JAMSTEC side of the focus cells."""
     jam_root = ROOT / "jamstec/multibeam"
     manifest = pd.read_parquet(jam_root / "manifests/file_manifest_points_raw.parquet")
     quality = pd.read_parquet(jam_root / "manifests/file_quality_flags_1min.parquet")
@@ -659,7 +748,7 @@ def inspect_izu_sampling(run: Path, l1_root: Path, exclusion_path: Path | None) 
     manifest = manifest[bounding & manifest["include_in_points_raw"] & ~manifest["file_id"].isin(excluded_files)]
     qc_manifest = pd.read_parquet(jam_root / "manifests/points_qc_manifest.parquet").set_index("file_id")
     file_cells_manifest = pd.read_parquet(jam_root / "manifests/file_cells_manifest_1min.parquet").set_index("file_id")
-    jam_points = []
+    summaries, jam_points = [], []
     for record in manifest.itertuples():
         if record.file_id not in file_cells_manifest.index:
             continue
@@ -687,7 +776,18 @@ def inspect_izu_sampling(run: Path, l1_root: Path, exclusion_path: Path | None) 
     jam_points = pd.concat(jam_points, ignore_index=True)
     for cell, sub in jam_points.groupby("cell_id"):
         summaries.append(position_summary(sub, "jam", "all_cruises", cell, "all_files"))
-    all_points.append(jam_points)
+    return summaries, jam_points
+
+
+def inspect_izu_sampling(run: Path, l1_root: Path, exclusion_path: Path | None) -> None:
+    """Inspect positions for the ten largest Izu cruise-cell differences."""
+    focus = pd.read_parquet(run / "izu_bonin_largest_cruise_residual_cells.parquet")
+    target_ids = set(focus["cell_id"])
+    exclusions = read_record_list(exclusion_path)
+    summaries, ncei_points = ncei_focus_points(focus, l1_root, exclusions)
+    jam_summaries, jam_points = jam_focus_points(target_ids)
+    summaries.extend(jam_summaries)
+    all_points = [*ncei_points, jam_points]
     samples = pd.concat(all_points, ignore_index=True)
     samples.to_parquet(run / "izu_bonin_focus_point_positions.parquet", index=False)
     write_table(pd.DataFrame(summaries), run / "izu_bonin_focus_sampling")

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,11 +24,14 @@ from pathlib import Path
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+
+from _common.file_io import atomic_write_parquet  # noqa: E402
+
 OUT_ROOT = REPO_ROOT / "ncei/derived/mb_round2"
 
 
 def _load_aggregator():
-    sys.path.insert(0, str(REPO_ROOT))
     mod_path = REPO_ROOT / "ncei/code/07_aggregate_file_cells_1min.py"
     spec = importlib.util.spec_from_file_location("ncei_07_aggregate", mod_path)
     module = importlib.util.module_from_spec(spec)
@@ -82,9 +84,7 @@ def main() -> int:
 
     manifest = pd.DataFrame(rows)
     manifest_path = OUT_ROOT / "file_cells_manifest.parquet"
-    tmp = manifest_path.with_suffix(".parquet.tmp")
-    manifest.to_parquet(tmp, index=False)
-    os.replace(tmp, manifest_path)
+    atomic_write_parquet(manifest, manifest_path)
     manifest.to_csv(OUT_ROOT / "file_cells_manifest.tsv", sep="\t", index=False)
     print(f"manifest: {manifest_path.relative_to(REPO_ROOT)}")
     return 0

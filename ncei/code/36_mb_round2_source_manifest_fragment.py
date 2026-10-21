@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import sys
 from pathlib import Path
 
@@ -33,6 +32,7 @@ import pyarrow.parquet as pq
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from _common.file_io import atomic_write_parquet  # noqa: E402
 from _common.r2_classifier import classify  # noqa: E402
 
 OUT_ROOT = REPO_ROOT / "ncei/derived/mb_round2"
@@ -195,9 +195,7 @@ def main() -> int:
 
     out = pd.DataFrame(rows, columns=COLUMNS)
     out_path = OUT_ROOT / "mb_round2_source_manifest_fragment.parquet"
-    tmp = out_path.with_suffix(".parquet.tmp")
-    out.to_parquet(tmp, index=False)
-    os.replace(tmp, out_path)
+    atomic_write_parquet(out, out_path)
     out.to_csv(OUT_ROOT / "mb_round2_source_manifest_fragment.tsv", sep="\t", index=False)
     print(out[["track_id", "n_points", "bbox_area_km2", "depth_sign_raw", "instrument_class_pred", "classification_rule"]].to_string(index=False))
     print(f"fragment: {out_path.relative_to(REPO_ROOT)}")
