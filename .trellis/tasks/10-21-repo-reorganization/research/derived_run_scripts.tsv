@@ -1,0 +1,4 @@
+path	lines	purpose	referenced_by
+ncei/derived/mb_round2/_runs/20261020T_l2_l3_first_batch/run_l2_l3.py	~90	Round-2 L2/L3 first-batch driver: imports ncei/code/07 aggregate_track_file for 13 cruises, writes l2 manifest	run report in same _runs dir (task 10-21-mb-round2-quality-revision)
+ncei/derived/mb_round2/_runs/20261020T_l2_l3_first_batch/finish_l2_l3.py	~60	Post-pass: add n_tracks/n_surveys columns, build source_manifest_fragment, region stats	unknown (no .md ref found; likely cited in task 10-21-mb-round2 jsonl)
+ncei/derived/mb_round2/_runs/20261020T_source_audit/source_audit_corrected.py	~40	Cross-source audit: mb_round2 L2 vs jamstec qcfiltered vs strict cells in 2 test regions; writes to 14-seamounts outputs	no repo .md; consumed by downstream 14-seamounts project
