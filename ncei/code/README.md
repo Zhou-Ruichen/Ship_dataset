@@ -1,52 +1,32 @@
-# ncei/code — script index
+# ncei/code — legacy download scripts (frozen)
 
-## Active pipeline lineage (numbered steps)
+This directory now holds only the legacy round-2 download scripts, kept in
+place while the Tier-B loop runs:
 
-`01_build_trackline_source_manifest.py` through `24_true_crossover_audit.py`
-are the living pipeline. Docs in `ncei/docs/` are organized by step number;
-each step's report names the script that produced its products.
+- `41_tier_a_gapfill.py` — the downloader currently re-invoked by
+  `/tmp/tierB_gapfill/supervise.sh` (platforms_tree inventory → diff →
+  fetch → merge).
+- `download_tier_a_round2.py` — the first tier-A downloader, superseded
+  by 41.
+- `41_gzip_preflight.py` — fail-closed `gzip -t` verification.
+- `32_mb_round2_completeness.py` — completeness audit; its formal manifest
+  is consumed by the swath census stage.
 
-- 01–08: source manifest, singlebeam/xyz/mrar standardization, point and
-  supplementary QC, 1′ cell aggregation and branch merge.
-- 09–12: overlap residuals, cross-branch audit, quality-policy calibration,
-  policy application.
-- 13: validation cells.
-- 23–24: singlebeam per-track bias estimation and true crossover audit
-  (task 09-02, currently scoped to the six downstream nested regions).
-- 25–26, 28, 30: global singlebeam production chain — per-track bias (25),
-  global crossover audit (26), track disposition (28), and global
-  disposition + final cells `file_cells_1min_final_r2` (30; task
-  09-03-global-sb-final-product).
-- 31: round-2 merged global 1-arcmin grid `global_grid_1min_r2`
-  (spec §2 product; strict mb wins, non-rejected final sb fills).
-- 32–37: `raw_round2` swath-cruise ingestion (task step15): completeness
-  audit (32), format census (33), L1 point extraction via the sealed
-  mbsystem environment's mblist U3/U0 join (34; the parser/join lives in
-  `_common/mbsystem.py`), L2 1-arcmin cells via `07.aggregate_track_file`
-  (35), standalone L3 source-manifest fragment (36; production manifest
-  NOT touched), and read-only coverage statistics vs the strict layer (37).
-- 38: MBBDB increment download-value ranking and A/B/C order lists
-  (task step16; catalog metadata fetch + pure computation). Dependencies:
-  pandas/numpy/pyarrow, the local `ncei/manifests/round2_download_log.parquet`
-  and `ncei_catalog_gap_2026-09.parquet`, network only for catalog metadata
-  (127.0.0.1:2085 proxy).
+Their replacement is the unified downloader
+`python -m ncei.download <command>` ([`ncei/download/README.md`](../download/README.md));
+after the switchover (needs the user's go-ahead) these four scripts are
+archived per `docs/code_archive.md`.
 
-## Archived one-off chains
+## Where the processing code went
 
-The 37-script SCS/TN352 sealed-confirmation audit chain that used to live
-in `scs_confirmation/` (with its 14 tests and the Stage C.1 oracle) was
-removed from the working tree on 2026-10-21. See `docs/code_archive.md`
-for the removal index and the old-path resolution table; the mblist
-parsing/join helpers that `34_mb_round2_extract_points.py` still needs
-now live in `_common/mbsystem.py`.
+- Trackline chain (stages 01–13, 23–26, 28, 30–31, 39–40):
+  `python -m ncei.trackline <command>` (`ncei/trackline/`; stage numbers
+  work as aliases).
+- Round-2 swath chain (stages 33–37, 43): `python -m ncei.swath <command>`
+  (`ncei/swath/`).
+- Frozen analyses (Step 08 validation pack 14–22, network bias 27,
+  interpolation holdout 29): `ncei/analysis/`.
+- Download-value ranking (stage 38): `python -m ncei.download rank`.
 
-`__init__.py` at this level makes `ncei.code` a package; both conventions
-(file execution and package import) are supported.
-
-## Moved to `ncei/analysis/`
-
-The frozen Step 08 validation pack (14–22), the six-region network-bias
-prototype (27) and the interpolation holdout evidence run (29) moved to
-`ncei/analysis/` on 2026-10-21 (commit after `bc4cd36`); reports and
-manifests written before that date reference the old `ncei/code/` paths.
-See `docs/code_archive.md` for the old-path → new-path table.
+Old `ncei/code/NN_*.py` paths in historical reports and manifests resolve
+through the table in `docs/code_archive.md`.

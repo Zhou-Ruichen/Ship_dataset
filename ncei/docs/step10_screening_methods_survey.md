@@ -6,9 +6,9 @@
 
 建议优先评估三项增补：
 
-1. 在 `ncei/code/24_true_crossover_audit.py` 之后增加按连通分量求解的单波束轨线常数偏移网络。先用与多波束相交的轨线固定绝对基准；没有多波束支撑的分量采用偏移和为零的自由网，并明确标成相对改正。GMT 的 `x2sys_solve` 正是从交叉差求每条轨线的系统改正，常数项因差分而没有绝对基准，默认以各连通分量内偏移和为零来约束（GMT, 2026；Wessel, 2010）。
-2. 在 `ncei/code/23_estimate_singlebeam_track_bias_1min.py` 与上述网络输出之后形成轨线质量等级。输入限于偏移显著性、改正后交叉残差、网络支撑度，以及年代、测深仪、声速、潮汐、吃水和基准元数据的完整性；不要用 GEBCO 残差决定等级。交叉差可以揭示轨线间不一致，但在未知地形梯度和定位误差存在时，不能单独归因为测深仪误差（Wessel and Watts, 1988）。
-3. 在 `ncei/code/12_apply_quality_policy.py` 形成单元格权重时加入随水深变化的单波束不确定度。只对元数据足以建立误差模型的记录计算；元数据缺失的旧测深给出保守等级，不能声称符合 IHO S-44。S-44 要求在 95% 置信水平记录由所有误差源传播得到的水平和垂向不确定度，而非只套用一个固定百分比（IHO, 2024）。
+1. 在 `ncei/trackline/crossover.py` 之后增加按连通分量求解的单波束轨线常数偏移网络。先用与多波束相交的轨线固定绝对基准；没有多波束支撑的分量采用偏移和为零的自由网，并明确标成相对改正。GMT 的 `x2sys_solve` 正是从交叉差求每条轨线的系统改正，常数项因差分而没有绝对基准，默认以各连通分量内偏移和为零来约束（GMT, 2026；Wessel, 2010）。
+2. 在 `ncei/trackline/track_bias.py` 与上述网络输出之后形成轨线质量等级。输入限于偏移显著性、改正后交叉残差、网络支撑度，以及年代、测深仪、声速、潮汐、吃水和基准元数据的完整性；不要用 GEBCO 残差决定等级。交叉差可以揭示轨线间不一致，但在未知地形梯度和定位误差存在时，不能单独归因为测深仪误差（Wessel and Watts, 1988）。
+3. 在 `ncei/trackline/apply_policy.py` 形成单元格权重时加入随水深变化的单波束不确定度。只对元数据足以建立误差模型的记录计算；元数据缺失的旧测深给出保守等级，不能声称符合 IHO S-44。S-44 要求在 95% 置信水平记录由所有误差源传播得到的水平和垂向不确定度，而非只套用一个固定百分比（IHO, 2024）。
 
 ## 1. 基于交叉点的轨线调整
 
@@ -119,7 +119,7 @@ MB-System 的清理和编辑程序以逐 ping、逐波束有效性标志控制�
 
 CUBE 不适合直接作用于本仓库现有 1′ 单元格。当前多数 NCEI 多波束文件缺时间戳，且 Step 04 已将点汇总为单元格统计量；CUBE 所需的逐测深不确定度、局部密度和多假设结构已经丢失。对现有资料可采用的只有较弱的汇总诊断：单元格内离散度、文件间离散度、重复资料比例、邻格突变，以及来源是否保留原始波束质量标志。这些诊断不能称为 CUBE，也不能反推 IHO 合规性（Calder, 2003；IHO, 2024）。
 
-若未来接收带时间、姿态、声速和波束标志的原始多波束，应在 `ncei/code/01-04` 的点级清理与 1′ 汇总之前完成波束级处理；进入 1′ 产品时只携带接受点数、不确定度摘要和来源标志。
+若未来接收带时间、姿态、声速和波束标志的原始多波束，应在 trackline 阶段 01–04 的点级清理与 1′ 汇总之前完成波束级处理；进入 1′ 产品时只携带接受点数、不确定度摘要和来源标志。
 
 ## 5. 与本仓库流程的差距表
 
@@ -127,23 +127,23 @@ CUBE 不适合直接作用于本仓库现有 1′ 单元格。当前多数 NCEI 
 
 | 方法 | 对应流程步骤 | 状态 | 依据与建议 |
 | --- | --- | --- | --- |
-| 点级范围、重复和人工标记 | `ncei/code/01_build_trackline_source_manifest.py`、`02_standardize_singlebeam.py`、`03_standardize_xyz.py`、`04_clean_mrar.py`、`05_point_quality_check.py`、`06_supplementary_quality_check.py` | have | 已在 `07_aggregate_file_cells_1min.py` 汇总前执行来源登记、标准化和点级 QC。保留，不用后续格网残差替代来源标记。 |
-| 单来源内 1′ 重叠残差 | `ncei/code/09_source_specific_overlap_residuals.py`（Step 05A） | have | 已按轨线单元格减分支单元格中位数形成描述性残差；它不是物理交叉点，也没有全网解。 |
-| 分支间 1′ 重叠差 | `ncei/code/10_cross_branch_overlap_audit.py`（Step 05B） | have | 已比较 MB、SB、MRAR 的同格差。继续作为来源间诊断，不替代轨线网络。 |
-| 质量等级和单元格权重 | `ncei/code/11_quality_policy_calibration_audit.py`、`12_apply_quality_policy.py`（Step 06A/06B） | partial | 已有等级、权重和主验证资格；权重尚未包含可解释的随水深单波束不确定度。增加元数据完整性和深度项，但先校准，不追认 S-44 等级。 |
-| 来源优先级和严格验证集 | `ncei/code/13_build_validation_cells.py`（Step 07B） | have | 已实施 JAMSTEC MB > NCEI MB > NCEI SB 填空，严格基线只用 MB。轨线调整只能改变 SB 补充或扩展产品，不改严格 MB 基线。 |
+| 点级范围、重复和人工标记 | `ncei/trackline/manifest.py`、`ncei/trackline/standardize_singlebeam.py`、`ncei/trackline/standardize_xyz.py`、`ncei/trackline/clean_mrar.py`、`ncei/trackline/point_qc.py`、`ncei/trackline/supplementary_qc.py` | have | 已在 `ncei/trackline/file_cells.py` 汇总前执行来源登记、标准化和点级 QC。保留，不用后续格网残差替代来源标记。 |
+| 单来源内 1′ 重叠残差 | `ncei/trackline/source_overlap.py`（Step 05A） | have | 已按轨线单元格减分支单元格中位数形成描述性残差；它不是物理交叉点，也没有全网解。 |
+| 分支间 1′ 重叠差 | `ncei/trackline/branch_overlap.py`（Step 05B） | have | 已比较 MB、SB、MRAR 的同格差。继续作为来源间诊断，不替代轨线网络。 |
+| 质量等级和单元格权重 | `ncei/trackline/policy_audit.py`、`ncei/trackline/apply_policy.py`（Step 06A/06B） | partial | 已有等级、权重和主验证资格；权重尚未包含可解释的随水深单波束不确定度。增加元数据完整性和深度项，但先校准，不追认 S-44 等级。 |
+| 来源优先级和严格验证集 | `ncei/trackline/validation_cells.py`（Step 07B） | have | 已实施 JAMSTEC MB > NCEI MB > NCEI SB 填空，严格基线只用 MB。轨线调整只能改变 SB 补充或扩展产品，不改严格 MB 基线。 |
 | GEBCO/全球格网残差筛选 | `ncei/analysis/14-22`（Step 08） | have（禁止项） | 已明确不按模型残差过滤、改级或提升船测。保持 GEBCO 仅作诊断分层，符合本任务边界。 |
-| 区域 SB 轨线常数偏移 | `ncei/code/23_estimate_singlebeam_track_bias_1min.py`（Step 09） | partial | 已用严格 MB 优先、否则同格其他 SB 的参考估计偏移，至少 5 个参考格且偏移达到 2 NMAD 才应用；仅六个区域，且不是交叉网络联立解。作为对照臂保留。 |
-| 真正 SB×SB 交叉点与时间 QC | `ncei/code/24_true_crossover_audit.py`（Step 09） | partial | 已在六个区域计算成对交叉差和 nc 时间 QC；未使用深度质量过滤，未与轨线偏移对照，未形成全球网络。应作为网络观测生产者，而不是终点。 |
-| 轨线偏移网络最小二乘 | 建议接在 `ncei/code/24` 后、进入 `ncei/code/12/13` 前 | missing | 按连通分量求常数偏移；MB 支撑分量固定绝对基准，无 MB 分量用偏移和为零并标记为相对解。先在冻结区域与 Step 23 对照，再决定是否全球化。方法依据 GMT（2026）和 Wessel（2010）。 |
+| 区域 SB 轨线常数偏移 | `ncei/trackline/track_bias.py`（Step 09） | partial | 已用严格 MB 优先、否则同格其他 SB 的参考估计偏移，至少 5 个参考格且偏移达到 2 NMAD 才应用；仅六个区域，且不是交叉网络联立解。作为对照臂保留。 |
+| 真正 SB×SB 交叉点与时间 QC | `ncei/trackline/crossover.py`（Step 09） | partial | 已在六个区域计算成对交叉差和 nc 时间 QC；未使用深度质量过滤，未与轨线偏移对照，未形成全球网络。应作为网络观测生产者，而不是终点。 |
+| 轨线偏移网络最小二乘 | 建议接在 `python -m ncei.trackline crossover` 后、进入 `apply-policy` / `validation-cells` 前 | missing | 按连通分量求常数偏移；MB 支撑分量固定绝对基准，无 MB 分量用偏移和为零并标记为相对解。先在冻结区域与 Step 23 对照，再决定是否全球化。方法依据 GMT（2026）和 Wessel（2010）。 |
 | 交叉点加权和异常轨线迭代降权 | 同上 | missing | 预先定义交叉点权重、标准化残差与停止条件；同时输出未加权解。不得从文献虚构统一水深阈值。GMT（2026）只规定可传入复合权重。 |
 | 每条轨线最低交叉数 | 同上 | missing | 没有核实到通用阈值。用网络可识别性、不同邻轨数、空间分布和留一误差确定本数据的准入条件；单交叉轨线只可求相对偏移，不能评估稳定性。 |
-| 轨线质量等级 | 建议由 Step 09 输出，供 `ncei/code/12` 使用 | missing | 合并偏移显著性、改正后交叉残差、网络支撑度和来源元数据；不要合并 GEBCO 残差。等级需保留各分量，避免一个总分掩盖原因。 |
-| 深度相关 SB 不确定度 | `ncei/code/11/12`（Step 06A/06B） | missing | 对元数据充分的记录按 TVU 结构和声速项建模；缺声速、潮汐、吃水或基准信息时给保守等级并列出缺项。依据 IHO（2024）、NOAA（2017）和 NGDC（2011）。 |
-| NCEI/MGD77T 质量码和头元数据 | `ncei/code/01-03` | partial | 已读入的字段需与原 MGD77T 质量码、假定声速、基准和改正记录逐项核对；空值保持 unknown，不解释为通过。依据 NGDC（2011）。 |
+| 轨线质量等级 | 建议由 Step 09 输出，供 `apply-policy` 使用 | missing | 合并偏移显著性、改正后交叉残差、网络支撑度和来源元数据；不要合并 GEBCO 残差。等级需保留各分量，避免一个总分掩盖原因。 |
+| 深度相关 SB 不确定度 | `policy-audit` / `apply-policy`（Step 06A/06B） | missing | 对元数据充分的记录按 TVU 结构和声速项建模；缺声速、潮汐、吃水或基准信息时给保守等级并列出缺项。依据 IHO（2024）、NOAA（2017）和 NGDC（2011）。 |
+| NCEI/MGD77T 质量码和头元数据 | `manifest` / `standardize-nc` / `standardize-xyz` | partial | 已读入的字段需与原 MGD77T 质量码、假定声速、基准和改正记录逐项核对；空值保持 unknown，不解释为通过。依据 NGDC（2011）。 |
 | GEBCO 异常诊断 | Step 09 诊断分层 | have | 已在偏移决定之后取样，未参与门控。保持此顺序；GEBCO 的编制本身使用船测，不能作为独立真值（GEBCO, 2026）。 |
-| CUBE/逐波束 QC | 应位于 `ncei/code/01-04` 之前 | missing，现有聚合资料不可补做 | 仅对未来具有逐 ping 时间、姿态、声速、波束标志和不确定度的原始 MB 使用；现有 1′ 产品只保留汇总诊断。依据 Calder（2003）。 |
-| MB-System 重叠条带导航调整 | 原始 MB 预处理，位于 `ncei/code/01-04` 之前 | missing，当前多数资料不适用 | 未来原始条带可用；当前无逐 ping 资料时不实施，也不把同格差改称导航调整。依据 Schmidt, Chayes, and Caress（2006）与 MB-System（2025）。 |
+| CUBE/逐波束 QC | 应位于 trackline 阶段 01–04 之前 | missing，现有聚合资料不可补做 | 仅对未来具有逐 ping 时间、姿态、声速、波束标志和不确定度的原始 MB 使用；现有 1′ 产品只保留汇总诊断。依据 Calder（2003）。 |
+| MB-System 重叠条带导航调整 | 原始 MB 预处理，位于 trackline 阶段 01–04 之前 | missing，当前多数资料不适用 | 未来原始条带可用；当前无逐 ping 资料时不实施，也不把同格差改称导航调整。依据 Schmidt, Chayes, and Caress（2006）与 MB-System（2025）。 |
 
 ## 6. 建议增加项，按优先级
 

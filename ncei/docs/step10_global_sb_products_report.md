@@ -79,6 +79,9 @@ The adjusted SB cells are an upstream product. Downstream projects remain respon
 Generated: 2026-09-02T22:55:03Z
 Command: `/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python ncei/code/31_build_global_grid_1min.py`
 
+This is the recorded 2026-09 command. The current entry point is
+`python -m ncei.trackline global-grid`; it preserves the existing-round guard.
+
 The merged product contains 15,245,229 unique 1-arcminute ship cells: 2,398,774 use strict multibeam and 12,846,455 are filled by non-rejected final singlebeam. There are 489,958 overlap cells; their primary depth is strict multibeam and their singlebeam median remains in `sb_median_depth_m`.
 
 | latitude band | rows |

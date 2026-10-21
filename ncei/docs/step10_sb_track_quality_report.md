@@ -1,7 +1,7 @@
 # Step 10 SB per-track quality disposition and rejection-arm controls
 
 Generated: 2026-09-02T20:10:19Z  
-Script: `ncei/code/28_sb_track_quality_disposition_1min.py` (run from repo root)  
+Script: `ncei/trackline/disposition.py` (run from repo root)\
 Interpreter: `/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python`  
 Task: `.trellis/tasks/09-03-sb-track-quality-rejection/prd.md`
 
@@ -184,5 +184,5 @@ flags, threshold).
 
 ```bash
 cd /mnt/data2/00-Data/ship
-/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python ncei/code/28_sb_track_quality_disposition_1min.py --overwrite
+/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python -m ncei.trackline disposition --overwrite
 ```

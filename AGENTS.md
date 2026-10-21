@@ -33,26 +33,35 @@ interfaces described in the project documents.
 
 ## Python execution convention: run from repo root
 
-All Python scripts in this repo (pipeline steps under `jamstec/multibeam/code/` and `ncei/code/`, analyses under `*/analysis/`, calibration drivers and tests under `_common/`) are invoked from the **repo root** (`/mnt/data2/00-Data/ship/`). That puts cwd on `sys.path`, so any consumer can write `from _common.r2_classifier import classify` with no per-script `sys.path.insert(...)` hack and no `PYTHONPATH` plumbing.
+All Python entry points in this repo (pipeline steps under `jamstec/multibeam/code/`, the processing packages `ncei/trackline/` and `ncei/swath/`, analyses under `*/analysis/`, the downloader under `ncei/download/`, calibration drivers and tests under `_common/`) are invoked from the **repo root** (`/mnt/data2/00-Data/ship/`), so relative input/output paths resolve against the repo.
 
-The alternative — packaging `_common/` via `pyproject.toml` + `pip install -e .` — was considered and deferred. Current single-user / single-machine setup doesn't benefit from it, and the convention below costs zero infrastructure.
+Two invocation forms behave differently with respect to imports:
 
-Invocation pattern:
+- **`python <script.py>`**: `sys.path[0]` is the script's own directory, not the repo root. Scripts that import `_common` therefore bootstrap the repo root themselves:
+  ```python
+  REPO_ROOT = Path(__file__).resolve().parents[N]
+  sys.path.insert(0, str(REPO_ROOT))
+  ```
+  No `PYTHONPATH` or install step is needed.
+- **Packages and tests** use `python -m` from the repo root (cwd is on `sys.path` for `-m`):
+  ```bash
+  python -m ncei.trackline 02 --run-label sample --sample-n-files 5
+  python -m ncei.swath extract --cruises AR15 AR40        # round-2 swath chain
+  python -m ncei.download verify --work /tmp/tierB_gapfill
+  python -m unittest _common.tests.test_r2_classifier
+  pytest _common/tests/                                   # if pytest is installed
+  ```
 
-```bash
-# From repo root, NOT from inside any code/ dir:
-cd /mnt/data2/00-Data/ship
+The alternative — packaging `_common/` via `pyproject.toml` + `pip install -e .` — was considered and deferred. Current single-user / single-machine setup doesn't benefit from it, and the convention above costs zero infrastructure.
 
-python jamstec/multibeam/code/03_qc_multibeam_points.py [args...]
-python ncei/code/02_standardize_singlebeam.py [args...]            # PR-E and later
-python -m _common.r2_calibration [args...]                          # or python _common/r2_calibration.py
-```
+If a script errors with `ModuleNotFoundError: No module named '_common'`, its repo-root bootstrap lines are missing or wrong — check `REPO_ROOT = Path(__file__).resolve().parents[N]` (N must match the script's directory depth).
 
-Unit tests follow the same rule — both runners assume cwd = repo root:
-
-```bash
-python -m unittest _common.tests.test_r2_classifier
-pytest _common/tests/                                               # if pytest is installed
-```
-
-If a script errors with `ModuleNotFoundError: No module named '_common'`, cwd is wrong — `cd /mnt/data2/00-Data/ship` and retry.
+**Warning — not every legacy script has argparse.** The processing packages
+guard the formerly argument-free stages (`python -m ncei.trackline 31` and
+`python -m ncei.swath 33`, `36`, `37`) with an empty argument parser so `--help`
+never starts processing. The frozen
+legacy downloader scripts in `ncei/code/` are separate from these package
+commands. Before running an unfamiliar legacy script, confirm it has an
+`argparse` parser and an `if __name__ == "__main__"` guard. To check that a
+module merely imports, execute it from `/tmp` with `python -I` and `importlib`
+so that no repo-relative outputs are reachable.

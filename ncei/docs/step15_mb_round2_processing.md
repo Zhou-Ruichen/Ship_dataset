@@ -4,16 +4,17 @@
 日期：2026-09。
 约束：全程不提交 git；中间产物只在 `ncei/derived/mb_round2/`；不改 README/规范/现有产品文件（含 `trackline_source_manifest.parquet`）；合并等用户审。
 
-新脚本（`ncei/code/`，仓库根目录运行）：
+处理入口（2026-10-21 迁至 `ncei/swath/`，仓库根目录用
+`python -m ncei.swath <command>` 运行；32 号留在原位）：
 
 | 脚本 | 阶段 | 作用 |
 |---|---|---|
-| `32_mb_round2_completeness.py` | 0 | 下载日志 + 盘上 .part 扫描 → 完整/不完整分类 |
-| `33_mb_round2_format_survey.py` | 1 | 完整航次的文件格式普查 |
-| `34_mb_round2_extract_points.py` | 2 | .mb58.gz → L1 点（16 列契约 + 质检 6 列，见 §4 说明） |
-| `35_mb_round2_file_cells.py` | 3 | L1 → L2 1′ 格（23 列，逐航次） |
-| `36_mb_round2_source_manifest_fragment.py` | 4 | L3 登记片段（26 列，独立 parquet） |
-| `37_mb_round2_coverage_stats.py` | 5 | 与严格准入层对照的只读覆盖统计 |
+| `ncei/code/32_mb_round2_completeness.py` | 0 | 下载日志 + 盘上 .part 扫描 → 完整/不完整分类 |
+| `ncei/swath/census.py` | 1 | 完整航次的文件格式普查 |
+| `ncei/swath/extract.py` | 2 | .mb58.gz → L1 点（16 列契约 + 质检 6 列，见 §4 说明） |
+| `ncei/swath/file_cells.py` | 3 | L1 → L2 1′ 格（23 列，逐航次） |
+| `ncei/swath/manifest_fragment.py` | 4 | L3 登记片段（26 列，独立 parquet） |
+| `ncei/swath/coverage.py` | 5 | 与严格准入层对照的只读覆盖统计 |
 
 ## 1. 输入盘点
 
@@ -48,7 +49,7 @@
 
 ## 3. 阶段 1：格式普查
 
-清单位：`ncei/derived/mb_round2/formats_manifest.parquet` / `.tsv`（脚本 `ncei/code/33_mb_round2_format_survey.py`），对象为阶段 0 的 14 个完整航次。
+清单位：`ncei/derived/mb_round2/formats_manifest.parquet` / `.tsv`（脚本 `ncei/swath/census.py`），对象为阶段 0 的 14 个完整航次。
 
 | 格式 | 文件数 | 字节 | 航次 |
 |---|---:|---:|---|
@@ -87,7 +88,7 @@
 
 ## 5. 阶段 3：L2 格子
 
-- 复用说明：任务书指定复用 jamstec `04a_make_multibeam_file_cells.py` 的逻辑。经核对，ncei 侧 `07_aggregate_file_cells_1min.py` 的 `aggregate_track_file()` 与 jamstec 04a 采用同一 cell_id 公式（07 文档串明确引用 04a），且直接产出规范 §1.2 的 23 列 multibeam_ncei 契约（04a 的跨 chunk 合并对中位数是加权近似，且产出 jamstec 自用 schema）。故本阶段 import 调用 `07.aggregate_track_file`，零复制；此对任务书的偏差请用户裁决。
+- 复用说明：任务书指定复用 jamstec `04a_make_multibeam_file_cells.py` 的逻辑。经核对，ncei 侧 `ncei/trackline/file_cells.py` 的 `aggregate_track_file()` 与 jamstec 04a 采用同一 cell_id 公式（07 文档串明确引用 04a），且直接产出规范 §1.2 的 23 列 multibeam_ncei 契约（04a 的跨 chunk 合并对中位数是加权近似，且产出 jamstec 自用 schema）。故本阶段 import 调用 `ncei.trackline.file_cells.aggregate_track_file`，零复制；此对任务书的偏差请用户裁决。
 - 逐航次 1′ 格（`ncei/derived/mb_round2/<航次>/file_cells_1min/<track_id>__mb58.parquet`，汇总清单 `ncei/derived/mb_round2/file_cells_manifest.parquet`）：
 
 | track_id | n_cells | pass 点 | 去重三元组 | duplicate_ratio |
@@ -211,7 +212,7 @@ HLY1102/AR66-A/AR66-B 点密度极高（em122 深水扇形扫描），L3 分类�
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-python ncei/code/43_mb_round2_quality_revision.py --workers 4
+python -m ncei.swath quality-revision --workers 4
 ```
 
 `--resume` 复用该入口已完成的隔离 L1/L2，继续统计。旧目录
@@ -245,7 +246,7 @@ python ncei/code/43_mb_round2_quality_revision.py --workers 4
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-python ncei/code/43_mb_round2_quality_revision.py --workers 4 --resume \
+python -m ncei.swath quality-revision --workers 4 --resume \
   --diagnosis-records ncei/derived/mb_round2/_runs/20261021_hnro14rr_diagnosis/affected_records.parquet
 ```
 
@@ -253,7 +254,7 @@ python ncei/code/43_mb_round2_quality_revision.py --workers 4 --resume \
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-python ncei/code/43_mb_round2_quality_revision.py \
+python -m ncei.swath quality-revision \
   --output-dir ncei/derived/mb_round2/_runs/20261021_quality_revision/without_located_records \
   --reuse-l1 ncei/derived/mb_round2/_runs/20261021_quality_revision \
   --exclude-records ncei/derived/mb_round2/_runs/20261021_hnro14rr_diagnosis/affected_records.parquet \

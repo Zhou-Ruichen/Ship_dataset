@@ -125,4 +125,4 @@ Total flagged: 106
 - Design audit: `ncei/docs/step04_aggregation_design_audit.md`
 - Step 03A output: `ncei/manifests/bathymetry_entry_manifest.parquet`
 - Step 03B supplement: `ncei/manifests/bathymetry_entry_manifest_supplementary.parquet`
-- Duplicate-triple convention: `pd.DataFrame({'lon','lat','depth'}).duplicated(keep='first')` with exact float equality — same as `06_supplementary_quality_check.py` Check B.
+- Duplicate-triple convention: `pd.DataFrame({'lon','lat','depth'}).duplicated(keep='first')` with exact float equality — same as `ncei/trackline/supplementary_qc.py` Check B.

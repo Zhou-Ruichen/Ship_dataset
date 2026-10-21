@@ -168,7 +168,7 @@ Reason source: fallback constant `step03b_flag`
 
 ## 10. References
 
-- Step 04A implementation: `ncei/code/07_aggregate_file_cells_1min.py` (`AGGREGATION_VERSION`).
+- Step 04A implementation: `ncei/trackline/file_cells.py` (`AGGREGATION_VERSION`).
 - Step 04A run report: `ncei/docs/step04a_file_cells_1min_report.md`.
 - Step 04A/04B design audit: `ncei/docs/step04_aggregation_design_audit.md`.
 - Spec §13 (NCEI Step 04A per-file 1-arcmin cell aggregation): `.trellis/spec/backend/pipeline-design-decisions.md`.

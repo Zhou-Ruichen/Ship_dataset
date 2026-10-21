@@ -2,28 +2,33 @@
 
 NCEI Marine Trackline Geophysical Data ingestion + cell-level quality
 products. Started as a flat-XYZ archive note; rebuilt as a 13-script
-per-track pipeline by task `.trellis/tasks/05-11-singlebeam-integration`
+per-track pipeline by task `.trellis/tasks/archive/2026-05/05-11-singlebeam-integration`
 (PR-A through PR-G, May 2026).
 
 ## Pipeline at a glance
 
-| Step | Script | Output |
+| Step | Command (`python -m ncei.trackline ...`) | Output |
 |---|---|---|
-| 01 | `code/01_build_trackline_source_manifest.py` | `manifests/trackline_source_manifest.parquet` (7,400 rows; R2 sb/mb classifier) |
-| 02 | `code/02_standardize_singlebeam.py` | `derived/singlebeam/points_raw/<id>__nc.parquet` (1,850 tracks) |
-| 03 | `code/03_standardize_xyz.py` | `derived/{singlebeam,multibeam}/points_raw/<id>__xyz.parquet` (5,382 tracks, sb+mb routed) |
-| 04 | `code/04_clean_mrar.py` | `archive/zhoushuai_processed_M/{bathymetry_points,land_mask}.parquet` (113.4M rows cleaned) |
-| 05 | `code/05_point_quality_check.py` (Step 03A) | `derived/{branch}/points_checked/*.parquet` + entry manifest |
-| 06 | `code/06_supplementary_quality_check.py` (Step 03B) | supplementary manifest + intersect divergence audit |
-| 07 | `code/07_aggregate_file_cells_1min.py` (Step 04A) | `derived/{branch}/file_cells_1min/*.parquet` (per-track 1-arcmin cells) |
-| 08 | `code/08_merge_branch_cells_1min.py` (Step 04B) | `derived/{branch}/cells_1min/` (hive-partitioned merged cells) |
-| 09 | `code/09_source_specific_overlap_residuals.py` (Step 05A) | within-branch residuals |
-| 10 | `code/10_cross_branch_overlap_audit.py` (Step 05B) | cross-branch overlap residuals |
-| 11 | `code/11_quality_policy_calibration_audit.py` (Step 06A) | stratified evidence + 16 candidate rules |
-| 12 | `code/12_apply_quality_policy.py` (Step 06B) | `derived/quality_flags_1min/cell_quality_flags_1min.parquet` (23.6M cells, 31 cols) |
-| 13 | `code/13_build_validation_cells.py` (Step 07B) | `derived/validation_cells_1min/` (5 final products) |
+| 01 | `01` / `manifest` | `manifests/trackline_source_manifest.parquet` (7,400 rows; R2 sb/mb classifier) |
+| 02 | `02` / `standardize-nc` | `derived/singlebeam/points_raw/<id>__nc.parquet` (1,850 tracks) |
+| 03 | `03` / `standardize-xyz` | `derived/{singlebeam,multibeam}/points_raw/<id>__xyz.parquet` (5,382 tracks, sb+mb routed) |
+| 04 | `04` / `clean-mrar` | `archive/zhoushuai_processed_M/{bathymetry_points,land_mask}.parquet` (113.4M rows cleaned) |
+| 05 | `05` / `point-qc` (Step 03A) | `derived/{branch}/points_checked/*.parquet` + entry manifest |
+| 06 | `06` / `supplementary-qc` (Step 03B) | supplementary manifest + intersect divergence audit |
+| 07 | `07` / `file-cells` (Step 04A) | `derived/{branch}/file_cells_1min/*.parquet` (per-track 1-arcmin cells) |
+| 08 | `08` / `merge-cells` (Step 04B) | `derived/{branch}/cells_1min/` (hive-partitioned merged cells) |
+| 09 | `09` / `source-overlap` (Step 05A) | within-branch residuals |
+| 10 | `10` / `branch-overlap` (Step 05B) | cross-branch overlap residuals |
+| 11 | `11` / `policy-audit` (Step 06A) | stratified evidence + 16 candidate rules |
+| 12 | `12` / `apply-policy` (Step 06B) | `derived/quality_flags_1min/cell_quality_flags_1min.parquet` (23.6M cells, 31 cols) |
+| 13 | `13` / `validation-cells` (Step 07B) | `derived/validation_cells_1min/` (5 final products) |
 
-Run any production step from repo root: `python ncei/code/<NN>_*.py --run-label sample|test100|full` (full requires `--confirm-full`). Frozen analyses (Step 08 pack 14–22, 27, 29) live under `ncei/analysis/`.
+Stages 23–26, 28, 30–31, 39–40 (regional/global singlebeam chains, global grid, MGD77T static
+bypass) run through the same dispatcher; `python -m ncei.trackline --help`
+lists every command. The round-2 swath chain is
+`python -m ncei.swath <command>` (stages 33–37, 43).
+
+Run the trackline chain from repo root via `python -m ncei.trackline <command>` (stage numbers work as aliases). Commands accepting `--run-label full` retain the `--confirm-full` gate. Frozen analyses (Step 08 pack 14–22, 27, 29) live under `ncei/analysis/`.
 
 ## Three branches (do not collapse)
 
@@ -67,7 +72,7 @@ regional_mrar → always regional_experiment (NEVER primary, NEVER expanded prim
 | `review_or_sensitivity_only` | 0.10–0.30 | ~11.3M |
 
 16 enforced rules + 1 invariant (manual_review_not_exclusion) live in
-`.trellis/tasks/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv`.
+`.trellis/tasks/archive/2026-05/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv`.
 
 ## Key conventions (pinned in spec §13–§19)
 
@@ -114,19 +119,83 @@ Global gridded-product validation results, frozen at commit `b376f95`
 - [`step08_gapfill_error_structure_report.md`](step08_gapfill_error_structure_report.md)
   — gap-fill RMSE attribution by quality tier / depth / region.
 
-Method spec: [`../../.trellis/spec/backend/step08_publication_pack.md`](../../.trellis/spec/backend/step08_publication_pack.md).
+Method spec: `.trellis/spec/backend/step08_publication_pack.md` (removed from
+the working tree in commit `37bb180`; read it there via
+`git show 37bb180:.trellis/spec/backend/step08_publication_pack.md`).
 Machine-readable artifacts (gitignored) land under
 `derived/model_validation_1min_step08_pub/{a_ranking_uncertainty,b_pub_tables,c_gapfill_structure,d_figures,summary}/`.
 
 ## Provenance / further reading
 
-- Per-step reports under `docs/step{0NA,03_,03b,04_,04a,04b,05a,05b,06a,06b,07a,07b,mrar,trackline,singlebeam,xyz}_*.md`
-- Task PRD: `.trellis/tasks/05-11-singlebeam-integration/prd.md`
+- Task PRD: `.trellis/tasks/archive/2026-05/05-11-singlebeam-integration/prd.md`
 - Spec sections: `.trellis/spec/backend/pipeline-design-decisions.md`
-  §13 (Step 04A) → §19 (Step 07B)
+  §13 (Step 04A) → §19 (Step 07B) — spec tree restructured in `37bb180`;
+  read the frozen sections via
+  `git show 37bb180:.trellis/spec/backend/pipeline-design-decisions.md`
 - Cross-cutting contracts: `.trellis/spec/backend/data-contracts.md`
+  (same commit)
 - Source-attribution evidence (NCEI_multibeam → JAMSTEC rename):
   `docs/experiments/2026-05_dataset-source-attribution.md`
 - M.rar provenance / cleaning: `archive/zhoushuai_processed_M/SOURCE.md`
 - Reference paper:
-  `docs/On the accuracy evaluation and correction of global single-beam depths.pdf`
+  `ncei/docs/On the accuracy evaluation and correction of global single-beam depths.pdf`
+
+## Document status groups
+
+Docs in this directory split into three groups. "Current product
+description" documents are the authority for a released or frozen product;
+"historical stage reports" record one finished run and are not updated;
+"external literature" is reference material.
+
+### Current product descriptions
+
+| Document | Describes |
+|---|---|
+| `README.md` | this index |
+| `trackline_source_manifest_schema.md` | L3 per-column semantics |
+| `trackline_source_manifest_report.md` | L3 generation report |
+| `step03_point_quality_check_report.md` | points_checked manifest (authoritative generation record) |
+| `step07a_validation_cell_preflight_report.md`, `step07b_validation_cells_report.md` | strict_primary generation record (manifest backfill basis) |
+| `step08_final_global_validation_report.md` | v1.0 frozen validation report (policy stance) |
+| `publication_ready_step08_summary.md` | v1.0 outward-facing summary |
+| `model_ranking_uncertainty_report.md` | v1.0 bootstrap CIs + ranking stability |
+| `step08_gapfill_error_structure_report.md` | v1.0 gap-fill RMSE attribution |
+| `step10_sb_interpolation_holdout_report.md` | holdout evidence behind spec §3 |
+| `step10_global_sb_final_product_report.md`, `step10_global_sb_products_report.md` | 25/26/30 global products |
+| `step15_mb_round2_processing.md` | round-2 three-layer set (merge pending review) |
+| `step16_mbbdb_value_ranking.md` | download order lists |
+| `product_completion_table.tsv`, `product_anomaly_summary.tsv`, `strict_primary_weighted_vs_unweighted_summary.tsv` | summary tables |
+
+### Historical stage reports
+
+One run each, kept as records; not updated on later runs:
+
+- Standardization era: `singlebeam_standardization_report.md`,
+  `xyz_standardization_report.md`, `mrar_cleaning_report.md`
+- L1/L2 design + runs: `step03b_supplementary_checks_report.md`,
+  `step04_aggregation_design_audit.md`, `step04a_file_cells_1min_report.md`,
+  `step04b_cells_1min_merge_report.md`
+- Overlap/quality-policy era: `step05a_source_specific_overlap_bias_report.md`,
+  `step05b_cross_branch_overlap_audit_report.md` (+ `_sample`),
+  `step06a_quality_policy_calibration_report.md` (+ `_sample`),
+  `step06b_cell_quality_flags_report.md` (+ `_sample`),
+  `step06b_quality_policy_rule_review.md`, `step06b_semantic_lock_report.md`
+- Step 07 sample run: `step07b_validation_cells_report_sample.md`
+- Step 08 intermediate runs: `strict_primary_global_validation_report{,_full_strict_primary}.md`,
+  `expanded_primary_global_validation_report{,_full_expanded_primary}.md`,
+  `strict_primary_full_validation_audit_report.md`,
+  `stage4_expanded_primary_validation_audit_report.md`,
+  `step08_preflight_report_{full_strict_primary,full_expanded_primary,smoke}.md`,
+  `step08_smoke_validation_report_smoke.md`,
+  `step08_non_primary_diagnostics_report_stage5_non_primary.md`
+- Six-region prototype chain: `step09_sb_track_bias_report.md`,
+  `step09_true_crossover_audit_report.md`, `step10_sb_network_bias_report.md`,
+  `step10_sb_track_quality_report.md`
+- Round-2 decision chain: `step10_screening_methods_survey.md`,
+  `step11_archive_gap_report.md`, `step12_channel_inventory.md`,
+  `step13_mbbdb_crosswalk.md`, `step14_next_step_decision_memo.md`,
+  `step17_tier_a_processing.md` (in-progress skeleton, tier-A loop)
+
+### External literature
+
+- `On the accuracy evaluation and correction of global single-beam depths.pdf`

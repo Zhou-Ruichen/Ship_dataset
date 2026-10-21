@@ -1,7 +1,7 @@
 # NCEI trackline source manifest — schema
 
 Schema of `ncei/manifests/trackline_source_manifest.parquet` (and the
-TSV mirror), produced by `ncei/code/01_build_trackline_source_manifest.py`
+TSV mirror), produced by `ncei/trackline/manifest.py`
 (PR-E1).
 
 26 columns, one row per source-side track. Two `.nc` files and two
@@ -51,7 +51,7 @@ build script itself.
 | `depth_max_raw` | float64 | Maximum raw depth value as stored in the source file (sign-preserved). Populated for `.xyz` sources only; NaN for `.nc` (see `depth_min_raw` note). NaN when `has_depth=False` for `.xyz`. |
 
 Note on the `mostly_positive` / `mostly_negative` cutoff: see the
-threshold logic in `01_build_trackline_source_manifest.py:depth_sign`
+threshold logic in `ncei/trackline/manifest.py:depth_sign`
 (lines ~150–170). NCEI documentation says `.xyz` files are
 negative-down (elevation convention); the 2026-05-19 full-corpus scan
 found all 5,382 `.xyz` files to be `mostly_positive`. The empirical
@@ -103,7 +103,7 @@ Rule: `n_points > 1M` → mb; `n_points < 100k` → sb;
 
 ## References
 
-- Script: `ncei/code/01_build_trackline_source_manifest.py`.
+- Script: `ncei/trackline/manifest.py`.
 - Classifier + thresholds: `_common/r2_classifier.py`.
 - Report (latest full run): `ncei/docs/trackline_source_manifest_report.md`.
 - PRD: `.trellis/tasks/05-11-singlebeam-integration/prd.md`

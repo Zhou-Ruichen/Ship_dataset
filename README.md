@@ -18,16 +18,35 @@ exact exclusion list.
 | Tracked | Not tracked (regenerable or external) |
 |---|---|
 | `jamstec/multibeam/code/` + `jamstec/multibeam/analysis/` — pipeline + analysis scripts | `**/raw/` (124 GB) — extracted `.dat` files |
+| `ncei/trackline/`, `ncei/swath/`, `ncei/analysis/`, `ncei/download/` — processing packages, analyses, downloader | `**/derived/` (178 GB) — points / cells / models |
 | `jamstec/multibeam/configs/` — YAML configs | `**/derived/` (178 GB) — points / cells / models |
 | `jamstec/multibeam/manifests/*.tsv` — small inventories | `**/archive/` (52 GB) — source zip / 7z |
 | `jamstec/multibeam/figures/*.png` — paper figures | `*.parquet`, `*.zip`, `*.7z`, `*.nc`, `*.npz`, ... |
-| `jamstec/multibeam/docs/*.md` — per-stage reports | `ncei/singlebeam.xyz` (3.1 GB flat dump) |
-| `docs/` — cross-dataset reference docs | `**/output/logs/` — per-script run logs |
+| `jamstec/multibeam/docs/*.md` — per-stage reports | `ncei/archive/sunmingzhi_singlebeam_xyz/singlebeam.xyz` (3.1 GB flat dump) |
+| `ncei/docs/*.md` — stage reports and product guidance | `ncei/raw_round2/` — round-2 raw swath archives |
+| `_common/` — shared helpers + tests | `**/output/logs/` — per-script run logs |
+| `docs/` — cross-dataset reference docs, `docs/code_archive.md` | `ncei/manifests/round2_download_log.parquet` |
 | `.trellis/` — workflow + spec + tasks | |
 | `.claude/` — AI agent configuration | |
 
 Reproducing the data products from a fresh clone requires obtaining the
 source archives (see "Reproducibility" below).
+
+---
+
+## Data sources, download entry, processing chain, products
+
+| Data | Source | Download | Processing chain | Main products |
+|---|---|---|---|---|
+| JAMSTEC multibeam | Two JAMSTEC zip archives (external) | one-time shell extract, `jamstec/multibeam/code/` stages 00–04 | `jamstec/multibeam/code/` steps 00–07 | `jamstec/multibeam/derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet` (2,394,115 cells) |
+| NCEI singlebeam | NCEI trackline archive (`tracklines_nc/` + `tracklines_xyz/`, external) | obtained externally, manifest by stage 01 | `python -m ncei.trackline` stages 01–13, 23–26, 28, 30 | `ncei/derived/singlebeam/file_cells_1min_final_r2/`, `ncei/derived/sb_track_quality_global/track_quality.parquet` |
+| NCEI round-2 swath multibeam / static tracklines | NCEI platforms tree / R2R / static MGD77T | `python -m ncei.download ...` ([`ncei/download/README.md`](ncei/download/README.md)); legacy stage-41/download scripts remain in `ncei/code/` until the switchover | `python -m ncei.swath` stages 33–37, 43 (32 superseded by `ncei.download verify`); static MGD77T: `python -m ncei.trackline` stages 39–40 | `ncei/derived/mb_round2/<cruise>/{points_raw,points_checked,file_cells_1min}/`, `ncei/derived/sb_round2_static/` |
+| Global merged grid | combines the above | — | `python -m ncei.trackline global-grid` (stage 31) | `ncei/derived/global_grid_1min_r2/` |
+
+Analyses that are not part of a production chain (frozen Step 08
+validation pack, SWOT T1 residual baselines, holdout evidence) live under
+`ncei/analysis/` and `jamstec/multibeam/analysis/`. Code removed from the
+working tree is indexed in [`docs/code_archive.md`](docs/code_archive.md).
 
 ---
 
@@ -83,11 +102,14 @@ raw/dat_by_subzip/*.dat        (5,140 audited / 5,083 processed)
 derived/validation_cells_1min/primary_ship_validation_cells_1min.parquet
   |        (2,394,115 cells — the canonical exported product)
   |
-  v   [08] validate gridded products         (08_validate_gridded_products_against_ship_cells.py)
-  v   [09] SWOT T1 batch validation          (09_batch_validate_swot_t1.py + analyze)
-  v   [10] residual dataset + 0.25° splits   (10_*, 10b_*)
-  v   [11] residual baselines (XGB/LGBM/...) (11_train_residual_baselines_T1.py)
+  v   [08] validate gridded products         (analysis/08_validate_gridded_products_against_ship_cells.py)
+  v   [09] SWOT T1 batch validation          (analysis/09_batch_validate_swot_t1.py + analyze)
+  v   [10] residual dataset + 0.25° splits   (analysis/10_*, 10b_*)
+  v   [11] residual baselines (XGB/LGBM/...) (analysis/11_train_residual_baselines_T1.py)
 ```
+
+Steps 00–07 are the production chain and live in `jamstec/multibeam/code/`;
+steps 06d and 08–11 are analyses in `jamstec/multibeam/analysis/`.
 
 Key design choices behind these steps (file-balanced median, 1' grid,
 A/B/C tiering, `run-label` gating, residual sign convention) are
@@ -149,10 +171,11 @@ Use strict multibeam wherever it exists. Elsewhere use
 
 | Product | Path | Status / how to use |
 |---|---|---|
-| Merged global 1-arcmin grid, round 2 | `ncei/derived/global_grid_1min_r2/` | Spec §2 product (script `31_build_global_grid_1min.py`); strict mb wins, non-rejected final sb fills; `product_manifest.json` records input hashes. |
+| Merged global 1-arcmin grid, round 2 | `ncei/derived/global_grid_1min_r2/` | Spec §2 product (stage 31); strict mb wins, non-rejected final sb fills; `product_manifest.json` records input hashes. |
 | Round-2 swath cruise three-layer set | `ncei/derived/mb_round2/<cruise>/{points_raw,points_checked,file_cells_1min}/` | L1/L2 for 12 complete cruises (10 × mb58 + 2 × mb21) + standalone L3 fragment `mb_round2_source_manifest_fragment.parquet`; **merge into production pending review** (`ncei/docs/step15_mb_round2_processing.md`). |
 | MBBDB increment value ranking | `ncei/derived/mbbdb_value_ranking/` | A/B/C order lists for the next download round (`ncei/docs/step16_mbbdb_value_ranking.md`). |
 | Round-2 raw sources | `ncei/raw_round2/{platforms_tree,r2r,mgd77t_static}/` | Raw swath archives + R2R products + static-tree MGD77T (in progress); provenance in `ncei/SOURCE.md`. |
+| Round-2 quality revision runs | `ncei/derived/mb_round2/_runs/<run-id>/` | Isolated rebuilds by stage 43; not merged into production. |
 
 ---
 
@@ -177,14 +200,20 @@ ship/
 │       ├── source_zips/      # 国外水深第一/第二部分.zip etc.
 │       └── bathymetry_data/  # 776 cruise zips (same source as multibeam/raw/subzips)
 ├── ncei/                     # NCEI ship-data processing and retained products
-│   ├── code/                 # Standardization, QC, cell, bias, crossover, and disposition stages
+│   ├── download/             # Unified round-2 downloader (`python -m ncei.download ...`)
+│   ├── trackline/            # Trackline chain 01–31, 39–40 (`python -m ncei.trackline ...`)
+│   ├── swath/                # Round-2 swath chain 33–37, 43 (`python -m ncei.swath ...`)
+│   ├── code/                 # Legacy download scripts only (41 pair, first tier-A
+│   │                         # downloader, 32 completeness); frozen until the switchover
 │   ├── analysis/             # Step 08 validation pack (14–22), 27 network bias, 29 holdout
 │   ├── docs/                 # Stage reports and product guidance
 │   ├── manifests/            # Track identity and source records
 │   └── derived/              # Generated products (ignored)
 ├── archive/                  # Top-level helper archives (ignored)
+├── _common/                  # Shared helpers: file_io, script_utils, mbsystem, r2_classifier, ...
 ├── docs/                     # Cross-dataset documentation
 │   ├── 多波束船测数据处理流程.md   # Authoritative pipeline overview
+│   ├── code_archive.md       # Index of removed/moved code
 │   └── experiments/          # Finished investigations
 ├── .trellis/                 # Trellis workflow framework
 │   ├── spec/                 # Data, evaluation, reproducibility, and writing rules
@@ -249,17 +278,29 @@ source record, while a matching pair retains the existing identity and is
 handled as an updated source rather than a second track.
 
 For NCEI ship data, rerun the applicable stages in this order from the repository
-root: stage 01 manifest; stages 02–06 standardization and QC; stages 07–08 cell
-products; stage 25 global bias; stage 26 global crossovers; stage 30 global
-disposition and final cells. Read each script's arguments before running it and
-keep existing derived rounds unchanged.
+root via `python -m ncei.trackline <command>` (stage numbers work as
+aliases): stage 01 manifest; stages 02–06 standardization and QC; stages
+07–08 cell products; stage 25 global bias; stage 26 global crossovers;
+stage 30 global disposition and final cells. Read a command's `--help`
+before running it and keep existing derived rounds unchanged.
 
 Raw swath multibeam downloaded from the NCEI platforms tree / R2R (round 2,
-`ncei/raw_round2/`) follows the separate stage 32–37 chain: completeness audit
-(32) → format census (33) → L1 extraction (34) → L2 cells (35) → L3 fragment
-(36, standalone until reviewed) → coverage statistics (37). New source-side
-values (`ncei_mb58`/`ncei_mb21`) enter production only after the fragment
-merge is approved.
+`ncei/raw_round2/`) uses the unified downloader: `python -m ncei.download
+run --catalog ... --work ...` resumes the Tier-B work directory; see
+[`ncei/download/README.md`](ncei/download/README.md) for the full command
+set (inventory / diff / fetch / merge / verify / run / rank). The Tier-B
+loop currently running is still driven by the legacy stage-41 downloader
+under `/tmp/tierB_gapfill/supervise.sh`; the legacy scripts in `ncei/code/`
+(the 41 pair, the first tier-A downloader, and stage 32's completeness
+audit) stay until the switchover, which needs the user's go-ahead.
+Downloaded cruises then follow the swath chain, run as
+`python -m ncei.swath <command>` (stage aliases 33–37, 43): format census
+(33) → L1 extraction (34) → L2 cells (35) → L3 fragment (36, standalone
+until reviewed) → coverage statistics (37); stage 43 (quality-revision)
+rebuilds L1/L2 and coverage in an isolated run directory under
+`ncei/derived/mb_round2/_runs/` without touching production outputs. New
+source-side values (`ncei_mb58`/`ncei_mb21`) enter production only after
+the fragment merge is approved.
 
 ## Product rounds
 

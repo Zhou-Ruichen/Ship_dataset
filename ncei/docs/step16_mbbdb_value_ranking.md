@@ -6,7 +6,7 @@
 
 目标：全球覆盖（六海区只标注、不筛选）；磁盘预算 9.5 TB（增量全量 43.8 TB 放不下，必须选批）。
 实测锚点：step15 的 10 个 mb58 完整航次 62 GB 原始 → 50,614 个严格层外新格（≈816.5 格/GB）。
-脚本：`ncei/code/38_mbbdb_value_ranking.py`（`--fetch-trackline` 取元数据，`--compute` 出全部产物）。
+脚本：`ncei/download/rank.py`（`--fetch-trackline` 取元数据，`--compute` 出全部产物）。
 
 ## 1. MBBDB 目录重拉
 

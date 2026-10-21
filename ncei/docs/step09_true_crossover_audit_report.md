@@ -1,7 +1,7 @@
 # Step 09 — True singlebeam crossover audit (deliverable D2)
 
 Generated: 2026-09-02T00:18:45Z  
-Script: `ncei/code/24_true_crossover_audit.py` (run from repo root)  
+Script: `ncei/trackline/crossover.py` (run from repo root)\
 Interpreter: `/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python`  
 Runtime: 40.7 s  
 Task: `.trellis/tasks/09-02-sb-crossover-bias-arms/prd.md` (D2)
@@ -197,5 +197,5 @@ ncei/derived/true_crossover_audit/
 
 ```bash
 cd /mnt/data2/00-Data/ship
-/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python ncei/code/24_true_crossover_audit.py --overwrite
+/mnt/data2/06-Projects/15-swot_feature_physics_bathy/.venv/bin/python -m ncei.trackline crossover --overwrite
 ```

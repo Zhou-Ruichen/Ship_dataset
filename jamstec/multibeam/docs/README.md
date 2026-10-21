@@ -23,11 +23,12 @@ This dataset originates from two large archives:
 ```
 jamstec/multibeam/
 ├── archive/                # Source large zip files
-├── code/                   # Processing scripts
+├── code/                   # Production-chain scripts (extraction + Steps 01–07)
 │   ├── 01_extract_subzips.sh
 │   ├── 02_check_subzips.sh
 │   ├── 03_recursive_extract.py
 │   └── 04_organize_dat.sh
+├── analysis/               # Analyses: 06d, 08, 09–11, plot_multibeam_figures
 ├── docs/                   # Logs and manifests
 │   ├── bad_subzips.txt     # List of corrupted sub-zips
 │   ├── dat_manifest.tsv    # Index of all extracted .dat files
@@ -40,7 +41,9 @@ jamstec/multibeam/
 ```
 
 ## 3. Processing Workflow
-Run the scripts in `code/` in numerical order to reproduce the dataset.
+Run the scripts in `code/` in numerical order to reproduce the dataset
+(extraction stage only; the full pipeline continues in `code/` Steps
+01–07, and the analysis steps 06d/08–11 live in `analysis/`).
 
 ### Step 1: Extract Sub-zips
 Extracts the two large archives into `raw/subzips/`.

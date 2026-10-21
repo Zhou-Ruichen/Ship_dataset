@@ -168,4 +168,4 @@ Step 06B implementation MUST:
 
 **Step 06B implementation can proceed.**
 
-All 5 sanity-check items are satisfied. Both deliverables (updated TSV + this report) reflect the locked semantics. No further policy design is required before code is written; the next concrete action is to implement `ncei/code/12_apply_quality_policy.py` (or analogous), driven entirely by the enforced TSV + the 4 contract clauses in §3 above.
+All 5 sanity-check items are satisfied. Both deliverables (updated TSV + this report) reflect the locked semantics. No further policy design is required before code is written; the next concrete action is to implement `ncei/trackline/apply_policy.py` (or analogous), driven entirely by the enforced TSV + the 4 contract clauses in §3 above.

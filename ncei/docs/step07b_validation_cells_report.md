@@ -5,7 +5,7 @@ Run label: `full`
 Validation product version: `ncei_validation_cells_v0.1.0`
 Elapsed: 485.8s
 
-This report is generated at runtime by `ncei/code/13_build_validation_cells.py`. The stage builds validation products only; it does not mutate Step 04B cells, Step 06B quality flags, or JAMSTEC inputs.
+This report is generated at runtime by `ncei/trackline/validation_cells.py`. The stage builds validation products only; it does not mutate Step 04B cells, Step 06B quality flags, or JAMSTEC inputs.
 
 ## 1. Per-product row count summary
 

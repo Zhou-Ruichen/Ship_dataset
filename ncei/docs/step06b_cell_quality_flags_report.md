@@ -5,7 +5,7 @@ Run label: `full`
 Policy enforce version: `ncei_policy_enforce_v0.1.0`
 Elapsed: 485.1s
 
-This report is generated at runtime by `ncei/code/12_apply_quality_policy.py`. The script writes a sidecar quality manifest and does not mutate Step 04B cells.
+This report is generated at runtime by `ncei/trackline/apply_policy.py`. The script writes a sidecar quality manifest and does not mutate Step 04B cells.
 
 ## 1. Row counts
 
@@ -115,4 +115,4 @@ This report is generated at runtime by `ncei/code/12_apply_quality_policy.py`. T
 - Spec: `.trellis/spec/backend/pipeline-design-decisions.md` §13 (data layers) / §14 (branch labels) / §15 (Step 05B cross-branch overlap) / §16 (Step 06 prerequisites) / §17 (Step 06A quality policy calibration).
 - Enforced rules TSV: `.trellis/tasks/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv` (18 cols × 16 rows; this script's only rule source).
 - Semantic lock report: `ncei/docs/step06b_semantic_lock_report.md` (Step 06B implementation contract — §1.2 filter grammar, §1.3 invariant rule, §1.4 AUV Sentry handling).
-- Predecessor (Step 06A): `ncei/code/11_quality_policy_calibration_audit.py` + `ncei/derived/quality_policy_calibration_1min/`.
+- Predecessor (Step 06A): `ncei/trackline/policy_audit.py` + `ncei/derived/quality_policy_calibration_1min/`.
