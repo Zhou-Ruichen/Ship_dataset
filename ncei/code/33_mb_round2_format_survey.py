@@ -31,6 +31,8 @@ def classify_ext(name: str) -> str:
         return ".part(stale)"
     if lowered.endswith(".all.mb58.gz"):
         return ".all.mb58.gz"
+    if lowered.endswith(".all.gz"):
+        return ".all.gz"
     if lowered.endswith(".mb58.gz"):
         return ".mb58.gz"
     if lowered.endswith(".raw.all.mb56.gz"):
