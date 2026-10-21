@@ -333,6 +333,7 @@ def nmad(values: pd.Series) -> float:
 def quality_tables(
     run: Path, cruises: list[str], l1_root: Path, exclusion_path: Path | None,
     diagnosis_path: Path | None,
+    baseline_diagnosis_path: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Write descriptive file/cruise quality tables without threshold labels."""
     l2 = read_cells(run, cruises)
@@ -470,6 +471,24 @@ def quality_tables(
     })
     file_df = pd.DataFrame(file_rows)
     cruise_df = pd.DataFrame(cruise_rows)
+    if baseline_diagnosis_path is not None:
+        baseline = read_record_list(baseline_diagnosis_path)
+        baseline_counts = baseline.groupby(["filekey", "file_ordinal"]).size()
+        file_df["r2_union_affected_record_count"] = file_df["r2_affected_record_count"]
+        file_df["r2_affected_record_count"] = [
+            baseline_counts.get((row.filekey, row.file_ordinal), 0)
+            for row in file_df.itertuples()
+        ]
+        cruise_df["r2_union_affected_record_count"] = cruise_df["r2_affected_record_count"]
+        cruise_df["r2_affected_record_count"] = cruise_df["cruise"].map(
+            file_df.groupby("cruise")["r2_affected_record_count"].sum()
+        )
+        for frame in (file_df, cruise_df):
+            frame["r2_count_scope"] = f"v1 located list: {baseline_diagnosis_path}"
+            frame["r2_union_count_scope"] = (
+                f"v1 union v2: {diagnosis_path}; both G1 pair members included; "
+                "sensitivity upper bound, not an adjudicated bad-sounding count"
+            )
     write_table(file_df, run / "file_quality_summary")
     write_table(cruise_df, run / "cruise_quality_summary")
     return file_df, cruise_df
@@ -797,9 +816,11 @@ def compare_record_exclusion(run: Path, retained_run: Path, exclusion_path: Path
         retained = pd.read_parquet(retained_run / f"{region}_candidate_coverage.parquet")
         excluded = pd.read_parquet(run / f"{region}_candidate_coverage.parquet")
         comparison = coverage_comparison(retained, excluded)
-        comparison = comparison.merge(retained[[
+        comparison = comparison.merge(excluded[[
             "candidate_id", "hnro14rr_located_cell_count", "hnro14rr_located_cells",
-            "coverage_condition_met", "measurement_action",
+        ]], on="candidate_id", validate="one_to_one")
+        comparison = comparison.merge(retained[[
+            "candidate_id", "coverage_condition_met", "measurement_action",
         ]], on="candidate_id", validate="one_to_one")
         comparison = comparison.merge(excluded[[
             "candidate_id", "coverage_condition_met", "measurement_action",
@@ -813,6 +834,7 @@ def main() -> int:
     parser.add_argument("--reuse-l1", type=Path, help="Reuse L1 from a previous quality-revision run.")
     parser.add_argument("--exclude-records", type=Path, help="Diagnosis parquet with point keys, cell_id, point_check_pass_basic, native_quality_state.")
     parser.add_argument("--diagnosis-records", type=Path, help="Located records for descriptive counts and candidate annotations; does not exclude points.")
+    parser.add_argument("--baseline-diagnosis-records", type=Path, help="Keep v1 quality-table counts and add the active v1-union-v2 diagnosis counts separately.")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
@@ -826,11 +848,13 @@ def main() -> int:
         raise ValueError("reused L1 must be from the isolated quality-revision directory")
     exclusion_path = args.exclude_records.resolve() if args.exclude_records else None
     diagnosis_path = args.diagnosis_records.resolve() if args.diagnosis_records else exclusion_path
+    baseline_diagnosis_path = args.baseline_diagnosis_records.resolve() if args.baseline_diagnosis_records else None
     parameters = {
         "entry": str(Path(__file__).relative_to(ROOT)), "cruises": CRUISES,
         "staging_root": str(PROD), "l1_root": str(l1_root),
         "exclude_records": str(exclusion_path) if exclusion_path else None,
         "diagnosis_records": str(diagnosis_path) if diagnosis_path else None,
+        "baseline_diagnosis_records": str(baseline_diagnosis_path) if baseline_diagnosis_path else None,
         "selection_policy": SELECTION_POLICY, "source_path_root": "ncei",
         "source_relpath_root": "ncei/raw_round2/platforms_tree",
         "combined_depth_estimator": "median of cruise-cell medians; unweighted across cruises",
@@ -854,7 +878,7 @@ def main() -> int:
                 raise ValueError(f"resume input changed: {key}")
     run.mkdir(parents=True, exist_ok=True)
     write_json(parameters, parameter_path)
-    for path in {exclusion_path, diagnosis_path} - {None}:
+    for path in {exclusion_path, diagnosis_path, baseline_diagnosis_path} - {None}:
         records = read_record_list(path)
         evidence_columns = {"cell_id", "point_check_pass_basic", "native_quality_state"}
         if not evidence_columns.issubset(records.columns):
@@ -889,7 +913,7 @@ def main() -> int:
         "reason": "UTC unavailable or invalid; no observation-coverage inference",
     }]), run / "unprocessed_cruises")
     write_table(source_manifest(rows), run / "source_manifest_fragment")
-    quality_tables(run, CRUISES, l1_root, exclusion_path, diagnosis_path)
+    quality_tables(run, CRUISES, l1_root, exclusion_path, diagnosis_path, baseline_diagnosis_path)
     outcome = analyze(run, CRUISES, diagnosis_path)
     inspect_izu_sampling(run, l1_root, exclusion_path)
     if exclusion_path is not None and l1_root != run:
