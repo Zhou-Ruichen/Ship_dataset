@@ -97,6 +97,7 @@ DIVERGENCE_AUDIT = MANIFEST_DIR / "intersect_divergence_audit.parquet"
 
 VALID_RUN_LABELS = ("sample", "test100", "full")
 AGGREGATION_VERSION = "ncei_cells_v0.1.0"
+SELECTION_POLICIES = ("basic", "basic_native_good")
 
 # Per-PRD 1-arcmin = 1/60°.
 CELL_SIZE_DEG = 1.0 / 60.0
@@ -304,6 +305,42 @@ def _decode_cell_key(key: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return lon_bin, lat_bin
 
 
+def selection_columns(selection_policy: str) -> list[str]:
+    """Columns required by the explicit point-selection policy."""
+    if selection_policy not in SELECTION_POLICIES:
+        raise ValueError(f"unknown selection policy: {selection_policy}")
+    columns = ["lon", "lat", "depth_m_positive_down", "point_check_pass_basic"]
+    if selection_policy == "basic_native_good":
+        columns.append("native_quality_state")
+    return columns
+
+
+def point_selection_mask(points: pd.DataFrame, selection_policy: str = "basic") -> np.ndarray:
+    """Keep the legacy basic check unless native-good selection is requested."""
+    required = selection_columns(selection_policy)
+    missing = set(required) - set(points.columns)
+    if missing:
+        raise ValueError(f"{selection_policy} selection requires columns: {sorted(missing)}")
+    mask = points["point_check_pass_basic"].to_numpy(dtype=bool)
+    if selection_policy == "basic_native_good":
+        mask = mask & points["native_quality_state"].eq("good").fillna(False).to_numpy(dtype=bool)
+    return mask
+
+
+def record_exclusion_mask(points: pd.DataFrame, exclusions: pd.DataFrame | None) -> np.ndarray:
+    """Locate diagnosed records by their unchanged staging-record keys."""
+    mask = np.zeros(len(points), dtype=bool)
+    if exclusions is None or exclusions.empty:
+        return mask
+    for (filekey, ordinal), group in exclusions.groupby(["filekey", "file_ordinal"]):
+        mask |= (
+            points["filekey"].eq(filekey).to_numpy()
+            & points["file_ordinal"].eq(ordinal).to_numpy()
+            & points["staging_row"].isin(group["staging_row"]).to_numpy()
+        )
+    return mask
+
+
 def aggregate_points(points: pd.DataFrame) -> pd.DataFrame:
     """Bin lon/lat into 1-arcmin cells and aggregate per cell.
 
@@ -509,8 +546,11 @@ def aggregate_track_file(
     branch: str,
     manual_review_flag: bool,
     overwrite: bool,
+    selection_policy: str = "basic",
+    batch_size: int | None = None,
+    excluded_records: pd.DataFrame | None = None,
 ) -> dict:
-    """Aggregate one per-track points_checked parquet (sb/mb branches)."""
+    """Aggregate checked points, optionally reading selected rows in batches."""
     if not input_path.exists():
         raise FileNotFoundError(f"input parquet not found: {input_path}")
     if output_path.exists() and not overwrite:
@@ -519,19 +559,36 @@ def aggregate_track_file(
         )
 
     start = datetime.now()
-    df = pd.read_parquet(
-        input_path,
-        columns=[
-            "lon",
-            "lat",
-            "depth_m_positive_down",
-            "point_check_pass_basic",
-        ],
+    columns = selection_columns(selection_policy)
+    if excluded_records is not None and not excluded_records.empty:
+        columns += ["filekey", "file_ordinal", "staging_row"]
+    missing = set(columns) - set(pq.read_schema(input_path).names)
+    if missing:
+        raise ValueError(f"{input_path}: {selection_policy} selection missing {sorted(missing)}")
+    if batch_size is None:
+        frames = [pd.read_parquet(input_path, columns=columns)]
+    else:
+        frames = (batch.to_pandas() for batch in pq.ParquetFile(input_path).iter_batches(
+            batch_size=batch_size, columns=columns
+        ))
+    pieces = []
+    n_input = n_basic = n_selected = n_excluded = 0
+    for df in frames:
+        mask = point_selection_mask(df, selection_policy)
+        excluded = record_exclusion_mask(df, excluded_records)
+        n_input += len(df)
+        n_basic += int(df["point_check_pass_basic"].sum())
+        n_excluded += int((mask & excluded).sum())
+        mask &= ~excluded
+        n_selected += int(mask.sum())
+        pieces.append(df.loc[mask, ["lon", "lat", "depth_m_positive_down"]])
+    valid = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame(
+        columns=["lon", "lat", "depth_m_positive_down"]
     )
-    pass_mask = df["point_check_pass_basic"].to_numpy(dtype=bool)
-    valid = df.loc[pass_mask, ["lon", "lat", "depth_m_positive_down"]]
+    del pieces, frames
 
     cell_df = aggregate_points(valid)
+    del valid
     out_df = attach_constant_cols(
         cell_df,
         track_id=track_id,
@@ -546,6 +603,8 @@ def aggregate_track_file(
     elapsed = (datetime.now() - start).total_seconds()
     n_cells = int(len(out_df))
     n_points_total = int(out_df["n_points_pass"].sum()) if n_cells else 0
+    if n_points_total != n_selected:
+        raise AssertionError(f"L1 selected {n_selected} != L2 points {n_points_total}")
     n_unique_total = int(out_df["n_unique_triples"].sum()) if n_cells else 0
     overall_dup = (
         0.0
@@ -566,6 +625,11 @@ def aggregate_track_file(
         "manual_review_flag": bool(manual_review_flag),
         "runtime_seconds": float(elapsed),
         "aggregation_version": AGGREGATION_VERSION,
+        "selection_policy": selection_policy,
+        "n_input_rows": n_input,
+        "n_pass_basic": n_basic,
+        "n_selected": n_selected,
+        "n_excluded_selected_records": n_excluded,
     }
 
 
@@ -574,6 +638,7 @@ def aggregate_mrar(
     entries: pd.DataFrame,
     overwrite: bool,
     logger: logging.Logger,
+    selection_policy: str = "basic",
 ) -> list[dict]:
     """Stream the M.rar combined parquet and write ONE output per quadrant.
 
@@ -637,13 +702,7 @@ def aggregate_mrar(
     start_stream = datetime.now()
     for batch in pf.iter_batches(
         batch_size=MRAR_BATCH_SIZE,
-        columns=[
-            "track_id",
-            "lon",
-            "lat",
-            "depth_m_positive_down",
-            "point_check_pass_basic",
-        ],
+        columns=["track_id", *selection_columns(selection_policy)],
     ):
         n_batches += 1
         bdf = batch.to_pandas()
@@ -652,7 +711,7 @@ def aggregate_mrar(
             continue
 
         # Apply pass-basic + selected-track filter in pyarrow-friendly order.
-        bdf = bdf[bdf["point_check_pass_basic"].astype(bool)]
+        bdf = bdf[point_selection_mask(bdf, selection_policy)]
         if bdf.empty:
             continue
         for tid, sub in bdf.groupby("track_id", sort=False):
@@ -1059,6 +1118,7 @@ def main() -> int:
         )
     )
     parser.add_argument("--run-label", choices=VALID_RUN_LABELS, default="sample")
+    parser.add_argument("--selection-policy", choices=SELECTION_POLICIES, default="basic")
     parser.add_argument(
         "--limit-files",
         type=int,
@@ -1250,6 +1310,7 @@ def main() -> int:
                 branch=str(row["branch"]),
                 manual_review_flag=mrf,
                 overwrite=args.overwrite,
+                selection_policy=args.selection_policy,
             )
             manifest_rows.append(res)
         except Exception as exc:  # noqa: BLE001
@@ -1272,6 +1333,7 @@ def main() -> int:
                 entries=mrar_work,
                 overwrite=args.overwrite,
                 logger=logger,
+                selection_policy=args.selection_policy,
             )
             manifest_rows.extend(mrar_results)
         except Exception as exc:  # noqa: BLE001

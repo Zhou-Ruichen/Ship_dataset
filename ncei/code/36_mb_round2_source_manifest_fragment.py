@@ -51,6 +51,60 @@ COLUMNS = [
 SOURCE_ARCHIVE = "ncei platforms tree direct download (raw_round2, 2026-09)"
 
 
+def resolve_source_paths(
+    cruise: str, manifest: pd.DataFrame,
+    raw_root: Path = REPO_ROOT / "ncei/raw_round2/platforms_tree",
+) -> tuple[str, pd.DataFrame]:
+    """Resolve extraction paths without changing their historical file keys.
+
+    source_relpath is relative to platforms_tree; source_path is relative
+    to ncei, as required by the trackline source-manifest contract.
+    """
+    resolved = manifest.copy()
+    candidates = [raw_root / cruise, *sorted(raw_root.glob(f"*/{cruise}"))]
+    source_dirs = [path for path in candidates if path.is_dir()]
+    paths = []
+    for row in resolved.itertuples():
+        rel = Path(row.relpath)
+        if "source_relpath" in resolved and pd.notna(row.source_relpath):
+            path = raw_root / row.source_relpath
+        elif (raw_root / rel).is_file():
+            path = raw_root / rel
+        else:
+            parts = rel.parts
+            tail = Path(*parts[parts.index(cruise) + 1:])
+            matches = [directory / tail for directory in source_dirs if (directory / tail).is_file()]
+            if not matches and tail.suffix == ".gz":
+                # Historical staging can outlive a source archive that was
+                # unpacked in place; use the existing uncompressed source.
+                raw_tail = tail.with_suffix("")
+                candidates_without_compression = [raw_tail]
+                if raw_tail.suffix in {".mb11", ".mb32", ".mb41", ".mb58", ".mb84", ".mb121"}:
+                    candidates_without_compression.append(raw_tail.with_suffix(""))
+                for candidate in candidates_without_compression:
+                    matches = [
+                        directory / candidate for directory in source_dirs
+                        if (directory / candidate).is_file()
+                    ]
+                    if matches:
+                        break
+            if len(matches) != 1:
+                raise ValueError(f"{cruise}: source path is missing or ambiguous: {rel}: {matches}")
+            path = matches[0]
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        paths.append(path.relative_to(raw_root).as_posix())
+    resolved["source_relpath"] = paths
+    cruise_dirs = set()
+    for rel in paths:
+        parts = Path(rel).parts
+        cruise_dirs.add(Path(*parts[:parts.index(cruise) + 1]))
+    if len(cruise_dirs) != 1:
+        raise ValueError(f"{cruise}: expected one source directory, got {cruise_dirs}")
+    directory = raw_root / cruise_dirs.pop()
+    return directory.relative_to(REPO_ROOT / "ncei").as_posix(), resolved
+
+
 def main() -> int:
     rows = []
     for cruise_dir in sorted(p for p in OUT_ROOT.iterdir() if (p / "points_checked").is_dir()):
@@ -63,6 +117,7 @@ def main() -> int:
         tag = points_path.stem.split("__", 1)[1]
         manifest = pd.read_parquet(cruise_dir / "extraction_manifest.parquet")
         ok = manifest[manifest["status"].isin(["ok", "skipped_exists"])]
+        source_path, _ = resolve_source_paths(cruise, ok)
         # Depth-sign verdict comes from the stage-2 merge summary; manifest
         # counters are None for files skipped on resumed runs and cannot be
         # summed across mixed runs.
@@ -117,7 +172,7 @@ def main() -> int:
             "track_id": track_id,
             "source_type": f"ncei_{tag}",
             "source_completeness": f"{tag}_only",
-            "source_path": f"raw_round2/platforms_tree/{cruise}",
+            "source_path": source_path,
             "source_archive": SOURCE_ARCHIVE,
             "n_points": n_points,
             "bbox_lon_min": lon_min, "bbox_lon_max": lon_max,

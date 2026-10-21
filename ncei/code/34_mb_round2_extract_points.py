@@ -15,9 +15,8 @@ recorded and skipped. For each target cruise, every file is:
   3. joined U3(left)/U0(good-beams) via
      scs_v2_stage_c_processing._raw_from_object (imported, not copied);
   4. converted to a per-file staging shard; at cruise end the shards are
-     merged into the 16-column L1 points_raw contract (matching the
-     existing ncei/derived/multibeam/points_raw schema) plus the
-     6-column points_checked QC extension.
+     merged into the L1 points_raw contract with native quality and
+     staging-record lineage, plus the points_checked QC extension.
 
 Depth sign is diagnosed per cruise from the raw parser depths (the
 L3 five-state enum) before the standardized depth column is written;
@@ -69,10 +68,18 @@ MBLIST = ENVIRONMENT_ROOT / "build/mbsystem/src/utilities/mblist"
 MBSYSTEM_VERSION = "5.8.3beta16"
 
 # MBIO format id by filename suffix; None -> probe by content signature.
-FORMAT_BY_SUFFIX = {".mb58.gz": 58, ".mb21.gz": 21, ".mb57.gz": 57}
+FORMAT_BY_SUFFIX = {
+    ".mb58.gz": 58, ".all.gz": 58, ".mb21.gz": 21, ".mb57.gz": 57,
+    ".mb41.gz": 41, ".mb32.gz": 32, ".mb11.gz": 11, ".rc00.gz": 15,
+    ".mb84.gz": 84,  # Preserve the source .prj as _work/<filekey>/input.mb58.prj.
+    ".gsf.mb121.gz": 121,
+}
+# '.all.gz' (NCEI level_00 tier-A packaging) is the same Kongsberg raw
+# content as '.all.mb58.gz'; verified 2026-09 with mbinfo -F58
+# (MBF_EM710RAW) on AR71-03/level_00/AR71-03_RAW_EM710.
 # Known swath suffixes this chain does not support (recorded explicitly so
 # they are not mislabelled as 'unknown').
-KNOWN_UNSUPPORTED_SUFFIXES = {".mb56.gz", ".mb41.gz"}
+KNOWN_UNSUPPORTED_SUFFIXES = {".mb56.gz", ".mb162.gz"}
 # Hydrosweep DS raw ASCII header (format 21) — the only content signature
 # we auto-detect for suffix-less files; anything else is skipped with a
 # recorded reason rather than guessed.
@@ -85,6 +92,8 @@ POINT_COLUMNS = [
     "lon_raw", "lat_raw", "lon", "lat", "depth_raw",
     "depth_m_positive_down", "elev_m", "gobs", "faa",
     "source_completeness", "instrument_class_pred", "standardization_version",
+    "filekey", "file_ordinal", "point_index_in_file", "staging_row",
+    "native_quality_state",
 ]
 CHECK_COLUMNS = [
     "valid_lon", "valid_lat", "valid_depth_pos", "valid_depth_max",
@@ -149,6 +158,33 @@ def append_command(path: Path, record: dict) -> None:
         handle.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+def staging_statistics(path: Path) -> dict:
+    """Recover quality and depth counts from an existing staging shard."""
+    counts = dict.fromkeys(
+        ["n_rows", "n_good", "n_flagged", "n_null", "n_unknown",
+         "n_depth_pos", "n_depth_neg", "n_depth_zero", "n_depth_nan"], 0
+    )
+    shard = pq.ParquetFile(path)
+    if "native_quality_state" not in shard.schema_arrow.names:
+        raise ValueError(f"native_quality_state missing from staging: {path}")
+    for batch in shard.iter_batches(
+        batch_size=1_000_000, columns=["depth_raw", "native_quality_state"]
+    ):
+        df = batch.to_pandas()
+        depth = df["depth_raw"].to_numpy(dtype=np.float64)
+        finite = np.isfinite(depth)
+        counts["n_rows"] += len(df)
+        counts["n_depth_pos"] += int(np.count_nonzero(depth[finite] > 0))
+        counts["n_depth_neg"] += int(np.count_nonzero(depth[finite] < 0))
+        counts["n_depth_zero"] += int(np.count_nonzero(depth[finite] == 0))
+        counts["n_depth_nan"] += int(np.count_nonzero(~finite))
+        quality = df["native_quality_state"]
+        for state in ("good", "flagged", "null"):
+            counts[f"n_{state}"] += int(quality.eq(state).sum())
+        counts["n_unknown"] += int((~quality.isin(["good", "flagged", "null"])).sum())
+    return counts
+
+
 def run_command(argv: list[str], *, stdout_path: Path | None, stderr_path: Path, ledger_path: Path, object_id: str, role: str) -> subprocess.CompletedProcess[str]:
     """Mirrors the SCS command-ledger contract (argv + rc + stream hashes)."""
     if stdout_path is None:
@@ -189,15 +225,12 @@ def process_one_file(cruise: str, ordinal: int, rel: Path, scs, mb_format: int, 
     object_id = f"mb_round2/{cruise}/{rel.name}"
 
     if staging_path.exists():
-        existing = pq.read_metadata(staging_path)
         return {
             "cruise": cruise, "file_ordinal": ordinal, "relpath": rel.as_posix(),
             "filekey": key, "mb_format": mb_format, "format_note": format_note, "status": "skipped_exists",
             "gz_bytes": gz_path.stat().st_size,
-            "n_rows": existing.num_rows,
-            "n_good": None, "n_flagged": None, "n_null": None,
-            "n_depth_pos": None, "n_depth_neg": None, "n_depth_zero": None,
-            "n_depth_nan": None, "error_code": "", "error_detail": "",
+            **staging_statistics(staging_path),
+            "error_code": "", "error_detail": "",
             "runtime_seconds": 0.0,
         }
 
@@ -306,8 +339,11 @@ def process_one_file(cruise: str, ordinal: int, rel: Path, scs, mb_format: int, 
     return row
 
 
-def merge_cruise(cruise: str, manifest: pd.DataFrame) -> dict:
-    """Merge staging shards into the 16-col points_raw + 22-col points_checked."""
+def merge_cruise(
+    cruise: str, manifest: pd.DataFrame, *,
+    staging_dir: Path | None = None, output_dir: Path | None = None,
+) -> dict:
+    """Merge shards with native quality and record lineage; recover manifest counts."""
     track_id = cruise.lower()
     ok_all = manifest[manifest["status"].isin(["ok", "skipped_exists"])].sort_values("file_ordinal")
     if ok_all.empty:
@@ -325,23 +361,20 @@ def merge_cruise(cruise: str, manifest: pd.DataFrame) -> dict:
         raise ValueError(f"{cruise}: expected exactly one usable format, got {formats_used}")
     source_type = f"ncei_mb{mb_format}"
     source_completeness = f"mb{mb_format}_only"
-    standardization_version = f"34_mb_round2_extract_points.py v1; mblist 5.8.3beta16 -F{mb_format} U3/U0 join"
-    out_cruise_dir = OUT_ROOT / cruise
-    staging_dir = out_cruise_dir / "_staging"
+    standardization_version = f"34_mb_round2_extract_points.py v2; mblist 5.8.3beta16 -F{mb_format} U3/U0 join; staging lineage"
+    out_cruise_dir = output_dir if output_dir is not None else OUT_ROOT / cruise
+    staging_dir = staging_dir if staging_dir is not None else OUT_ROOT / cruise / "_staging"
     ok = ok_all
     # Depth-sign stats recomputed from the shards themselves — manifest rows
     # for skipped files carry None counters, so they cannot be trusted as a
     # statistics source across resumed runs.
-    n_pos = n_neg = n_zero = n_nan = 0
+    totals = {}
     for row in ok.itertuples():
-        shard = pq.ParquetFile(staging_dir / f"{row.filekey}.parquet")
-        for batch in shard.iter_batches(batch_size=1_000_000, columns=["depth_raw"]):
-            depth = batch.to_pandas()["depth_raw"].to_numpy(dtype=np.float64)
-            finite = np.isfinite(depth)
-            n_pos += int(np.count_nonzero(depth[finite] > 0))
-            n_neg += int(np.count_nonzero(depth[finite] < 0))
-            n_zero += int(np.count_nonzero(depth[finite] == 0))
-            n_nan += int(np.count_nonzero(~finite))
+        counts = staging_statistics(staging_dir / f"{row.filekey}.parquet")
+        for name, count in counts.items():
+            manifest.loc[row.Index, name] = count
+            totals[name] = totals.get(name, 0) + count
+    n_pos, n_neg, n_zero = (totals[k] for k in ("n_depth_pos", "n_depth_neg", "n_depth_zero"))
     n_values = n_pos + n_neg + n_zero
     if n_values == 0:
         sign = "no_depth_values"
@@ -365,30 +398,33 @@ def merge_cruise(cruise: str, manifest: pd.DataFrame) -> dict:
     tmp_raw = raw_out.with_suffix(".parquet.tmp")
     tmp_chk = chk_out.with_suffix(".parquet.tmp")
 
-    writer_raw = pq.ParquetWriter(tmp_raw, pa.schema(
+    raw_schema = pa.schema(
         [("source_type", pa.string()), ("track_id", pa.string()), ("point_index_in_track", pa.int64()),
          ("time", pa.timestamp("ns")), ("lon_raw", pa.float64()), ("lat_raw", pa.float64()),
          ("lon", pa.float64()), ("lat", pa.float64()), ("depth_raw", pa.float64()),
          ("depth_m_positive_down", pa.float64()), ("elev_m", pa.float64()), ("gobs", pa.float64()),
          ("faa", pa.float64()), ("source_completeness", pa.string()), ("instrument_class_pred", pa.string()),
-         ("standardization_version", pa.string())]), compression="zstd")
-    writer_chk = pq.ParquetWriter(tmp_chk, pa.schema(
-        [pa.field(n, t) for n, t in [
-            ("source_type", pa.string()), ("track_id", pa.string()), ("point_index_in_track", pa.int64()),
-            ("time", pa.timestamp("ns")), ("lon_raw", pa.float64()), ("lat_raw", pa.float64()),
-            ("lon", pa.float64()), ("lat", pa.float64()), ("depth_raw", pa.float64()),
-            ("depth_m_positive_down", pa.float64()), ("elev_m", pa.float64()), ("gobs", pa.float64()),
-            ("faa", pa.float64()), ("source_completeness", pa.string()), ("instrument_class_pred", pa.string()),
-            ("standardization_version", pa.string()), ("valid_lon", pa.bool_()), ("valid_lat", pa.bool_()),
-            ("valid_depth_pos", pa.bool_()), ("valid_depth_max", pa.bool_()),
-            ("valid_core_fields", pa.bool_()), ("point_check_pass_basic", pa.bool_())]]), compression="zstd")
+         ("standardization_version", pa.string()), ("filekey", pa.string()),
+         ("file_ordinal", pa.int32()), ("point_index_in_file", pa.int64()),
+         ("staging_row", pa.int64()), ("native_quality_state", pa.string())])
+    checked_schema = pa.schema(
+        list(raw_schema) + [pa.field(name, pa.bool_()) for name in CHECK_COLUMNS]
+    )
+    writer_raw = pq.ParquetWriter(tmp_raw, raw_schema, compression="zstd")
+    writer_chk = pq.ParquetWriter(tmp_chk, checked_schema, compression="zstd")
 
     global_index = 0
     n_rows = 0
     n_pass = 0
+    n_selected = 0
+    bounds = {"lon_min": np.inf, "lon_max": -np.inf, "lat_min": np.inf,
+              "lat_max": -np.inf, "depth_min_raw": np.inf, "depth_max_raw": -np.inf}
+    n_finite_position = 0
     for row in ok.itertuples():
         shard_path = staging_dir / f"{row.filekey}.parquet"
         pf = pq.ParquetFile(shard_path)
+        staging_row = 0
+        file_basic = file_selected = 0
         for batch in pf.iter_batches(batch_size=500_000):
             df = batch.to_pandas()
             n = len(df)
@@ -400,6 +436,9 @@ def merge_cruise(cruise: str, manifest: pd.DataFrame) -> dict:
             valid_pos = np.isfinite(depth_std) & (depth_std > 0.0)
             valid_max = np.isfinite(depth_std) & (depth_std <= DEPTH_VALID_MAX_M)
             core = valid_lon & valid_lat & valid_pos & valid_max
+            selected = core & df["native_quality_state"].eq("good").to_numpy(dtype=bool)
+            if not df["file_ordinal"].eq(row.file_ordinal).all():
+                raise ValueError(f"file_ordinal disagrees with extraction manifest: {shard_path}")
             base = {
                 "source_type": np.full(n, source_type, dtype=object),
                 "track_id": np.full(n, track_id, dtype=object),
@@ -417,14 +456,37 @@ def merge_cruise(cruise: str, manifest: pd.DataFrame) -> dict:
                 "source_completeness": np.full(n, source_completeness, dtype=object),
                 "instrument_class_pred": np.full(n, INSTRUMENT_CLASS, dtype=object),
                 "standardization_version": np.full(n, standardization_version, dtype=object),
+                "filekey": np.full(n, row.filekey, dtype=object),
+                "file_ordinal": df["file_ordinal"].to_numpy(dtype=np.int32),
+                "point_index_in_file": df["point_index_in_file"].to_numpy(dtype=np.int64),
+                "staging_row": np.arange(staging_row, staging_row + n, dtype=np.int64),
+                "native_quality_state": df["native_quality_state"].to_numpy(),
             }
-            writer_raw.write_table(pa.Table.from_pydict(base))
+            writer_raw.write_table(pa.Table.from_pydict(base, schema=raw_schema))
             writer_chk.write_table(pa.Table.from_pydict({**base,
                 "valid_lon": valid_lon, "valid_lat": valid_lat, "valid_depth_pos": valid_pos,
-                "valid_depth_max": valid_max, "valid_core_fields": core, "point_check_pass_basic": core}))
+                "valid_depth_max": valid_max, "valid_core_fields": core, "point_check_pass_basic": core},
+                schema=checked_schema))
             global_index += n
+            staging_row += n
             n_rows += n
             n_pass += int(core.sum())
+            n_selected += int(selected.sum())
+            file_basic += int(core.sum())
+            file_selected += int(selected.sum())
+            finite_position = np.isfinite(df["lon"]) & np.isfinite(df["lat"])
+            n_finite_position += int(finite_position.sum())
+            for name in ("lon", "lat"):
+                values = df.loc[finite_position, name].to_numpy()
+                if len(values):
+                    bounds[f"{name}_min"] = min(bounds[f"{name}_min"], float(values.min()))
+                    bounds[f"{name}_max"] = max(bounds[f"{name}_max"], float(values.max()))
+            finite_depth = depth_raw[np.isfinite(depth_raw)]
+            if len(finite_depth):
+                bounds["depth_min_raw"] = min(bounds["depth_min_raw"], float(finite_depth.min()))
+                bounds["depth_max_raw"] = max(bounds["depth_max_raw"], float(finite_depth.max()))
+        manifest.loc[row.Index, "n_pass_basic"] = file_basic
+        manifest.loc[row.Index, "n_selected_basic_native_good"] = file_selected
     writer_raw.close()
     writer_chk.close()
     os.replace(tmp_raw, raw_out)
@@ -433,6 +495,11 @@ def merge_cruise(cruise: str, manifest: pd.DataFrame) -> dict:
         "cruise": cruise, "track_id": track_id, "mb_format": mb_format,
         "depth_sign_raw": sign,
         "sign_flip": sign_flip, "n_rows": n_rows, "n_pass_basic": n_pass,
+        **{k: v for k, v in totals.items() if k != "n_rows"},
+        "n_selected_basic_native_good": n_selected,
+        "selection_rule": "point_check_pass_basic & (native_quality_state == 'good')",
+        "n_finite_position": n_finite_position,
+        **{k: v if np.isfinite(v) else None for k, v in bounds.items()},
         "points_raw_path": str(raw_out.relative_to(REPO_ROOT)),
         "points_checked_path": str(chk_out.relative_to(REPO_ROOT)),
     }
@@ -467,7 +534,18 @@ def main() -> int:
         rows: list[dict] = []
         if not args.merge_only:
             tasks = [(cruise, ordinal, rel, *formats[rel.as_posix()]) for ordinal, rel in enumerate(files)]
-            with mp.Pool(processes=min(args.workers, len(tasks))) as pool:
+            if not tasks:
+                manifest = pd.DataFrame(columns=["cruise", "file_ordinal", "relpath", "filekey", "status"])
+                manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                manifest.to_parquet(manifest_path, index=False)
+                summary = {"cruise": cruise, "track_id": cruise.lower(), "mb_format": None,
+                           "depth_sign_raw": "no_depth_values", "sign_flip": 1.0, "n_rows": 0,
+                           "n_pass_basic": 0, "points_raw_path": "", "points_checked_path": "",
+                           "status": "no_gz_files"}
+                (OUT_ROOT / cruise / "extraction_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                print(json.dumps(summary, sort_keys=True), flush=True)
+                continue
+            with mp.Pool(processes=max(1, min(args.workers, len(tasks)))) as pool:
                 results = pool.starmap(_process_wrapper, tasks)
             rows = results
             manifest = pd.DataFrame(rows)
@@ -479,6 +557,8 @@ def main() -> int:
         else:
             manifest = existing if existing is not None else pd.DataFrame(columns=["filekey", "file_ordinal", "status"])
         summary = merge_cruise(cruise, manifest)
+        manifest.to_parquet(manifest_path, index=False)
+        manifest.to_csv(manifest_path.with_suffix(".tsv"), sep="\t", index=False)
         summary_path = OUT_ROOT / cruise / "extraction_summary.json"
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(summary, sort_keys=True))

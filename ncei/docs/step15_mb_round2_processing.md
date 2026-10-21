@@ -182,4 +182,105 @@ luna 补全后重跑 32。本轮发现**下载日志的 URL 枚举本身被截�
 
 ### 11.2 增量提取与三层结果
 
-（提取后台进行中，完成后填写：新航次逐行表、覆盖统计重算）
+提取于 2026-09-05 完成（34 号重跑，断点续跑）：新变完整 7 航次全部入库；luna 修复的 12 个截断文件重提并入（AR23-02 点数 110.12M→110.80M、AR30-01 +216k、EW9905 4 个文件从 9/13 补到 13/13）；仍未修复的 3 个截断文件（AR42-02/em710/0028、AR41/em710/0004、FK006C/em302/0049）继续拒收。CNTL 两航次 mb57 仍全量崩溃，维持不处理。
+
+逐航次 L2（19 航次；全量 3.63G 点 / 285,542 航次格）：
+
+| track | n_cells | pass 点 | dup |
+|---|---:|---:|---:|
+| ar30-04 | 9,959 | 83,089,113 | 0.0003 |
+| ar45 | 3,357 | 15,516,144 | 0.0011 |
+| ar66-a | 482 | 311,094,000 | ~0 |
+| ar66-b | 234 | 157,840,000 | ~0 |
+| fk006b | 1,198 | 84,481,872 | ~0 |
+| hly1102 | 193,593 | 649,526,711 | 0.0029 |
+| hly1403 | 11,581 | 1,851,889,392 | 0.0829 |
+| （其余 12 航次同 §4/§5/§9 表，另 3 航次数有小幅上修） |
+
+HLY1102/AR66-A/AR66-B 点密度极高（em122 深水扇形扫描），L3 分类均 hard_mb_points；HLY1403 重复率 8.3%（分段文件 ping 重叠，同 EW9802 型）。
+
+**覆盖统计重算（37，19 航次）**：并集 64,293 → **284,720** 格；与严格层重合 1,305 → 5,941（2.09%）；严格层外新增 **278,779**（约为严格层基线的 +11.6%）；近原点伪迹格 24 → 32（新增 HLY1102/HLY1403 各几格，GPS 锁定前同型伪迹）；**六海区首次出现格级覆盖**：lon004_lat033（北极 -160..-155°E/75-80°N）1,565 格、净新增 1,248，来自 HLY1403，其余五区仍为 0。
+
+## 12. 首批海山研究航次的质量修订（2026-10-21）
+
+本节对应 2026-10-19 首批下载中已完成提取的 13 个航次。修订结果写入
+`ncei/derived/mb_round2/_runs/20261021_quality_revision/`，不改原始下载、原 staging、
+既有 L1/L2 或生产主数据集。NT06-21 保持“当前解析链未处理”，UTC 不完整的状态不表示零观测覆盖。
+
+当前入口从仓库根目录运行：
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+python ncei/code/43_mb_round2_quality_revision.py --workers 4
+```
+
+`--resume` 复用该入口已完成的隔离 L1/L2，继续统计。旧目录
+`_runs/20261020T_l2_l3_first_batch/` 中的 `run_l2_l3.py`、`finish_l2_l3.py`
+及 `_runs/20261020T_source_audit/source_audit_corrected.py` 仅保留为旧结果的复现记录；
+新结果不再调用这些脚本。
+
+选点规则为 `point_check_pass_basic & (native_quality_state == "good")`。
+基础检查仍表示有限经纬度、合法坐标范围与 `0 < depth_m_positive_down <= 11500 m`，
+不包含原生质量判定。34 号脚本从现有 staging 重建 L1，在原有列之外保留
+`native_quality_state`、`filekey`、`file_ordinal`、`point_index_in_file`、`staging_row`。
+`staging_row` 是对应 staging parquet 中从 0 开始的行位置。通过 `filekey` 连接提取清单，
+清单中的 `source_relpath` 相对于 `ncei/raw_round2/platforms_tree/`；
+来源片段中的 `source_path` 相对于 `ncei/`。36 号脚本按磁盘实际文件解析船名/航次层级和直接航次层级，
+保留历史 `relpath` 与 `filekey`，核对来源文件存在。
+
+07 号聚合器通过 `selection_policy="basic_native_good"` 显式采用新规则，
+内存与分批读取使用相同掩码。默认 `selection_policy="basic"` 保留单波束与 xyz 链的原有语义。
+缺少原生质量字段时，新规则报出缺失列，不将旧记录标成 good。
+提取汇总、逐文件清单和 `run_status` 分别报告总点数、基础检查通过数、good/flagged/null/unknown
+数量、最终选入数及 L2 点数；`skipped_exists` 的计数从 staging 恢复。
+
+`--diagnosis-records` 读取诊断清单，填写逐文件/航次的已定位记录数并标注候选，
+不改变选点。已定位记录可单独作保留/暂不采用对照；只有 `--exclude-records`
+会排除记录。两种清单均使用 `filekey`（或 R2 的 `staging_stem`）、
+`file_ordinal`、`staging_row` 定位点。两种清单均保留 `cell_id`、
+`native_quality_state` 与 `point_check_pass_basic`，
+用于区分全部已定位记录和实际影响选点的记录。
+
+保留全部 good 版本可在已有隔离输出上补充诊断统计：
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+python ncei/code/43_mb_round2_quality_revision.py --workers 4 --resume \
+  --diagnosis-records ncei/derived/mb_round2/_runs/20261021_hnro14rr_diagnosis/affected_records.parquet
+```
+
+暂不采用已定位记录的版本复用隔离 L1 和未受影响航次的 L2：
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+python ncei/code/43_mb_round2_quality_revision.py \
+  --output-dir ncei/derived/mb_round2/_runs/20261021_quality_revision/without_located_records \
+  --reuse-l1 ncei/derived/mb_round2/_runs/20261021_quality_revision \
+  --exclude-records ncei/derived/mb_round2/_runs/20261021_hnro14rr_diagnosis/affected_records.parquet \
+  --diagnosis-records ncei/derived/mb_round2/_runs/20261021_hnro14rr_diagnosis/affected_records.parquet \
+  --workers 4
+```
+
+`file_quality_summary` 与 `cruise_quality_summary` 描述质量类别计数/比例、
+基础检查通过数、最终选入数、选入前后差值、1′ 格数和 JAMSTEC/strict 逐航次格残差。
+文件表中的残差是该文件所属航次全部重叠格的统计，不是文件贡献点的独立水深统计。
+`has_native_edit_flag=True` 表示实际观察到 flagged；未观察到 flagged 且未核对源编辑字段
+时留空，不能由 good/null 或格式号推断已做过编辑。R2 计数只表示已定位清单中的记录数，
+0 不表示没有其他异常。HNRO14RR 的诊断检索下限 5000 m 不用于选点。
+
+候选覆盖读取完整 12.5 km 邻域。分母使用候选实际位置相对于全球 1′ 网格中心的距离，
+核心半径 4 km、环带 8–12.5 km、8 个方位扇区；各来源及三源并集均按 `cell_id` 去重。
+区域总覆盖仍限于日本海 132–136°E、36–40°N 和伊豆 140–144°E、28–32°N。
+表中先给出连续覆盖率，`coverage_condition_met` 仅表示沿用的
+`core>=0.6 & ring>=0.5 & min_sector>=0.25` 条件，不代表形态判定。
+
+残差表保留 `(track_id, cell_id)`，逐航次独立连接 JAMSTEC；
+合并 NCEI 水深仍为航次格中位水深的中位数，不按点数加权。
+`*_residual_by_source_combination` 单列来源组合统计。
+`*_strict_provenance` 记录 strict 层实际来源，其中源自 JAMSTEC 的格子不构成第三套独立测深证据。
+伊豆重点差异的格内位置、文件分布和点样本写入 `izu_bonin_focus_*`；
+格内离散度与同格跨源残差不作为海山高度误差，航次标识不表示独立重复测线数。
+
+回归检查：`python -m unittest _common.tests.test_mb_round2_quality -v`。
+数值对照与候选测量建议见任务
+`.trellis/tasks/10-21-mb-round2-quality-revision/result.md`。
