@@ -115,3 +115,14 @@ Thumbs.db
 *.model
 *.lgbm
 *.xgb
+
+# ---------------------------------------------------------------------------
+# AI agent tooling. Generated or synced files stay local; Trellis project
+# rules (spec/) and task records (tasks/) are tracked.
+# ---------------------------------------------------------------------------
+.claude/
+.agents/
+.codex/
+.trellis/*
+!.trellis/spec/
+!.trellis/tasks/
