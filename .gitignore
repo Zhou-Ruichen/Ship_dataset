@@ -46,6 +46,13 @@ ncei/manifests/*.tsv
 # (full-run report is the committable canonical form).
 ncei/docs/*_sample.md
 ncei/docs/*_test100.md
+# Round-2 raw swath, R2R and MGD77T downloads (~1.8 TB); provenance lives in
+# ncei/SOURCE.md and ncei/manifests/round2_download_log.parquet.
+ncei/raw_round2/
+# Timestamped log backups written by 41_tier_a_gapfill.py --stage merge.
+ncei/manifests/*.bak-*
+# Scraped MBBDB catalogue pages kept on disk as survey evidence.
+reports/mbbdb_20261019/
 
 # ---------------------------------------------------------------------------
 # Generic binary / data formats - never commit
