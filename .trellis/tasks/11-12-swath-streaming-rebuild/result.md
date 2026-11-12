@@ -96,3 +96,65 @@ A="$D/ncei/derived/swath_rebuild_check"
 新增 `ncei/swath/{sources,decode,selection,exclusions,format_times,aggregation,source_summary,pipeline,points,cli}.py`，更新 `__main__.py`、`census.py`、`coverage.py`、README、`_common/mbsystem.py`、多波束测试与 `docs/code_archive.md`。删除 `ncei/swath/{batch,extract,file_cells,manifest_fragment,quality_revision,navigation_revision,navigation_review}.py` 和 SQLite staging 连接函数；归档注明 EW0202 外部脚本的历史调用。`seamount_candidate_delivery.py` 交 D 归档删除；本次不保留专用辅助模块。
 
 建议主代理在共享主机负载与测速接近时用 32 workers；需与其他重 I/O 工作并行时用 16。全量先做 `census`，主代理决定不支持格式的处置；当前仍沿用旧链的格式支持集合，MB56 不进入受支持格式的交叠计算。若某航次有两个已支持格式的解码区间交叠，按该航次的 `format_overlap` 清单决定采用哪一套源记录。
+
+## 全量运行
+
+主机 `Precision-7920-Tower`，固定代码 `80965c7e550e031e43779fb90dc3cb170661d231`，工作树 `/mnt/data2/00-Data/ship_swath_rebuild_f1f82a4`。共享 trackline 聚合器仍为 `1900142` 版本。首次普查发现历史空提取清单缺格式列；`80965c7` 修订后 65 项测试通过。2026-11-12 读取的台账快照有 2,073 个 `platforms_tree`、`status=ok` 航次，零估计池记录未合入；`full_cruises.txt` 保存这批清单，RR0913 排首位。
+
+以下命令在 Bash 中执行。输出根的 `excluded_pings.parquet` 和 `hnro14rr_sensitivity_beams.parquet` 由固定代码从原核对表生成，路径与 SHA-256 写入 `run_parameters.json`。单元 `swath-rebuild.service` 的标准输出和错误合并追加到 `swath_rebuild.log`；日志在首条输出时创建，以便运行入口先初始化输出根。
+
+```bash
+cd /mnt/data2/00-Data/ship_swath_rebuild_f1f82a4
+D=/mnt/data2/00-Data/ship
+O="$D/ncei/derived/swath_rebuild_20261112"
+T="$D/.trellis/tasks/11-12-swath-streaming-rebuild"
+P=/opt/miniforge3/envs/torch29/bin/python
+mapfile -t cruises < "$T/full_cruises.txt"
+
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1 POLARS_MAX_THREADS=1
+"$P" -u -m ncei.swath census \
+  --data-root "$D" --ledger "$D/ncei/manifests/round2_download_log.parquet" \
+  --raw-root "$D/ncei/raw_round2/platforms_tree" \
+  --raw-root /mnt/data1/pub/ship/ncei/raw_round2/platforms_tree \
+  --output-root "$O" --cruises "${cruises[@]}"
+
+launch_swath() {
+  systemd-run --user --unit=swath-rebuild --collect --expand-environment=no \
+    --working-directory=/mnt/data2/00-Data/ship_swath_rebuild_f1f82a4 \
+    --setenv=OPENBLAS_NUM_THREADS=1 --setenv=OMP_NUM_THREADS=1 \
+    --setenv=MKL_NUM_THREADS=1 --setenv=NUMEXPR_NUM_THREADS=1 --setenv=POLARS_MAX_THREADS=1 \
+    /bin/bash -e -o pipefail -c 'log=$1; shift; "$@" 2>&1 | while IFS= read -r line; do printf "%s\n" "$line" >> "$log"; done' \
+    swath-log "$O/swath_rebuild.log" "$P" -u -m ncei.swath run \
+    --data-root "$D" --ledger "$D/ncei/manifests/round2_download_log.parquet" \
+    --raw-root "$D/ncei/raw_round2/platforms_tree" \
+    --raw-root /mnt/data1/pub/ship/ncei/raw_round2/platforms_tree \
+    --output-root "$O" --workers 32 "$@"
+}
+
+# 首次启动
+launch_swath --cruises "${cruises[@]}"
+# 单元退出或主机重启后，按原清单续跑
+# launch_swath --resume --cruises "${cruises[@]}"
+# 零估计池完成下载并合入台账后，补跑新增航次
+# launch_swath --resume
+```
+
+普查结果：604,657 个候选源文件、10,683.439 GB。支持格式 365,267 文件、8,957.807 GB、1,546 航次；不支持 239,390 文件、1,725.633 GB、590 航次。两组航次可重叠。167 航次未找到当前枚举规则下的候选文件。各格式的文件数、原文件字节数和航次数见输出根 `census_summary.json`；未识别类别为 26,068 文件、781.286 GB、283 航次。
+
+| 已识别不支持格式 | 文件数 | GB | 航次数 |
+| --- | ---: | ---: | ---: |
+| MB56 | 66,840 | 554.342 | 139 |
+| MB94 | 39,053 | 246.385 | 72 |
+| MB183 | 95,928 | 46.156 | 38 |
+| MB163 | 806 | 31.603 | 7 |
+| MB162 | 812 | 27.668 | 11 |
+| MB43 | 5,790 | 12.128 | 17 |
+| MB201 | 673 | 9.158 | 2 |
+| MB164 | 55 | 6.125 | 54 |
+| MB59 | 194 | 4.268 | 4 |
+| MB51 | 655 | 3.799 | 6 |
+
+单元于 2026-11-12 14:33:59 UTC 启动，invocation ID `34fb624105c74a67b6f92f3b344f1b18`，32 workers。`run_invocations.jsonl` 的首条记录包含 2,073 个航次，RR0913 排第一。输出根两张表分别为 19 个排除 ping、11,816 个敏感性声束键，SHA-256 均与 `run_parameters.json` 一致。
+
+首航次 RR0913 于 2026-11-12 14:35:27 UTC 完成：25,528,176 声束、23,801,097 选点、17,181 格，航次耗时 86.53 秒。113 个候选文件含 1 个不支持的 MB164。L2、完成标记和临时目录清理均已核对，单元仍为 `active/running`。后续由主代理接管。

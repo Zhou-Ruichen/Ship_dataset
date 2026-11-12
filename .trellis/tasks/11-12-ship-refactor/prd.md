@@ -64,3 +64,4 @@ K 的清单完成后，主代理定布局，再派实现：trackline 交 gpt-6.1
 - 2026-11-12：K 清单完成（`research/layout_inventory.*`，168 文件），主代理定布局。T 派出为 fe57f48d（codex gpt-6.1-sol，full-access）；K 接 JAMSTEC 包化；D 在下载期间接 `ncei/analysis/` 与 `_common` 归档；S 被告知删除 `ncei.swath.delivery`、EW0202 归档说明、全量运行用绝对路径参数。
 - 2026-11-12：D 归档完成（24 个文件，`io_helpers.py` 因 r2_classifier 测试仍用而保留），条目并入 `docs/code_archive.md`；提交 `f1f82a4`（swath）与 `7489d72`（归档与下载器参数），未推送。T、K 进行中。
 - 2026-11-12：S 最小修订提交 `80965c7`（续跑不比较航次集合、记录敏感性表、空历史清单按原文件发现），全量从该提交的 worktree 启动。T 完成 trackline，19 命令对照见 `research/trackline_refactor_check.md`，提交 `13fc476`，条目并入 `docs/code_archive.md`。主代理决定：区域与全球叶 tile 发布交叉点表（1,276 / 2,495）保留原版本；`1900142` 与重构代码同输入均为 1,277 / 2,496 且逐列一致，作为等价证据，不改写产品。K 的 JAMSTEC 进行中（`test_jamstec_pipeline` 的 KY09-09 用例待 K 修）。
+- 2026-11-12：K 完成 JAMSTEC 包化，9 命令 54 个产品对照差异 0（`research/jamstec_refactor_check.md`），KY09-09 测试失败原因为规则表日期被读成浮点，已改字符串读取。提交 `732f396`，主代理复跑 `_common/tests` 65 项通过。文档阶段派给 K。剩余：文档阶段；下载结束后 D 的切换与 `ncei/code/` 归档；推送待用户确认。
