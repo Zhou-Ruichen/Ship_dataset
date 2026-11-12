@@ -1,0 +1,6 @@
+rule_id	match	cruise_id_guess	cruise_contains	filename_contains	quality_flag	exclude_from_primary_cells	flag_reason
+KY09_09_cruise	cruise	KY09-09			exclude	true	extreme_cruise_bias_KY09_09
+MR02_K06_cruise	cruise	MR02-K06			exclude	true	extreme_cruise_bias_MR02_K06
+KY12_01_cruise	cruise	KY12-01			exclude	true	extreme_cruise_bias_KY12_01
+KY12_08_20120614	file_pattern		KY12-08	20120614	exclude	true	extreme_file_bias_KY12_08_20120614
+KY12_08_20120607	file_pattern		KY12-08	20120607	exclude	true	extreme_file_bias_KY12_08_20120607

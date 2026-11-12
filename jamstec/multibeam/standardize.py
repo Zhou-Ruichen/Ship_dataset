@@ -64,12 +64,12 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
-REPO_ROOT = ROOT_DIR.parent.parent  # ship/
-sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+from _common.file_io import atomic_write_df, write_errors_tsv
+from _common.script_utils import setup_logging
 
-from _common.file_io import write_errors_tsv  # noqa: E402
+from ._paths import PROJECT_ROOT
+
+ROOT_DIR = PROJECT_ROOT
 
 CURATED_MANIFEST_PQ = ROOT_DIR / "manifests" / "file_manifest_points_raw.parquet"
 ORIGINAL_MANIFEST_PQ = ROOT_DIR / "manifests" / "file_manifest.parquet"
@@ -127,21 +127,6 @@ POINT_SCHEMA = pa.schema([
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("standardize_xyz")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
-
-
 # ---------------------------------------------------------------------------
 # Sample selection
 # ---------------------------------------------------------------------------
@@ -579,28 +564,6 @@ file_manifest (1) -- (N) points_raw/*.parquet   [by file_id]
 # ---------------------------------------------------------------------------
 # Atomic write
 # ---------------------------------------------------------------------------
-def atomic_write_df(
-    df: pd.DataFrame,
-    target_parquet: Path,
-    target_tsv: Path,
-    logger: logging.Logger,
-):
-    target_parquet.parent.mkdir(parents=True, exist_ok=True)
-
-    tmp_pq = target_parquet.with_suffix(".parquet.tmp")
-    tmp_tsv = target_tsv.with_suffix(".tsv.tmp")
-
-    df.to_parquet(tmp_pq, index=False)
-    logger.info(f"Wrote temp parquet: {tmp_pq}")
-
-    df.to_csv(tmp_tsv, sep="\t", index=False)
-    logger.info(f"Wrote temp tsv: {tmp_tsv}")
-
-    os.replace(tmp_pq, target_parquet)
-    os.replace(tmp_tsv, target_tsv)
-    logger.info(f"Renamed to final: {target_parquet.name}, {target_tsv.name}")
-
-
 # ---------------------------------------------------------------------------
 # Write errors TSV
 # ---------------------------------------------------------------------------
@@ -609,7 +572,7 @@ def atomic_write_df(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Convert NCEI multibeam .dat files to standardized Parquet point tables.",
     )
@@ -670,11 +633,11 @@ def main():
         "--dry-run", action="store_true",
         help="Show what would be processed without writing output.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_label = args.run_label
 
-    logger = setup_logging(LOG_PATH)
+    logger = setup_logging(LOG_PATH, "jamstec.standardize")
     logger.info("=" * 60)
     logger.info("Starting 02_standardize_multibeam_xyz.py")
     logger.info(f"Args: {vars(args)}")

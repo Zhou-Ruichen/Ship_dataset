@@ -4,7 +4,7 @@
 # Usage: ./04_organize_dat.sh
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+ROOT_DIR="${JAMSTEC_MULTIBEAM_ROOT:-$(dirname "$SCRIPT_DIR")}"
 
 DAT_BY_SUBZIP="$ROOT_DIR/raw/dat_by_subzip"
 DOCS_DIR="$ROOT_DIR/docs"

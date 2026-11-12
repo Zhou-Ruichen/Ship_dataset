@@ -54,8 +54,12 @@ from typing import Optional
 
 import pandas as pd
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
+from _common.file_io import atomic_write_df
+from _common.script_utils import setup_logging
+
+from ._paths import PROJECT_ROOT
+
+ROOT_DIR = PROJECT_ROOT
 
 DAT_BY_SUBZIP = ROOT_DIR / "raw" / "dat_by_subzip"
 DAT_MANIFEST_TSV = ROOT_DIR / "docs" / "dat_manifest.tsv"
@@ -155,24 +159,6 @@ def get_output_paths(is_sample: bool):
         ROOT_DIR / "manifests" / "nonstandard_dat_files.tsv",
         ROOT_DIR / "docs" / "format_audit_report.md",
     )
-
-
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("build_manifest")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
 
 
 # ---------------------------------------------------------------------------
@@ -877,32 +863,10 @@ def write_audit_report(
 # ---------------------------------------------------------------------------
 # Atomic write
 # ---------------------------------------------------------------------------
-def atomic_write_df(
-    df: pd.DataFrame,
-    target_parquet: Path,
-    target_tsv: Path,
-    logger: logging.Logger,
-):
-    target_parquet.parent.mkdir(parents=True, exist_ok=True)
-
-    tmp_pq = target_parquet.with_suffix(".parquet.tmp")
-    tmp_tsv = target_tsv.with_suffix(".tsv.tmp")
-
-    df.to_parquet(tmp_pq, index=False)
-    logger.info(f"Wrote temp parquet: {tmp_pq}")
-
-    df.to_csv(tmp_tsv, sep="\t", index=False)
-    logger.info(f"Wrote temp tsv: {tmp_tsv}")
-
-    os.replace(tmp_pq, target_parquet)
-    os.replace(tmp_tsv, target_tsv)
-    logger.info(f"Renamed to final: {target_parquet.name}, {target_tsv.name}")
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Build file_manifest and subzip_manifest for NCEI multibeam data."
     )
@@ -926,9 +890,9 @@ def main():
         "--include-path-regex", type=str, default=None,
         help="Only audit dat files whose relative path matches this regex.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    logger = setup_logging(LOG_PATH)
+    logger = setup_logging(LOG_PATH, "jamstec.manifest")
     logger.info("=" * 60)
     logger.info("Starting 01_build_multibeam_manifest.py")
     logger.info(f"Args: {vars(args)}")

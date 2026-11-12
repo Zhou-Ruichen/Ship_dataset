@@ -42,8 +42,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
+from _common.script_utils import setup_logging
+
+from ._paths import PROJECT_ROOT
+from .io import atomic_write_parquet, atomic_write_tsv, write_errors_tsv
+from .rules import load_extreme_bias_rules
+
+ROOT_DIR = PROJECT_ROOT
 
 FC_DIR = ROOT_DIR / "derived" / "file_cells_1min"
 CELLS_PQ = ROOT_DIR / "derived" / "cells_1min" / "cells.parquet"
@@ -89,52 +94,6 @@ def get_output_paths(run_label: str, cell_size: str) -> dict:
     }
 
 
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("extreme_bias")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
-
-
-def atomic_write_parquet(df: pd.DataFrame, target: Path, logger: logging.Logger):
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".parquet.tmp")
-    df.to_parquet(tmp, index=False)
-    logger.info(f"  Wrote temp: {tmp.name} ({len(df):,} rows)")
-    os.replace(tmp, target)
-    logger.info(f"  Renamed to: {target.name}")
-
-
-def atomic_write_tsv(df: pd.DataFrame, target: Path, logger: logging.Logger):
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".tsv.tmp")
-    df.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, target)
-    logger.info(f"  Wrote TSV: {target.name}")
-
-
-def write_errors_tsv(errors: list[dict], errors_path: Path, logger: logging.Logger):
-    errors_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = errors_path.with_suffix(".tsv.tmp")
-    if not errors:
-        pd.DataFrame().to_csv(tmp, sep="\t", index=False)
-        os.replace(tmp, errors_path)
-        logger.info(f"Wrote empty errors TSV (0 errors): {errors_path.name}")
-        return
-    df_err = pd.DataFrame(errors)
-    df_err.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, errors_path)
-    logger.info(f"Wrote {len(errors)} errors to {errors_path}")
-
-
 def read_file_cells(manifest_ok: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     all_dfs = []
     errors = []
@@ -169,15 +128,16 @@ def select_candidates(
     candidate_file_ids = set()
     candidate_cruise_ids = set()
 
-    # Always: KY09-09 cruise
-    candidate_cruise_ids.add("KY09-09")
-
-    # Always: KY12-08 and 20120614 file
-    ky12_mask = (
-        file_bias["file_id"].str.contains("KY12-08", na=False)
-        & file_bias["file_id"].str.contains("20120614", na=False)
-    )
-    candidate_file_ids.update(file_bias.loc[ky12_mask, "file_id"])
+    # Reviewed exceptions are data, selected before the ranked candidates.
+    for rule in load_extreme_bias_rules().itertuples():
+        if rule.candidate_type == "cruise":
+            candidate_cruise_ids.add(rule.cruise_equals)
+        else:
+            mask = (
+                file_bias["file_id"].str.contains(rule.cruise_equals, na=False)
+                & file_bias["file_id"].str.contains(rule.filename_contains, na=False)
+            )
+            candidate_file_ids.update(file_bias.loc[mask, "file_id"])
 
     n_top = 5 if run_label == "sample" else 30
 
@@ -402,23 +362,34 @@ def _classify_action(
     other_file_med: float = None,
 ) -> tuple[str, str]:
     """Classify recommended action for a candidate."""
-    is_ky09 = candidate_type == "cruise" and candidate_id == "KY09-09"
-    is_ky12 = candidate_type == "file" and "KY12-08" in str(candidate_id) and "20120614" in str(candidate_id)
+    rules = load_extreme_bias_rules()
+    matched_ids = [
+        rule.Index for rule in rules.itertuples()
+        if rule.candidate_type == candidate_type
+        and str(rule.cruise_equals) in candidate_id
+        and str(rule.filename_contains) in candidate_id
+    ]
+    matched = rules.loc[matched_ids]
 
-    # Special: KY12-08::20120614 uses other_file_median
-    if is_ky12 and pd.notna(other_file_med):
+    # The reviewed file exception uses the other-file rather than the
+    # other-cruise median; retain its original threshold order and wording.
+    file_rules = matched[matched["evidence_field"].eq("other_file")]
+    if not file_rules.empty and pd.notna(other_file_med):
+        prefix = file_rules.iloc[0]["reason_prefix"]
         if abs(other_file_med) >= EXCLUDE_ABS_MEDIAN:
-            return "exclude_candidate", f"KY12-08::20120614: abs(other_file_median)={abs(other_file_med):.1f}m >= {EXCLUDE_ABS_MEDIAN}m"
+            return "exclude_candidate", f"{prefix}: abs(other_file_median)={abs(other_file_med):.1f}m >= {EXCLUDE_ABS_MEDIAN}m"
         if abs(other_file_med) >= REVIEW_ABS_MEDIAN_LOW:
-            return "review_candidate", f"KY12-08::20120614: abs(other_file_median)={abs(other_file_med):.1f}m in [{REVIEW_ABS_MEDIAN_LOW},{REVIEW_ABS_MEDIAN_HIGH})m"
+            return "review_candidate", f"{prefix}: abs(other_file_median)={abs(other_file_med):.1f}m in [{REVIEW_ABS_MEDIAN_LOW},{REVIEW_ABS_MEDIAN_HIGH})m"
 
     if pd.isna(other_cruise_med):
         return "keep", "insufficient overlap data for classification"
 
     abs_med = abs(other_cruise_med)
 
-    if is_ky09 and abs_med > EXCLUDE_ABS_MEDIAN:
-        return "exclude_candidate", f"KY09-09: abs(other_cruise_median)={abs_med:.1f}m > {EXCLUDE_ABS_MEDIAN}m"
+    cruise_rules = matched[matched["evidence_field"].eq("other_cruise")]
+    if not cruise_rules.empty and abs_med > EXCLUDE_ABS_MEDIAN:
+        prefix = cruise_rules.iloc[0]["reason_prefix"]
+        return "exclude_candidate", f"{prefix}: abs(other_cruise_median)={abs_med:.1f}m > {EXCLUDE_ABS_MEDIAN}m"
 
     if n_other_cruise >= EXCLUDE_MIN_OVERLAP and abs_med >= EXCLUDE_ABS_MEDIAN:
         return "exclude_candidate", f"n_other_cruise={int(n_other_cruise)}, abs(median)={abs_med:.1f}m >= {EXCLUDE_ABS_MEDIAN}m"
@@ -675,7 +646,7 @@ def write_report(
     logger.info(f"Report written to {report_path}")
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Investigate extreme bias sources from 05 overlap/bias analysis.",
     )
@@ -684,7 +655,7 @@ def main():
     parser.add_argument("--confirm-full", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--estimate-only", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_label = args.run_label
     cell_size = args.cell_size
@@ -692,7 +663,7 @@ def main():
     log_path = LOG_DIR / f"06a_investigate_extreme_bias_sources_{run_label}.log"
     errors_tsv = LOG_DIR / f"06a_extreme_bias_errors_{run_label}.tsv"
 
-    logger = setup_logging(log_path)
+    logger = setup_logging(log_path, "jamstec.extreme_bias")
     logger.info("=" * 60)
     logger.info("Starting 06a_investigate_extreme_bias_sources.py")
     logger.info(f"Args: {vars(args)}")

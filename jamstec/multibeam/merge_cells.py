@@ -46,12 +46,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
-REPO_ROOT = ROOT_DIR.parent.parent  # ship/
-sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+from _common.file_io import atomic_write_df, write_errors_tsv
+from _common.script_utils import setup_logging
 
-from _common.file_io import write_errors_tsv  # noqa: E402
+from ._paths import PROJECT_ROOT
+from .io import atomic_write_parquet
+
+ROOT_DIR = PROJECT_ROOT
 
 # Input paths — fixed regardless of run_label
 FC_DIR = ROOT_DIR / "derived" / "file_cells_1min"
@@ -97,41 +98,6 @@ def get_run_paths(run_label: str, cell_size: str):
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("merge_cells")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
-
-
-# ---------------------------------------------------------------------------
-# Atomic write helpers
-# ---------------------------------------------------------------------------
-def atomic_write_parquet(df: pd.DataFrame, target: Path, logger: logging.Logger):
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".parquet.tmp")
-    df.to_parquet(tmp, index=False)
-    logger.info(f"  Wrote temp: {tmp.name} ({len(df):,} rows)")
-    os.replace(tmp, target)
-    logger.info(f"  Renamed to: {target.name}")
-
-
-def atomic_write_tsv(df: pd.DataFrame, target: Path, logger: logging.Logger):
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".tsv.tmp")
-    df.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, target)
-    logger.info(f"  Wrote manifest TSV: {target.name}")
-
-
 # ---------------------------------------------------------------------------
 # Read file-cell parquets
 # ---------------------------------------------------------------------------
@@ -479,7 +445,7 @@ def estimate_only(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Merge file-level cell statistics into global cell-level bathymetry product.",
     )
@@ -513,7 +479,7 @@ def main():
         "--estimate-only", action="store_true",
         help="Print estimates and exit. No files written.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_label = args.run_label
     cell_size = args.cell_size
@@ -523,7 +489,7 @@ def main():
     log_path = LOG_DIR / f"04b_merge_multibeam_cells_{log_suffix}.log"
     errors_tsv = LOG_DIR / f"04b_merge_cells_errors_{log_suffix}.tsv"
 
-    logger = setup_logging(log_path)
+    logger = setup_logging(log_path, "jamstec.merge_cells")
     logger.info("=" * 60)
     logger.info("Starting 04b_merge_multibeam_cells.py")
     logger.info(f"Args: {vars(args)}")
@@ -642,11 +608,7 @@ def main():
 
     # Step 4: Write manifest
     manifest_df = pd.DataFrame(manifest_entries)
-    manifest_df.to_parquet(manifest_pq.with_suffix(".parquet.tmp"), index=False)
-    manifest_df.to_csv(manifest_tsv.with_suffix(".tsv.tmp"), sep="\t", index=False)
-    os.replace(manifest_pq.with_suffix(".parquet.tmp"), manifest_pq)
-    os.replace(manifest_tsv.with_suffix(".tsv.tmp"), manifest_tsv)
-    logger.info(f"Wrote manifest: {manifest_pq.name} ({len(manifest_df)} rows)")
+    atomic_write_df(manifest_df, manifest_pq, manifest_tsv, logger)
 
     # Step 5: Write errors
     write_errors_tsv(read_errors, errors_tsv, logger)

@@ -6,8 +6,8 @@ in place (deleting each intermediate zip after extraction), and writes the
 final .dat payload files to jamstec/multibeam/raw/dat_by_subzip. Zips that
 fail extraction are quarantined in jamstec/multibeam/raw/subzips_bad.
 
-Run from repo root:
-    python jamstec/multibeam/code/03_recursive_extract.py
+Run through the package entry point:
+    python -m jamstec.multibeam extract
 """
 
 import os
@@ -16,9 +16,9 @@ import shutil
 from pathlib import Path
 import sys
 
-# Setup paths
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
+from .._paths import PROJECT_ROOT
+
+ROOT_DIR = PROJECT_ROOT
 SUBZIPS_DIR = ROOT_DIR / "raw" / "subzips"
 OUTPUT_DIR = ROOT_DIR / "raw" / "dat_by_subzip"
 BAD_DIR = ROOT_DIR / "raw" / "subzips_bad"

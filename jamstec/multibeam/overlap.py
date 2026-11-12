@@ -50,8 +50,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
+from _common.script_utils import setup_logging
+
+from ._paths import PROJECT_ROOT
+from .io import atomic_write_parquet, atomic_write_tsv, write_errors_tsv
+
+ROOT_DIR = PROJECT_ROOT
 
 FC_DIR = ROOT_DIR / "derived" / "file_cells_1min"
 CELLS_PQ = ROOT_DIR / "derived" / "cells_1min" / "cells.parquet"
@@ -107,52 +111,6 @@ def get_output_paths(run_label: str, cell_size: str):
         "suspicious_cells_tsv": out_dir / "suspicious_cells.tsv",
         "report_path": out_dir / "overlap_bias_report.md",
     }
-
-
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("overlap_bias")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
-
-
-def atomic_write_parquet(df: pd.DataFrame, target: Path, logger: logging.Logger):
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".parquet.tmp")
-    df.to_parquet(tmp, index=False)
-    logger.info(f"  Wrote temp: {tmp.name} ({len(df):,} rows)")
-    os.replace(tmp, target)
-    logger.info(f"  Renamed to: {target.name}")
-
-
-def atomic_write_tsv(df: pd.DataFrame, target: Path, logger: logging.Logger):
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".tsv.tmp")
-    df.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, target)
-    logger.info(f"  Wrote TSV: {target.name}")
-
-
-def write_errors_tsv(errors: list[dict], errors_path: Path, logger: logging.Logger):
-    errors_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = errors_path.with_suffix(".tsv.tmp")
-    if not errors:
-        pd.DataFrame().to_csv(tmp, sep="\t", index=False)
-        os.replace(tmp, errors_path)
-        logger.info(f"Wrote empty errors TSV (0 errors): {errors_path.name}")
-        return
-    df_err = pd.DataFrame(errors)
-    df_err.to_csv(tmp, sep="\t", index=False)
-    os.replace(tmp, errors_path)
-    logger.info(f"Wrote {len(errors)} errors to {errors_path}")
 
 
 def read_file_cells(
@@ -567,7 +525,7 @@ def estimate_only(
     print(f"{'=' * 60}\n")
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Analyze overlap/bias between file-level cells and merged global cells.",
     )
@@ -601,7 +559,7 @@ def main():
         "--estimate-only", action="store_true",
         help="Print estimates and exit. No files written.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_label = args.run_label
     cell_size = args.cell_size
@@ -610,7 +568,7 @@ def main():
     log_path = LOG_DIR / f"05_analyze_cell_overlap_bias_{run_label}.log"
     errors_tsv = LOG_DIR / f"05_overlap_bias_errors_{run_label}.tsv"
 
-    logger = setup_logging(log_path)
+    logger = setup_logging(log_path, "jamstec.overlap")
     logger.info("=" * 60)
     logger.info("Starting 05_analyze_cell_overlap_bias.py")
     logger.info(f"Args: {vars(args)}")

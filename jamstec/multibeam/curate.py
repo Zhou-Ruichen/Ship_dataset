@@ -30,8 +30,11 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
+from _common.script_utils import setup_logging
+
+from ._paths import PROJECT_ROOT
+
+ROOT_DIR = PROJECT_ROOT
 
 FILE_MANIFEST_PQ = ROOT_DIR / "manifests" / "file_manifest.parquet"
 POINTS_RAW_PQ = ROOT_DIR / "manifests" / "file_manifest_points_raw.parquet"
@@ -46,21 +49,6 @@ LAYOUT_6COL = "date_time_sonar_lon_lat_depth_6col"
 OK_STATUSES = {"ok_xyz_3col", "ok_xyz_6col_time_sonar_lonlatdepth"}
 OK_LAYOUTS = {LAYOUT_3COL, LAYOUT_6COL}
 AUX_PREFIXES = ("grid_", "track_", "dist_")
-
-
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("curate_manifest")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
 
 
 def classify_file_role(row: pd.Series) -> str:
@@ -248,7 +236,7 @@ def write_report(
     logger.info(f"Curation report written to {report_path}")
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Curate file_manifest into points_raw-ready manifest.",
     )
@@ -256,9 +244,9 @@ def main():
         "--overwrite", action="store_true",
         help="Overwrite existing output files.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    logger = setup_logging(LOG_PATH)
+    logger = setup_logging(LOG_PATH, "jamstec.curate")
     logger.info("=" * 60)
     logger.info("Starting 02a_curate_points_manifest.py")
 

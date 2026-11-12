@@ -22,7 +22,7 @@ Output:
   - derived/validation_cells_1min/validation_cells_1min_report.md
 
 Run from repo root:
-    python jamstec/multibeam/code/07_prepare_primary_validation_cells_1min.py [--overwrite]
+    python -m jamstec.multibeam validation-cells [--overwrite]
 """
 
 import argparse
@@ -36,11 +36,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-PROJECT = Path(__file__).resolve().parent.parent
-REPO_ROOT = PROJECT.parent.parent  # ship/
-sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 
-from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv  # noqa: E402
+from ._paths import PROJECT_ROOT
+
+PROJECT = PROJECT_ROOT
 
 INPUTS = {
     "qcfiltered_cells": PROJECT / "derived" / "cells_1min_qcfiltered" / "cells.parquet",
@@ -460,12 +460,17 @@ def generate_report(data: dict, summary: pd.DataFrame, elapsed: float) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Prepare primary validation cells (07)")
     parser.add_argument("--overwrite", action="store_true",
                         help="Overwrite existing output files")
-    args = parser.parse_args()
+    parser.add_argument("--original-cells", type=Path)
+    args = parser.parse_args(argv)
+    if args.original_cells:
+        global INPUTS
+        INPUTS = INPUTS.copy()
+        INPUTS["original_cells"] = args.original_cells
 
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(

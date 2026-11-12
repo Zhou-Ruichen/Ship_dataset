@@ -1,0 +1,28 @@
+{
+  "id": "ship-refactor",
+  "name": "ship-refactor",
+  "title": "Ship repository refactor: modular processing code",
+  "description": "One-time cleanup of the ship repository: one streaming swath chain, consolidated trackline and JAMSTEC code, archived one-off analyses, unified downloader, current docs.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "Ruichen Zhou",
+  "assignee": "Ruichen Zhou",
+  "createdAt": "2026-11-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "11-12-swath-streaming-rebuild"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

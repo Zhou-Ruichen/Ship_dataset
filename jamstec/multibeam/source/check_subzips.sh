@@ -4,7 +4,7 @@
 # Usage: ./02_check_subzips.sh
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+ROOT_DIR="${JAMSTEC_MULTIBEAM_ROOT:-$(dirname "$SCRIPT_DIR")}"
 
 SUBZIPS_DIR="$ROOT_DIR/raw/subzips"
 BAD_DIR="$ROOT_DIR/raw/subzips_bad"

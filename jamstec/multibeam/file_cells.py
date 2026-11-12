@@ -60,12 +60,13 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-ROOT_DIR = SCRIPT_DIR.parent
-REPO_ROOT = ROOT_DIR.parent.parent  # ship/
-sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+from _common.file_io import atomic_write_df, write_errors_tsv
+from _common.script_utils import setup_logging
 
-from _common.file_io import write_errors_tsv  # noqa: E402
+from ._paths import PROJECT_ROOT
+from .io import file_id_to_parquet_name
+
+ROOT_DIR = PROJECT_ROOT
 
 POINTS_QC_DIR = ROOT_DIR / "derived" / "points_qc"
 QC_MANIFEST_PQ = ROOT_DIR / "manifests" / "points_qc_manifest.parquet"
@@ -101,31 +102,6 @@ def get_run_paths(run_label: str, cell_size: str):
         manifests / f"file_cells_manifest_{cs}_{suffix}.tsv",
         docs / f"file_cells_report_{cs}_{suffix}.md",
     )
-
-
-def file_id_to_parquet_name(file_id: str) -> str:
-    safe = file_id.replace("::", "__").replace("/", "__")
-    if safe.endswith(".dat"):
-        safe = safe[:-4]
-    return safe + ".parquet"
-
-
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-def setup_logging(log_path: Path) -> logging.Logger:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("file_cells")
-    logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s %(message)s"))
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter("%(levelname)-8s %(message)s"))
-    logger.addHandler(ch)
-    return logger
 
 
 # ---------------------------------------------------------------------------
@@ -519,20 +495,6 @@ def _combine_chunk_cells(
 # ---------------------------------------------------------------------------
 # Atomic write
 # ---------------------------------------------------------------------------
-def atomic_write_df(df: pd.DataFrame, target_parquet: Path, target_tsv: Path,
-                    logger: logging.Logger):
-    target_parquet.parent.mkdir(parents=True, exist_ok=True)
-    tmp_pq = target_parquet.with_suffix(".parquet.tmp")
-    tmp_tsv = target_tsv.with_suffix(".tsv.tmp")
-    df.to_parquet(tmp_pq, index=False)
-    logger.info(f"Wrote temp parquet: {tmp_pq}")
-    df.to_csv(tmp_tsv, sep="\t", index=False)
-    logger.info(f"Wrote temp tsv: {tmp_tsv}")
-    os.replace(tmp_pq, target_parquet)
-    os.replace(tmp_tsv, target_tsv)
-    logger.info(f"Renamed to final: {target_parquet.name}, {target_tsv.name}")
-
-
 # ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
@@ -657,7 +619,7 @@ def estimate_only(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Aggregate QC-passed points into file-level cell statistics.",
     )
@@ -699,7 +661,7 @@ def main():
         "--estimate-only", action="store_true",
         help="Print estimates and exit. No files written.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_label = args.run_label
     cell_size = args.cell_size
@@ -709,7 +671,7 @@ def main():
     log_path = LOG_DIR / f"04a_make_multibeam_file_cells_{log_suffix}.log"
     errors_tsv = LOG_DIR / f"04a_file_cells_errors_{log_suffix}.tsv"
 
-    logger = setup_logging(log_path)
+    logger = setup_logging(log_path, "jamstec.file_cells")
     logger.info("=" * 60)
     logger.info("Starting 04a_make_multibeam_file_cells.py")
     logger.info(f"Args: {vars(args)}")

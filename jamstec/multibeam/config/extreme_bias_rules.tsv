@@ -1,0 +1,3 @@
+rule_id	candidate_type	cruise_equals	filename_contains	evidence_field	reason_prefix
+KY09_09_cruise	cruise	KY09-09		other_cruise	KY09-09
+KY12_08_20120614_file	file	KY12-08	20120614	other_file	KY12-08::20120614

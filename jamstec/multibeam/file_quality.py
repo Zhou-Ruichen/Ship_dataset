@@ -20,7 +20,7 @@ Output:
 Does NOT modify any existing data. Read-only on all inputs.
 
 Run from repo root:
-    python jamstec/multibeam/code/06b_create_file_quality_flags_1min.py [--overwrite] [--dry-run]
+    python -m jamstec.multibeam quality [--overwrite] [--estimate-only]
 """
 
 import argparse
@@ -39,11 +39,12 @@ import pandas as pd
 # Constants
 # ---------------------------------------------------------------------------
 
-PROJECT = Path(__file__).resolve().parent.parent
-REPO_ROOT = PROJECT.parent.parent  # ship/
-sys.path.insert(0, str(REPO_ROOT))  # make _common importable when run by path
+from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 
-from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv  # noqa: E402
+from ._paths import PROJECT_ROOT
+from .rules import load_file_exclusion_rules
+
+PROJECT = PROJECT_ROOT
 
 INPUTS = {
     "file_manifest": PROJECT / "manifests" / "file_manifest_points_raw.parquet",
@@ -65,48 +66,6 @@ ERROR_PATH = PROJECT / "output" / "logs" / "06b_file_quality_flags_errors.tsv"
 
 # Flag priority (higher index = higher priority)
 FLAG_PRIORITY = {"keep": 0, "high_variance_review": 1, "review": 2, "exclude": 3}
-
-# Hardcoded exclude rules from spec
-EXCLUDE_RULES = [
-    {
-        "match": "cruise",
-        "cruise_id_guess": "KY09-09",
-        "quality_flag": "exclude",
-        "exclude_from_primary_cells": True,
-        "flag_reason": "extreme_cruise_bias_KY09_09",
-    },
-    {
-        "match": "cruise",
-        "cruise_id_guess": "MR02-K06",
-        "quality_flag": "exclude",
-        "exclude_from_primary_cells": True,
-        "flag_reason": "extreme_cruise_bias_MR02_K06",
-    },
-    {
-        "match": "cruise",
-        "cruise_id_guess": "KY12-01",
-        "quality_flag": "exclude",
-        "exclude_from_primary_cells": True,
-        "flag_reason": "extreme_cruise_bias_KY12_01",
-    },
-    {
-        "match": "file_pattern",
-        "cruise_contains": "KY12-08",
-        "filename_contains": "20120614",
-        "quality_flag": "exclude",
-        "exclude_from_primary_cells": True,
-        "flag_reason": "extreme_file_bias_KY12_08_20120614",
-    },
-    {
-        "match": "file_pattern",
-        "cruise_contains": "KY12-08",
-        "filename_contains": "20120607",
-        "quality_flag": "exclude",
-        "exclude_from_primary_cells": True,
-        "flag_reason": "extreme_file_bias_KY12_08_20120607",
-    },
-]
-
 
 # ---------------------------------------------------------------------------
 # Atomic write helpers
@@ -207,9 +166,9 @@ def build_quality_flags(args) -> pd.DataFrame:
         flags.loc[cruise_mask, "recommended_action_from_06a"] = action
         flags.loc[cruise_mask, "action_reason_from_06a"] = reason
 
-    # ── 6. Apply hardcoded exclude rules ──────────────────────────────
-    log.info("Applying hardcoded exclude rules ...")
-    for rule in EXCLUDE_RULES:
+    # ── 6. Apply configured exclude rules ─────────────────────────────
+    log.info("Applying configured exclude rules ...")
+    for rule in load_file_exclusion_rules():
         if rule["match"] == "cruise":
             mask = flags["cruise_id_guess"] == rule["cruise_id_guess"]
             n = apply_flag(flags, mask,
@@ -579,14 +538,14 @@ def generate_report(flags: pd.DataFrame, errors: list, elapsed: float) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Generate file-level quality flags for multibeam files")
     parser.add_argument("--overwrite", action="store_true",
                         help="Overwrite existing output files")
     parser.add_argument("--dry-run", action="store_true",
                         help="Compute flags but do not write output")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Setup logging
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)

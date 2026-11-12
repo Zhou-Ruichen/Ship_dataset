@@ -29,7 +29,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-PROJECT = Path(__file__).resolve().parent.parent
+from _common.file_io import atomic_write_parquet, atomic_write_text
+
+from ._paths import PROJECT_ROOT
+
+PROJECT = PROJECT_ROOT
 
 INPUTS = {
     "original_cells": PROJECT / "derived" / "cells_1min" / "cells.parquet",
@@ -56,21 +60,6 @@ EXCLUDED_CRUISES = ["KY09-09", "MR02-K06", "KY12-01", "KY12-08"]
 # ---------------------------------------------------------------------------
 # Atomic write helpers
 # ---------------------------------------------------------------------------
-
-def atomic_write_parquet(df: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    df.to_parquet(tmp, index=False, engine="pyarrow")
-    os.replace(tmp, path)
-
-
-def atomic_write_text(text: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(tmp, path)
-
 
 # ---------------------------------------------------------------------------
 # Core comparison
@@ -567,12 +556,17 @@ def generate_recommendation(data: dict) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Compare original vs qcfiltered cells (06d)")
     parser.add_argument("--overwrite", action="store_true",
                         help="Overwrite existing output files")
-    args = parser.parse_args()
+    parser.add_argument("--original-cells", type=Path)
+    args = parser.parse_args(argv)
+    if args.original_cells:
+        global INPUTS
+        INPUTS = INPUTS.copy()
+        INPUTS["original_cells"] = args.original_cells
 
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(

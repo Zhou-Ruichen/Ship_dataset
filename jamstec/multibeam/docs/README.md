@@ -1,124 +1,108 @@
-# NCEI Multibeam Data Processing
+# JAMSTEC Multibeam Data Processing
 
-## 1. Background & Status
-This dataset originates from two large archives:
-- `/mnt/data2/00-Data/ship/jamstec/multibeam/archive/国外水深第一部分.zip`
-- `/mnt/data2/00-Data/ship/jamstec/multibeam/archive/国外水深第二部分.zip`
+## 1. Source archives and status
 
-**Verification:**
-- SHA256 checksums verified (see `docs/sha256_remote.txt`).
-- `7z t` integrity check passed for both large archives.
-- Total expected sub-zips: **776** (excluding the 2 large archive filenames).
+The dataset originates from two archives:
 
-**Known Issues:**
-- **Bad Sub-zips:** 13 sub-zips failed integrity checks and are moved to `raw/subzips_bad/` (see `docs/bad_subzips.txt`).
-- **Nested Structure:** Some sub-zips contain `.dat` files directly, while others (e.g., `KM16-08_leg1_bathymetry_dmo.zip`) contain nested zips (e.g., `KM16-08_leg1.dat.zip`) which must be recursively extracted.
+- `jamstec/multibeam/archive/国外水深第一部分.zip`
+- `jamstec/multibeam/archive/国外水深第二部分.zip`
 
-**Data Format:**
-- Format: `.dat` text files.
-- Columns: `lon lat depth_m` (Depth is positive meters).
-- See **Section 4. Data Specifications** for detailed rules.
+Equivalent source packaging is retained under `jamstec/archive/`. The archive
+SHA-256 values are recorded in `docs/sha256_remote.txt`; both large archives
+passed the `7z t` integrity check. The expected source inventory contains 776
+sub-zips. Thirteen damaged sub-zips are listed in `docs/bad_subzips.txt` and
+quarantined under `raw/subzips_bad/`.
 
-## 2. Directory Structure
-```
+Some sub-zips contain `.dat` files directly; others contain nested zip files.
+The `extract` command handles both forms and writes the final payload under
+`raw/dat_by_subzip/`.
+
+## 2. Current package layout
+
+```text
 jamstec/multibeam/
-├── archive/                # Source large zip files
-├── code/                   # Production-chain scripts (extraction + Steps 01–07)
-│   ├── 01_extract_subzips.sh
-│   ├── 02_check_subzips.sh
-│   ├── 03_recursive_extract.py
-│   └── 04_organize_dat.sh
-├── analysis/               # Analyses: 06d, 08, 09–11, plot_multibeam_figures
-├── docs/                   # Logs and manifests
-│   ├── bad_subzips.txt     # List of corrupted sub-zips
-│   ├── dat_manifest.tsv    # Index of all extracted .dat files
-│   └── sha256_remote.txt
-├── raw/
-│   ├── subzips/            # Extracted individual zip files (flat)
-│   ├── subzips_bad/        # Corrupted sub-zips moved here
-│   └── dat_by_subzip/      # Final extracted content, one folder per sub-zip
-└── output/                 # (Reserved for future processing)
+├── __main__.py              # python -m jamstec.multibeam
+├── extract.py               # archive extraction and DAT inventory
+├── manifest.py              # source format audit and manifests
+├── curate.py                # source inclusion and duplicate candidates
+├── standardize.py           # DAT -> L1 point tables
+├── point_qc.py              # point-quality flags
+├── file_cells.py            # per-file one-minute cells
+├── merge_cells.py           # file-balanced merged cells
+├── quality.py               # stages 05, 06a, 06b, 06c, 06d in order
+├── validation_cells.py      # primary and sensitivity validation cells
+├── config/                  # reviewed source-quality exception tables
+├── configs/                 # frozen gridded-product validation configuration
+├── source/                  # extraction helpers called by extract
+├── docs/                    # schemas, reports and source records
+├── manifests/               # tracked TSV product inventories
+├── figures/                 # retained figures
+├── raw/                     # extracted sources, not tracked by git
+├── derived/                 # generated products, not tracked by git
+└── output/logs/             # run logs
 ```
 
-## 3. Processing Workflow
-Run the scripts in `code/` in numerical order to reproduce the dataset
-(extraction stage only; the full pipeline continues in `code/` Steps
-01–07, and the analysis steps 06d/08–11 live in `analysis/`).
+The completed model-validation, SWOT and residual-baseline analysis code has
+left the working tree. Its reports, configuration and figures remain. Removed
+code is indexed in `docs/code_archive.md` at the repository root.
 
-### Step 1: Extract Sub-zips
-Extracts the two large archives into `raw/subzips/`.
+## 3. Run the pipeline
+
+Run from the repository root with the project Python environment:
+
 ```bash
-bash code/01_extract_subzips.sh
+/opt/miniforge3/envs/torch29/bin/python -m jamstec.multibeam --help
+/opt/miniforge3/envs/torch29/bin/python -m jamstec.multibeam extract
 ```
 
-### Step 2: Verify Integrity
-Checks each sub-zip. Corrupted files are moved to `raw/subzips_bad/`.
+`extract` performs the four source steps in order: outer-archive extraction,
+subzip integrity checks, recursive nested-zip extraction and DAT inventory.
+It writes `raw/subzips/`, `raw/dat_by_subzip/` and `docs/dat_manifest.tsv`.
+Intermediate nested zip files are removed after successful extraction.
+
+See `PIPELINE_PROCESSING_GUIDE.md` for the remaining commands, products and
+scientific conventions. Every command supports `--help` without starting
+processing.
+
+For an isolated check, place inputs under the same relative layout and select
+another project root before the command name:
+
 ```bash
-bash code/02_check_subzips.sh
+/opt/miniforge3/envs/torch29/bin/python -m jamstec.multibeam \
+  --project-root jamstec/multibeam/derived/refactor_check/core/project \
+  manifest --help
 ```
 
-### Step 3: Recursive Extraction
-Extracts all sub-zips to `raw/dat_by_subzip/`.
-- Handles nested zips (e.g., `.dat.zip`) by extracting them recursively.
-- Deletes intermediate nested zip files to save space.
-```bash
-python3 code/03_recursive_extract.py
-```
+The default root is `jamstec/multibeam/`. Do not use an existing product root
+as a scratch output root.
 
-### Step 4: Index Data
-Generates a manifest of all available `.dat` files at `docs/dat_manifest.tsv`.
-```bash
-bash code/04_organize_dat.sh
-```
+## 4. Source data conventions
 
-## 4. Data Specifications
+Source files are ASCII tables under `raw/dat_by_subzip/<subzip>/`. The manifest
+distinguishes the two bathymetric layouts:
 
-### File Naming & Organization
-The data is organized in `raw/dat_by_subzip/`, where each folder corresponds to a sub-zip.
+- three columns: `lon lat depth`;
+- six columns: `date time sonar lon lat depth`.
 
-**Folder Naming:**
-- **Date-based:** e.g., `20120408/` (Contains daily data)
-- **Cruise-based:** e.g., `KM16-08_leg1_bathymetry_dmo/` (Contains cruise data)
+Depth is metres positive downward. Standardization retains raw coordinates,
+normalizes longitude to `[-180, 180)`, and adds elevation as `-depth`.
+Transit and auxiliary sources are marked during `curate`; inclusion is
+controlled by `include_in_points_raw`, not inferred from a filename at a later
+stage.
 
-**File Naming Conventions:**
-1.  **Daily Files:** `YYYYMMDD.dat` (e.g., `20120408.dat`) - Date is explicit.
-2.  **Daily Files (Prefix):** `TYYYYMMDD.dat` (e.g., `T20101012.dat`) - Date is explicit.
-3.  **Cruise Files:** `CruiseName.dat` (e.g., `KM16-08_leg1.dat`) - Date is implicit (associated with the cruise period).
-4.  **Transit Files:** `CruiseName_t.dat` (e.g., `KM16-08_leg1_t.dat`) - Likely transit data (between stations/legs).
-
-### Coordinate System
-- **Format:** ASCII text, space-separated.
-- **Columns:** `Longitude Latitude Depth`
-- **Longitude:** -180 to 180 (Decimal Degrees). West is negative.
-- **Latitude:** -90 to 90 (Decimal Degrees). South is negative.
-- **Depth:** Positive meters (Down is positive).
-
-### Metadata
-- Some folders contain PDF files with cruise reports or readme files (e.g., `*_readme_eng.pdf`).
-- `docs/dat_manifest.tsv` provides a full index of all available data files.
-
-## 5. Usage Example (Python)
-
-Here is a simple example of how to use the manifest to locate and load data files.
+`docs/dat_manifest.tsv` is the source inventory. Read it from the repository
+root rather than relying on the historical absolute `Path` values:
 
 ```python
+from pathlib import Path
 import pandas as pd
-import os
 
-# 1. Load the manifest
-manifest_path = 'docs/dat_manifest.tsv'
-df_manifest = pd.read_csv(manifest_path, sep='\t')
-
-print(f"Total files available: {len(df_manifest)}")
-print(df_manifest.head())
-
-# 2. Load a specific data file (e.g., the first one)
-first_file_path = df_manifest.iloc[0]['Path']
-print(f"Loading: {first_file_path}")
-
-# Read the space-separated .dat file
-# Columns: Longitude, Latitude, Depth
-data = pd.read_csv(first_file_path, sep='\s+', header=None, names=['lon', 'lat', 'depth'])
-
-print(data.describe())
+repo = Path("/mnt/data2/00-Data/ship")
+project = repo / "jamstec/multibeam"
+manifest = pd.read_csv(project / "docs/dat_manifest.tsv", sep="\t")
+row = manifest.iloc[0]
+source = project / "raw/dat_by_subzip" / row["Subzip"] / row["Filename"]
+points = pd.read_csv(source, sep=r"\s+", header=None, names=["lon", "lat", "depth"])
 ```
+
+The detailed point-table contract is in `docs/point_schema_v1.md`.
