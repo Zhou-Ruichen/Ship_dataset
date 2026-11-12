@@ -310,7 +310,7 @@ def stage_inventory(workers: int, refresh: bool) -> dict:
 # --------------------------------------------------------------------------
 # stage: diff
 # --------------------------------------------------------------------------
-def stage_diff(trees: dict) -> list[dict]:
+def stage_diff(trees: dict, queue_order: bool = False) -> list[dict]:
     todo = []
     per_survey = []
     for sid, tree in sorted(trees.items()):
@@ -331,6 +331,12 @@ def stage_diff(trees: dict) -> list[dict]:
                                sum(n["expected"] or 0 for n in need)))
         todo.extend(need)
     todo.sort(key=lambda n: (n["expected"] or 0))
+    if queue_order:
+        # Stable sort: whole surveys finish in queue order, small files first
+        # within each survey.
+        rank = {sid: i for i, sid in enumerate(
+            pd.read_csv(CAT, sep="\t", dtype=str).surveyId)}
+        todo.sort(key=lambda n: rank[n["survey_id"]])
     (WORK / "todo.json").write_text(json.dumps(todo))
     total_gb = sum(gb for _, _, _, gb in per_survey) / 1024 ** 3
     log(f"diff: {len(todo)} files to fetch in {len(per_survey)} surveys, "
@@ -486,7 +492,7 @@ def stage_merge() -> None:
 
 
 def main() -> None:
-    global CAT, WORK, TAG
+    global CAT, RAW, WORK, TAG
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", default="all",
                     choices=["inventory", "diff", "download", "merge", "all"])
@@ -498,12 +504,18 @@ def main() -> None:
                     help="ignore cached listings and re-fetch")
     ap.add_argument("--catalog", default=str(CAT),
                     help="queue tsv with a surveyId column")
+    ap.add_argument("--raw-root", default=str(RAW),
+                    help="output root for <surveyId>/ directories")
+    ap.add_argument("--queue-order", action="store_true",
+                    help="fetch surveys in catalog order instead of "
+                         "smallest file first across all surveys")
     ap.add_argument("--work", default=str(WORK),
                     help="scratch/cache directory")
     ap.add_argument("--tag", default=TAG,
                     help="worker tag written to the download log")
     args = ap.parse_args()
     CAT = Path(args.catalog)
+    RAW = Path(args.raw_root)
     WORK = Path(args.work)
     TAG = args.tag
     set_proxies([p.strip() for p in args.proxies.split(",") if p.strip()])
@@ -514,7 +526,7 @@ def main() -> None:
     if args.stage in ("diff", "all") or trees is None:
         if trees is None:
             trees = json.loads((WORK / "trees.json").read_text())
-        todo = stage_diff(trees)
+        todo = stage_diff(trees, args.queue_order)
         if args.stage == "diff":
             return
     if args.stage in ("download", "all"):
