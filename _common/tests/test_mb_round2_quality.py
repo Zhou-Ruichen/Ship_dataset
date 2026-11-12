@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from ncei.swath import aggregation, decode, exclusions, format_times, pipeline, points, selection, sources
+from ncei.swath import aggregation, cli, decode, exclusions, format_times, pipeline, points, selection, sources
 
 
 def source(root: Path, fmt: int = 41, key: str = 'key') -> sources.Source:
@@ -137,6 +137,52 @@ class StreamingSwathTest(unittest.TestCase):
             self.assertFalse((root / '_tmp/NEXT').exists())
             with patch.object(pipeline, 'discover', side_effect=AssertionError('must skip')):
                 self.assertEqual(pipeline.run(root, ['NEXT'], directories, {}, 1, True), 0)
+
+    def test_empty_historical_manifest_uses_raw_sources(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            raw, history = root / 'raw', root / 'history'
+            directory = raw / 'ship/TEST'
+            directory.mkdir(parents=True)
+            path = directory / 'source.mb41.gz'
+            path.touch()
+            (history / 'TEST').mkdir(parents=True)
+            pd.DataFrame(columns=['cruise', 'file_ordinal', 'relpath', 'filekey', 'status']).to_parquet(
+                history / 'TEST/extraction_manifest.parquet', index=False)
+            records = sources.discover('TEST', [(raw, directory)], history)
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].path, path)
+            self.assertEqual(records[0].mb_format, 41)
+            self.assertEqual(records[0].file_ordinal, 0)
+            self.assertEqual(records[0].filekey, sources.file_key(path.relative_to(raw)))
+
+    def test_resume_expands_cruise_set_and_records_each_invocation(self):
+        import json
+
+        def write_sensitivity(path, _history):
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b'sensitivity fixture')
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            output = root / 'output'
+            common = ['run', '--data-root', str(root), '--raw-root', str(root / 'raw'),
+                      '--ledger', str(root / 'ledger.parquet'), '--output-root', str(output),
+                      '--no-exclusions']
+            with patch.object(sources, 'downloaded_cruises', return_value={'RR0913', 'SECOND'}), \
+                    patch.object(sources, 'cruise_directories', return_value={}), \
+                    patch.object(exclusions, 'write_sensitivity', side_effect=write_sensitivity), \
+                    patch.object(pipeline, 'run', return_value=0) as run:
+                self.assertEqual(cli.main([*common, '--cruises', 'RR0913']), 0)
+                self.assertEqual(cli.main([*common, '--resume']), 0)
+                with self.assertRaisesRegex(ValueError, 'processing parameters differ'):
+                    cli.main([*common, '--raw-root', str(root / 'changed'), '--resume'])
+            self.assertEqual(run.call_count, 2)
+            calls = [json.loads(line) for line in (output / 'run_invocations.jsonl').read_text().splitlines()]
+            self.assertEqual([call['cruises'] for call in calls], [['RR0913'], ['RR0913', 'SECOND']])
+            parameters = json.loads((output / 'run_parameters.json').read_text())
+            self.assertEqual(parameters['sensitivity_path'], str(output / exclusions.SENSITIVITY_TABLE))
+            self.assertEqual(len(parameters['sensitivity_sha256']), 64)
 
     def test_shared_aggregation_preserves_duplicates_and_unique_median(self):
         with tempfile.TemporaryDirectory() as name:

@@ -92,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         points.write_points(inputs, path, set(args.files), args.bbox, exclusions.load(exclusion_path), data_root / ENVIRONMENT_RELATIVE)
         print(path)
         return 0
-    invalid_pings = pipeline.prepare_run(output, roots, requested, args.resume, exclusion_path,
+    invalid_pings = pipeline.prepare_run(output, roots, args.resume, exclusion_path,
                                          not args.no_exclusions and exclusion_path is None, ledger, data_root)
+    pipeline.record_invocation(output, targets, ledger, args.workers, args.resume)
     return pipeline.run(output, targets, directories, invalid_pings, args.workers, args.resume, data_root)

@@ -99,6 +99,7 @@ retained in `files.parquet`.
 | `files.parquet` | Source keys, paths, formats, status, raw bytes, beam/quality/selection counts, ping-time bounds in UTC integer microseconds |
 | `cruises.parquet` | Cruise status, counts, format intervals and overlaps, elapsed seconds, the former stage-36 source fields |
 | `run_parameters.json` | Raw roots, selection policy and rule, exclusion-table path and SHA-256, MB-System version and code commit |
+| `run_invocations.jsonl` | Append-only invocation times, cruise lists, ledger paths, workers and resume settings |
 | `excluded_pings.parquet` | The default 19 confirmed-invalid source ping identities |
 | `hnro14rr_sensitivity_beams.parquet` | 11,816 diagnosed beam identities, excluded from the default selection rules |
 | `census.parquet` | Cruise/format file counts, bytes, supported status |
@@ -114,11 +115,15 @@ A shared endpoint counts as overlap even when the duration is zero.
 record the successive selection counts. `n_excluded_beams` counts all beams
 belonging to the listed invalid pings, including already rejected beams.
 
-`--resume` requires matching source and selection parameters, skips completed
-cruises, and rebuilds an incomplete cruise from its raw files. Interrupted
+`--resume` requires matching input roots, selection, exclusion-table contents,
+and aggregation parameters. Each invocation can extend the cruise list;
+completed cruises are skipped and an incomplete cruise is rebuilt from its raw files. Interrupted
 manifest updates are recovered from `_checkpoints/`. Workers may change on
 resume. Existing L2 files are replaced only while rebuilding an incomplete
 cruise in that run's output directory.
+
+`run_parameters.json` also records the HNRO14RR sensitivity-table path and
+SHA-256. The invocation record retains each requested cruise list separately.
 
 ## Recreate checked soundings on demand
 

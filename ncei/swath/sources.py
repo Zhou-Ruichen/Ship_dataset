@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW_ROOTS = (
@@ -114,7 +115,10 @@ def discover(cruise: str, directories: list[tuple[Path, Path]],
     historical = historical_root / cruise / "extraction_manifest.parquet"
     if historical.is_file():
         columns = ["relpath", "file_ordinal", "filekey", "mb_format", "format_note"]
-        for row in pd.read_parquet(historical, columns=columns).sort_values("file_ordinal").itertuples():
+        with pq.ParquetFile(historical) as manifest:
+            rows = (manifest.read(columns=columns).to_pandas().sort_values("file_ordinal").itertuples()
+                    if manifest.metadata.num_rows else ())
+        for row in rows:
             rel = Path(row.relpath)
             tail = Path(*rel.parts[rel.parts.index(cruise) + 1:])
             key = tail.with_suffix("") if tail.suffix.lower() == ".gz" else tail

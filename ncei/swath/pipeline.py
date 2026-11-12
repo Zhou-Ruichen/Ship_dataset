@@ -9,12 +9,14 @@ import subprocess
 import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 
 import pandas as pd
 
 from _common.file_io import atomic_write_parquet, atomic_write_text
+from ncei.trackline.file_cells import AGGREGATION_VERSION
 
 from . import exclusions
 from .aggregation import aggregate_cruise
@@ -144,7 +146,7 @@ def publish_manifests(output: Path) -> None:
         path.unlink()
 
 
-def prepare_run(output: Path, roots: list[Path], selected: list[str] | None, resume: bool,
+def prepare_run(output: Path, roots: list[Path], resume: bool,
                 exclusion_path: Path | None, default_exclusions: bool, ledger: Path = LEDGER,
                 data_root: Path = ROOT) -> dict:
     parameters_path = output / "run_parameters.json"
@@ -159,24 +161,39 @@ def prepare_run(output: Path, roots: list[Path], selected: list[str] | None, res
         if not exclusion_path.exists():
             exclusions.write_default(exclusion_path, data_root / "ncei/derived/processing_revision_20261025/swath")
     invalid_pings = exclusions.load(exclusion_path)
-    parameters = {
-        "raw_roots": [str(root) for root in roots], "cruises": selected, "ledger": str(ledger),
+    processing = {
+        "raw_roots": [str(root) for root in roots],
         "data_root": str(data_root),
         "selection_policy": "basic_native_good_valid_ping_navigation_case_review" if exclusion_path
                             else "basic_native_good_valid_ping_navigation",
         "selection_rule": SELECTION_RULE if exclusion_path else SELECTION_RULE.split(" & ~")[0],
-        "exclusion_path": str(exclusion_path) if exclusion_path else None,
         "exclusion_sha256": hashlib.sha256(exclusion_path.read_bytes()).hexdigest() if exclusion_path else None,
-        "code_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "aggregation_version": AGGREGATION_VERSION,
         "mbsystem_version": MBSYSTEM_VERSION,
     }
     if parameters_path.exists():
-        if json.loads(parameters_path.read_text()) != parameters:
-            raise ValueError("resume inputs or selection differ from run_parameters.json")
+        saved = json.loads(parameters_path.read_text())
+        if any(saved.get(key) != value for key, value in processing.items()):
+            raise ValueError("resume processing parameters differ from run_parameters.json")
     else:
-        exclusions.write_sensitivity(output / exclusions.SENSITIVITY_TABLE, data_root / "ncei/derived/mb_round2")
-        write_json(parameters_path, parameters)
+        sensitivity = output / exclusions.SENSITIVITY_TABLE
+        exclusions.write_sensitivity(sensitivity, data_root / "ncei/derived/mb_round2")
+        write_json(parameters_path, {
+            **processing, "ledger": str(ledger),
+            "exclusion_path": str(exclusion_path) if exclusion_path else None,
+            "sensitivity_path": str(sensitivity),
+            "sensitivity_sha256": hashlib.sha256(sensitivity.read_bytes()).hexdigest(),
+            "code_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        })
     return invalid_pings
+
+
+def record_invocation(output: Path, targets: list[str], ledger: Path, workers: int, resume: bool) -> None:
+    with (output / "run_invocations.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({
+            "started_at_utc": datetime.now(timezone.utc).isoformat(),
+            "cruises": targets, "ledger": str(ledger), "workers": workers, "resume": resume,
+        }) + "\n")
 
 
 def run(output: Path, targets: list[str], directories: dict[str, list[tuple[Path, Path]]], invalid_pings: dict,
