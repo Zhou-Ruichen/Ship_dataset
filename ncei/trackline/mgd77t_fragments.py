@@ -149,8 +149,23 @@ def _worker(track_id: str, survey: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m ncei.trackline mgd77t-fragments", description=__doc__)
     parser.add_argument("--tracks", nargs="*", default=None)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=None)
+    parser.add_argument("--source-fields", action="store_true", help="Read complete MGD77T records and retain source quality and time.")
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--source-root", type=Path, default=REPO_ROOT / "ncei/raw_round2/mgd77t_static")
+    parser.add_argument("--legacy-root", type=Path, default=OUT_ROOT)
+    parser.add_argument("--evidence-root", type=Path, help="Optional historical source-comparison tables; not required for conversion.")
+    parser.add_argument("--no-legacy-comparison", action="store_true", help="Do not read historical point products or their manifest.")
+    parser.add_argument("--classification-manifest", type=Path, help="Optional retained instrument predictions, independent of point comparisons.")
+    parser.add_argument("--chunk-size", type=int, default=100_000)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
+    if args.source_fields:
+        from .mgd77t_source_fields import run_source_fields
+        args.workers = args.workers or 2
+        return run_source_fields(args)
+    args.workers = args.workers or 8
 
     conv = pd.read_parquet(CONV_MANIFEST)
     work = [(r.track_id, r.survey) for r in conv.itertuples()

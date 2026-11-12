@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +14,8 @@ import pyarrow.parquet as pq
 from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 from ncei.trackline import file_cells
 from . import coverage, extract, manifest_fragment
+
+NAVIGATION_POLICY = "basic_native_good_valid_ping_navigation"
 
 
 def write_json(value: dict, path: Path) -> None:
@@ -48,6 +51,7 @@ def input_manifest(cruise: str, input_root: Path, reextract: bool) -> pd.DataFra
 
 def process_cruise(
     cruise: str, input_root: Path, output_root: Path, reextract: bool, resume: bool,
+    selection_policy: str = "basic_native_good", workers: int = 1,
 ) -> dict:
     destination = output_root / cruise
     summary_path = destination / "extraction_summary.json"
@@ -67,15 +71,18 @@ def process_cruise(
         staging = input_root / cruise / "_staging"
         if reextract:
             rows = []
-            for record in manifest.itertuples():
-                fmt = int(record.mb_format) if pd.notna(record.mb_format) else None
-                row = extract.process_one_file(
-                    cruise, record.file_ordinal, Path(record.relpath), fmt,
-                    record.format_note, output_root=output_root,
-                    source_path=extract.RAW_ROOT / record.source_relpath,
-                )
-                row["source_relpath"] = record.source_relpath
-                rows.append(row)
+            records = manifest.to_dict("records")
+            tasks = [(cruise, record, output_root) for record in records]
+            if workers == 1:
+                results = map(extract_record, tasks)
+                for row in results:
+                    rows.append(row)
+                    print(f"{cruise} file {len(rows)}/{len(tasks)}: {row['status']}", flush=True)
+            else:
+                with ProcessPoolExecutor(max_workers=workers) as pool:
+                    for row in pool.map(extract_record, tasks):
+                        rows.append(row)
+                        print(f"{cruise} file {len(rows)}/{len(tasks)}: {row['status']}", flush=True)
             manifest = pd.DataFrame(rows)
             staging = destination / "_staging"
             atomic_write_parquet(manifest, out_manifest)
@@ -93,11 +100,17 @@ def process_cruise(
         write_json(summary, summary_path)
         checked = extract.REPO_ROOT / summary["points_checked_path"]
 
+    required = file_cells.selection_columns(selection_policy)
+    missing = set(required) - set(pq.read_schema(checked).names)
+    if missing:
+        raise ValueError(f"{cruise}: {selection_policy} missing fields: {sorted(missing)}")
+    if selection_policy == NAVIGATION_POLICY and summary.get("n_unknown_navigation_beams", summary["n_rows"]):
+        raise ValueError(f"{cruise}: source ping navigation has not been extracted for every beam")
     l2 = destination / "file_cells_1min" / checked.name
     aggregation_path = destination / "aggregation_summary.json"
     if resume and aggregation_path.exists():
         result = json.loads(aggregation_path.read_text())
-        if result["selection_policy"] != "basic_native_good":
+        if result["selection_policy"] != selection_policy:
             raise ValueError(f"{cruise}: saved L2 uses a different selection policy")
         if not l2.is_file() or pq.read_metadata(l2).num_rows != result["n_cells"]:
             raise ValueError(f"{cruise}: L2 differs from its checkpoint")
@@ -107,14 +120,27 @@ def process_cruise(
             source_type=f"ncei_mb{summary['mb_format']}",
             source_completeness=f"mb{summary['mb_format']}_only",
             instrument_class_pred="multibeam", branch="multibeam_ncei",
-            manual_review_flag=False, overwrite=resume, selection_policy="basic_native_good",
+            manual_review_flag=False, overwrite=resume, selection_policy=selection_policy,
             batch_size=500_000,
         )
         write_json(result, aggregation_path)
-    if result["n_selected"] != summary["n_selected_basic_native_good"]:
+    summary_count = "n_selected_" + selection_policy
+    if result["n_selected"] != summary[summary_count]:
         raise ValueError(f"{cruise}: L1 and L2 selected-point counts differ")
     print(f"{cruise}: {summary['n_rows']:,} points; {result['n_selected']:,} selected; {result['n_cells']:,} cells")
     return {**summary, **result, "cruise": cruise}
+
+
+def extract_record(task: tuple) -> dict:
+    cruise, record, output_root = task
+    fmt = int(record["mb_format"]) if pd.notna(record["mb_format"]) else None
+    row = extract.process_one_file(
+        cruise, record["file_ordinal"], Path(record["relpath"]), fmt,
+        record["format_note"], output_root=output_root,
+        source_path=extract.RAW_ROOT / record["source_relpath"],
+    )
+    row["source_relpath"] = record["source_relpath"]
+    return row
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,7 +163,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="Extract raw sources into the new root instead of reusing input staging.")
     parser.add_argument("--resume", action="store_true",
                         help="Reuse completed L1/L2 outputs and continue missing steps.")
+    parser.add_argument("--selection-policy", choices=("basic_native_good", NAVIGATION_POLICY),
+                        default="basic_native_good",
+                        help="Navigation policy requires newly extracted per-ping navigation.")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Concurrent source-file extraction processes.")
     args = parser.parse_args(argv)
+    if args.workers < 1:
+        parser.error("--workers must be positive")
     input_root = args.input_root.resolve()
     output_root = args.output_root.resolve()
     production = extract.OUT_ROOT.resolve()
@@ -157,18 +190,22 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("cruise IDs must be directory names, not paths")
     parameters = {
         "cruises": cruises, "input_root": str(input_root), "output_root": str(output_root),
-        "extract": args.extract, "selection_policy": "basic_native_good",
+        "extract": args.extract, "selection_policy": args.selection_policy,
+        "workers": args.workers,
     }
     parameter_path = output_root / "run_parameters.json"
     if output_root.exists() and any(output_root.iterdir()):
         if not args.resume or not parameter_path.is_file():
             raise FileExistsError(f"nonempty output; --resume requires this batch's checkpoint: {output_root}")
-        if json.loads(parameter_path.read_text()) != parameters:
+        saved_parameters = json.loads(parameter_path.read_text())
+        saved_parameters.setdefault("workers", 1)
+        if saved_parameters != parameters:
             raise ValueError("resume parameters differ from the saved batch")
     output_root.mkdir(parents=True, exist_ok=True)
     write_json(parameters, parameter_path)
     rows = [
-        process_cruise(cruise, input_root, output_root, args.extract, args.resume)
+        process_cruise(cruise, input_root, output_root, args.extract, args.resume,
+                       args.selection_policy, args.workers)
         for cruise in cruises
     ]
     atomic_write_parquet(pd.DataFrame(rows), output_root / "file_cells_manifest.parquet")
@@ -177,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     if coverage.coverage_stats(output_root):
         return 1
     write_json({
-        "status": "completed", "cruises": cruises, "selection_policy": "basic_native_good",
+        "status": "completed", "cruises": cruises, "selection_policy": args.selection_policy,
         "n_rows": sum(r["n_rows"] for r in rows), "n_selected": sum(r["n_selected"] for r in rows),
         "n_cruise_cells": sum(r["n_cells"] for r in rows),
         "command": [sys.executable, "-m", "ncei.swath", "batch", *(sys.argv[1:] if argv is None else argv)],

@@ -30,6 +30,9 @@ COMMANDS = {
     "global-grid": ("global_grid", "Build the merged global one-minute grid."),
     "mgd77t-xyz": ("mgd77t_xyz", "Convert static MGD77T files to XYZ."),
     "mgd77t-fragments": ("mgd77t_fragments", "Build static MGD77T L1-L3 fragments."),
+    "mgd77t-nc": ("mgd77t_netcdf", "Convert explicit MGD77T input to source-preserving NetCDF."),
+    "legacy-faa-revision": ("legacy_faa_revision", "Rebuild and compare an explicit legacy FAA batch."),
+    "source-corrections": ("source_corrections", "Structure source physical-correction states with evidence."),
 }
 
 ALIASES = {

@@ -418,9 +418,11 @@ def grid_candidate_pairs(
     idr_s = seg_idrank[seg_s]
 
     pair_key = key_s * np.int64(n_idranks + 1) + idr_s
-    uk, counts = np.unique(pair_key, return_counts=True)
-    active = uk[counts >= 2]
-    active_keys = np.unique(active // np.int64(n_idranks + 1))
+    unique_cell_track = np.unique(pair_key)
+    cell_keys, track_counts = np.unique(
+        unique_cell_track // np.int64(n_idranks + 1), return_counts=True,
+    )
+    active_keys = cell_keys[track_counts >= 2]
     logger.info(
         "grid: %d segment-cell entries, %d non-empty cells, %d cells with >=2 track ids",
         total, len(np.unique(key_s)), len(active_keys),
@@ -564,6 +566,8 @@ def orient_and_filter(
     rt: RegionTracks,
     bbox: tuple[float, float, float, float],
     logger: logging.Logger,
+    *,
+    include_segment_identity: bool = False,
 ) -> tuple[pd.DataFrame, dict]:
     """Keep crossings inside the true bbox with finite depths, dedup
     vertex-sharing duplicates, apply the ordering convention.
@@ -621,10 +625,9 @@ def orient_and_filter(
     ta = ta[sel]; tb = tb[sel]
     cx = cx[sel]; cy = cy[sel]
 
-    # Ordering: nc x nc with both crossing times finite -> by time (earlier
-    # first); otherwise deterministic arbitrary (nc before xyz, then
-    # track_id ascending).
-    is_nc = np.array([s == "nc" for s in rt.track_source])
+    # MGD77T can supply known UTC without a NetCDF intermediate. Missing or
+    # unspecified source timezone never supplies an ordering time.
+    is_nc = np.array([s in {"nc", "mgd77t"} for s in rt.track_source])
     lex_rank = np.argsort(np.array(rt.track_ids), kind="stable")
     rank = np.empty(n_tracks, dtype=np.int64)
     rank[lex_rank] = np.arange(n_tracks)
@@ -656,6 +659,9 @@ def orient_and_filter(
         np.where(st_second == "nc", "nc_x_nc", "nc_x_xyz"),
         "xyz_x_xyz",
     )
+    pair_type = np.where(
+        (st_first == "mgd77t") & (st_second == "mgd77t"), "mgd77t_x_mgd77t", pair_type,
+    )
     # Canonical (lexicographic) pair key, independent of the event orientation.
     first_le = tid_first <= tid_second
     canonical_a = np.where(first_le, tid_first, tid_second)
@@ -681,6 +687,9 @@ def orient_and_filter(
             "ordering_basis": np.where(use_time, "time", "arbitrary"),
         }
     )
+    if include_segment_identity:
+        events["segment_id_first"] = np.where(swap, j_idx[sel], i_idx[sel]).astype(np.int64)
+        events["segment_id_second"] = np.where(swap, i_idx[sel], j_idx[sel]).astype(np.int64)
     logger.info(
         "events: %(raw)d raw -> %(inside)d inside bbox -> %(nan_depth)d dropped "
         "for NaN depth -> %(dup)d vertex duplicates -> %(final)d final",
@@ -1004,7 +1013,15 @@ def main(argv: list[str] | None = None) -> int:
         "--overwrite", action="store_true",
         help="recompute even if all six per-region outputs exist",
     )
+    parser.add_argument("--source-points-root", type=Path, help="Read revised MGD77T points with original-observation continuity.")
+    parser.add_argument("--output-root", type=Path, help="Explicit separate output for the source-point mode.")
+    parser.add_argument("--selection-policies", nargs="+", choices=("basic", "basic_source_quality"), default=["basic", "basic_source_quality"])
     args = parser.parse_args(argv)
+    if args.source_points_root is not None:
+        if args.output_root is None:
+            parser.error("--source-points-root requires --output-root")
+        from .mgd77t_crossover import run_source_crossovers
+        return run_source_crossovers(args)
 
     t_start = _time.time()
     logger = setup_logging(LOG_DIR / "24_true_crossover_audit.log", "ncei_true_crossover_audit")

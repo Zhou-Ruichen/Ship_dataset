@@ -8,8 +8,9 @@ recorded and skipped. For each target cruise, every file is:
 
   1. decompressed with the fixed-version gzip from the sealed SCS
      mbsystem environment;
-  2. parsed twice by the fixed-version mblist (5.8.3beta16) with the
-     command lines -F<fmt> -P1 -L0 -MA -U3/-U0 -OMN#XYzH;
+  2. parsed by the fixed-version mblist (5.8.3beta16) with the
+     command lines -F<fmt> -P1 -L0 -MA -U3/-U0 -OMN#XYzH,
+     plus -U3 -OMNXYzH without -MA for source ping navigation;
   3. joined U3(left)/U0(good-beams) via
      _common.mbsystem.raw_from_object (extracted from the archived SCS
      Stage C processing module; see docs/code_archive.md);
@@ -55,7 +56,7 @@ import pyarrow.parquet as pq
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-from _common.mbsystem import raw_from_object
+from _common.mbsystem import PING_NAVIGATION_SCHEMA, raw_from_object, read_ping_navigation
 
 RAW_ROOT = REPO_ROOT / "ncei/raw_round2/platforms_tree"
 COMP_PATH = REPO_ROOT / "ncei/derived/mb_round2/completeness_manifest.parquet"
@@ -85,6 +86,15 @@ KNOWN_UNSUPPORTED_SUFFIXES = {".mb56.gz", ".mb162.gz"}
 # recorded reason rather than guessed.
 CONTENT_SIGNATURES = {b"ERGNMESS": 21}
 INSTRUMENT_CLASS = "multibeam"
+NAVIGATION_FIELDS = [
+    pa.field("parser_ping_index", pa.int64()),
+    pa.field("native_ping_counter", pa.int64()),
+    pa.field("beam_index", pa.int32()),
+    *[field for field in PING_NAVIGATION_SCHEMA
+      if field.name not in {"epoch_us", "native_ping_counter"}],
+]
+NAVIGATION_COLUMNS = [field.name for field in NAVIGATION_FIELDS]
+NAVIGATION_SELECTION_COLUMN = "point_selected_basic_native_good_valid_ping_navigation"
 
 # L1 contract columns (matches existing ncei/derived/multibeam/points_raw).
 POINT_COLUMNS = [
@@ -94,6 +104,7 @@ POINT_COLUMNS = [
     "source_completeness", "instrument_class_pred", "standardization_version",
     "filekey", "file_ordinal", "point_index_in_file", "staging_row",
     "native_quality_state",
+    *NAVIGATION_COLUMNS,
 ]
 CHECK_COLUMNS = [
     "valid_lon", "valid_lat", "valid_depth_pos", "valid_depth_max",
@@ -112,6 +123,7 @@ STAGING_SCHEMA = pa.schema(
         ("lat", pa.float64()),
         ("depth_raw", pa.float64()),
         ("native_quality_state", pa.string()),
+        *NAVIGATION_FIELDS,
     ]
 )
 
@@ -175,6 +187,17 @@ def staging_statistics(path: Path) -> dict:
     return counts
 
 
+def projection_sidecar(source: Path, mb_format: int) -> Path | None:
+    """Use only the projection belonging to this source's uncompressed name."""
+    if mb_format != 84:
+        return None
+    body = source.with_suffix("") if source.suffix == ".gz" else source
+    sidecar = Path(str(body) + ".prj")
+    if not sidecar.is_file() or not sidecar.read_text(encoding="ascii").strip():
+        raise FileNotFoundError(f"MB84 source projection is missing or empty: {sidecar}")
+    return sidecar
+
+
 def run_command(argv: list[str], *, stdout_path: Path | None, stderr_path: Path, ledger_path: Path, object_id: str, role: str) -> subprocess.CompletedProcess[str]:
     """Mirrors the SCS command-ledger contract (argv + rc + stream hashes)."""
     if stdout_path is None:
@@ -218,11 +241,21 @@ def process_one_file(
     object_id = f"mb_round2/{cruise}/{rel.name}"
 
     if staging_path.exists():
+        metadata_path = work / "source_metadata.json"
+        saved_metadata = json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+        navigation_parquet = work / "ping_navigation.parquet"
+        if navigation_parquet.is_file():
+            navigation = pq.read_table(navigation_parquet).to_pandas()
+            saved_metadata.update({
+                "n_source_pings": len(navigation),
+                "n_invalid_navigation_pings": int((~navigation["valid_ping_navigation"]).sum()),
+            })
         return {
             "cruise": cruise, "file_ordinal": ordinal, "relpath": rel.as_posix(),
             "filekey": key, "mb_format": mb_format, "format_note": format_note, "status": "skipped_exists",
             "gz_bytes": gz_path.stat().st_size,
             **staging_statistics(staging_path),
+            **saved_metadata,
             "error_code": "", "error_detail": "",
             "runtime_seconds": 0.0,
         }
@@ -246,8 +279,23 @@ def process_one_file(
     u3 = work / "all_u3.tsv"
     u0 = work / "good_u0.tsv"
     raw_path = work / "raw_joined.parquet"
+    navigation_path = work / "ping_navigation.tsv"
+    projection_record = {
+        "source_path": os.path.relpath(gz_path, REPO_ROOT),
+        "projection_source_path": None, "projection_definition": None,
+    }
     t0 = time.time()
     try:
+        sidecar = projection_sidecar(gz_path, mb_format)
+        if sidecar is not None:
+            projection_record.update({
+                "projection_source_path": os.path.relpath(sidecar, REPO_ROOT),
+                "projection_definition": sidecar.read_text(encoding="ascii").strip(),
+            })
+            shutil.copyfile(sidecar, Path(str(decompressed) + ".prj"))
+        (work / "source_metadata.json").write_text(
+            json.dumps(projection_record, indent=2) + "\n", encoding="utf-8"
+        )
         if source_path is None or gz_path.suffix == ".gz":
             run_command([str(GZIP), "-dc", "--", str(gz_path)], stdout_path=decompressed, stderr_path=work / "gzip.stderr", ledger_path=ledger, object_id=object_id, role="decompression")
         else:
@@ -256,6 +304,16 @@ def process_one_file(
         u0_argv = [str(MBLIST), f"-I{decompressed}", f"-F{mb_format}", "-P1", "-L0", "-MA", "-U0", "-OMN#XYzH", f"-X{u0}"]
         run_command(u3_argv, stdout_path=None, stderr_path=work / "u3.stderr", ledger_path=ledger, object_id=object_id, role="mblist_u3")
         run_command(u0_argv, stdout_path=None, stderr_path=work / "u0.stderr", ledger_path=ledger, object_id=object_id, role="mblist_u0")
+        navigation_argv = [
+            str(MBLIST), f"-I{decompressed}", f"-F{mb_format}", "-P1", "-L0",
+            "-U3", "-OMNXYzH", f"-X{navigation_path}",
+        ]
+        run_command(navigation_argv, stdout_path=None, stderr_path=work / "navigation.stderr",
+                    ledger_path=ledger, object_id=object_id, role="mblist_ping_navigation")
+        navigation_table = read_ping_navigation(navigation_path)
+        pq.write_table(navigation_table, work / "ping_navigation.parquet", compression="zstd")
+        navigation = navigation_table.to_pandas()
+        navigation_index = pd.MultiIndex.from_frame(navigation[["epoch_us", "native_ping_counter"]])
         total_rows, good_rows, error_code, error_detail = raw_from_object(object_id, u3, u0, work / "u0.sqlite", raw_path)
         if error_code:
             return {
@@ -275,9 +333,26 @@ def process_one_file(
         n_pos = n_neg = n_zero = n_nan = 0
         n_good = n_flagged = n_null = 0
         local_index = 0
+        previous_navigation_index = -1
+        matched_navigation = set()
         pf = pq.ParquetFile(raw_path)
         for batch in pf.iter_batches(batch_size=200_000):
             df = batch.to_pandas()
+            indices = navigation_index.get_indexer(
+                pd.MultiIndex.from_frame(df[["epoch_us", "native_ping_counter"]])
+            )
+            if np.any(indices < 0):
+                raise ValueError("beam ping key absent from source ping navigation")
+            if len(indices) and (indices[0] < previous_navigation_index or np.any(np.diff(indices) < 0)):
+                raise ValueError("beam and source ping navigation order disagree")
+            if len(indices):
+                previous_navigation_index = int(indices[-1])
+            matched_navigation.update(indices.tolist())
+            ping_fields = {
+                name: navigation[name].to_numpy()[indices]
+                for name in NAVIGATION_COLUMNS
+                if name not in {"parser_ping_index", "native_ping_counter", "beam_index"}
+            }
             depth_raw = df["parser_depth_value"].to_numpy(dtype=np.float64)
             finite = np.isfinite(depth_raw)
             n_pos += int(np.count_nonzero(depth_raw[finite] > 0))
@@ -299,6 +374,9 @@ def process_one_file(
                     "lat": df["lat_deg"].to_numpy(dtype=np.float64),
                     "depth_raw": depth_raw,
                     "native_quality_state": quality.astype(str),
+                    **{name: df[name].to_numpy() for name in
+                       ("parser_ping_index", "native_ping_counter", "beam_index")},
+                    **ping_fields,
                 },
                 schema=STAGING_SCHEMA,
             )
@@ -314,6 +392,10 @@ def process_one_file(
             "n_depth_pos": n_pos, "n_depth_neg": n_neg, "n_depth_zero": n_zero, "n_depth_nan": n_nan,
             "error_code": "", "error_detail": "",
             "runtime_seconds": time.time() - t0,
+            **projection_record,
+            "n_source_pings": len(navigation),
+            "n_invalid_navigation_pings": int((~navigation["valid_ping_navigation"]).sum()),
+            "n_source_pings_without_beams": len(navigation) - len(matched_navigation),
         }
     except Exception as error:  # noqa: BLE001 — per-file isolation, recorded
         tmp = staging_dir / f"{key}.parquet.tmp" if staging_dir.exists() else None
@@ -330,7 +412,7 @@ def process_one_file(
         }
     finally:
         # Keep the command ledger; drop bulky intermediates.
-        for junk in (decompressed, u3, u0, raw_path, work / "u0.sqlite"):
+        for junk in (decompressed, u3, u0, navigation_path, raw_path, work / "u0.sqlite"):
             junk.unlink(missing_ok=True)
     return row
 
@@ -357,7 +439,7 @@ def merge_cruise(
         raise ValueError(f"{cruise}: expected exactly one usable format, got {formats_used}")
     source_type = f"ncei_mb{mb_format}"
     source_completeness = f"mb{mb_format}_only"
-    standardization_version = f"34_mb_round2_extract_points.py v2; mblist 5.8.3beta16 -F{mb_format} U3/U0 join; staging lineage"
+    standardization_version = f"ncei.swath.extract v3; mblist 5.8.3beta16 -F{mb_format} U3/U0 join; staging lineage"
     out_cruise_dir = output_dir if output_dir is not None else OUT_ROOT / cruise
     staging_dir = staging_dir if staging_dir is not None else OUT_ROOT / cruise / "_staging"
     ok = ok_all
@@ -402,9 +484,11 @@ def merge_cruise(
          ("faa", pa.float64()), ("source_completeness", pa.string()), ("instrument_class_pred", pa.string()),
          ("standardization_version", pa.string()), ("filekey", pa.string()),
          ("file_ordinal", pa.int32()), ("point_index_in_file", pa.int64()),
-         ("staging_row", pa.int64()), ("native_quality_state", pa.string())])
+         ("staging_row", pa.int64()), ("native_quality_state", pa.string()),
+         *NAVIGATION_FIELDS])
     checked_schema = pa.schema(
         list(raw_schema) + [pa.field(name, pa.bool_()) for name in CHECK_COLUMNS]
+        + [pa.field(NAVIGATION_SELECTION_COLUMN, pa.bool_())]
     )
     writer_raw = pq.ParquetWriter(tmp_raw, raw_schema, compression="zstd")
     writer_chk = pq.ParquetWriter(tmp_chk, checked_schema, compression="zstd")
@@ -413,6 +497,7 @@ def merge_cruise(
     n_rows = 0
     n_pass = 0
     n_selected = 0
+    n_selected_navigation = n_invalid_navigation_beams = n_unknown_navigation_beams = 0
     bounds = {"lon_min": np.inf, "lon_max": -np.inf, "lat_min": np.inf,
               "lat_max": -np.inf, "depth_min_raw": np.inf, "depth_max_raw": -np.inf}
     n_finite_position = 0
@@ -420,7 +505,7 @@ def merge_cruise(
         shard_path = staging_dir / f"{row.filekey}.parquet"
         pf = pq.ParquetFile(shard_path)
         staging_row = 0
-        file_basic = file_selected = 0
+        file_basic = file_selected = file_selected_navigation = file_invalid_navigation_beams = 0
         for batch in pf.iter_batches(batch_size=500_000):
             df = batch.to_pandas()
             n = len(df)
@@ -433,6 +518,12 @@ def merge_cruise(
             valid_max = np.isfinite(depth_std) & (depth_std <= DEPTH_VALID_MAX_M)
             core = valid_lon & valid_lat & valid_pos & valid_max
             selected = core & df["native_quality_state"].eq("good").to_numpy(dtype=bool)
+            for field in NAVIGATION_FIELDS:
+                if field.name not in df:
+                    df[field.name] = "not_extracted" if field.name == "ping_navigation_reason" else None
+            navigation_valid = df["valid_ping_navigation"].fillna(False).to_numpy(dtype=bool)
+            selected_navigation = selected & navigation_valid
+            invalid_navigation = df["valid_ping_navigation"].eq(False).to_numpy(dtype=bool)
             if not df["file_ordinal"].eq(row.file_ordinal).all():
                 raise ValueError(f"file_ordinal disagrees with extraction manifest: {shard_path}")
             base = {
@@ -457,11 +548,13 @@ def merge_cruise(
                 "point_index_in_file": df["point_index_in_file"].to_numpy(dtype=np.int64),
                 "staging_row": np.arange(staging_row, staging_row + n, dtype=np.int64),
                 "native_quality_state": df["native_quality_state"].to_numpy(),
+                **{name: df[name].tolist() for name in NAVIGATION_COLUMNS},
             }
             writer_raw.write_table(pa.Table.from_pydict(base, schema=raw_schema))
             writer_chk.write_table(pa.Table.from_pydict({**base,
                 "valid_lon": valid_lon, "valid_lat": valid_lat, "valid_depth_pos": valid_pos,
-                "valid_depth_max": valid_max, "valid_core_fields": core, "point_check_pass_basic": core},
+                "valid_depth_max": valid_max, "valid_core_fields": core, "point_check_pass_basic": core,
+                NAVIGATION_SELECTION_COLUMN: selected_navigation},
                 schema=checked_schema))
             global_index += n
             staging_row += n
@@ -470,6 +563,11 @@ def merge_cruise(
             n_selected += int(selected.sum())
             file_basic += int(core.sum())
             file_selected += int(selected.sum())
+            file_selected_navigation += int(selected_navigation.sum())
+            file_invalid_navigation_beams += int(invalid_navigation.sum())
+            n_selected_navigation += int(selected_navigation.sum())
+            n_invalid_navigation_beams += int(invalid_navigation.sum())
+            n_unknown_navigation_beams += int(df["valid_ping_navigation"].isna().sum())
             finite_position = np.isfinite(df["lon"]) & np.isfinite(df["lat"])
             n_finite_position += int(finite_position.sum())
             for name in ("lon", "lat"):
@@ -483,6 +581,8 @@ def merge_cruise(
                 bounds["depth_max_raw"] = max(bounds["depth_max_raw"], float(finite_depth.max()))
         manifest.loc[row.Index, "n_pass_basic"] = file_basic
         manifest.loc[row.Index, "n_selected_basic_native_good"] = file_selected
+        manifest.loc[row.Index, "n_selected_basic_native_good_valid_ping_navigation"] = file_selected_navigation
+        manifest.loc[row.Index, "n_invalid_navigation_beams"] = file_invalid_navigation_beams
     writer_raw.close()
     writer_chk.close()
     os.replace(tmp_raw, raw_out)
@@ -493,6 +593,12 @@ def merge_cruise(
         "sign_flip": sign_flip, "n_rows": n_rows, "n_pass_basic": n_pass,
         **{k: v for k, v in totals.items() if k != "n_rows"},
         "n_selected_basic_native_good": n_selected,
+        "n_selected_basic_native_good_valid_ping_navigation": n_selected_navigation,
+        "selection_rule_basic_native_good_valid_ping_navigation": (
+            "point_check_pass_basic & (native_quality_state == 'good') & valid_ping_navigation"
+        ),
+        "n_invalid_navigation_beams": n_invalid_navigation_beams,
+        "n_unknown_navigation_beams": n_unknown_navigation_beams,
         "selection_rule": "point_check_pass_basic & (native_quality_state == 'good')",
         "n_finite_position": n_finite_position,
         **{k: v if np.isfinite(v) else None for k, v in bounds.items()},
@@ -506,12 +612,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cruises", nargs="*", default=None, help="Subset of cruise IDs (default: all complete mb58 cruises).")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--merge-only", action="store_true", help="Skip extraction; only merge existing staging shards.")
+    parser.add_argument("--output-root", type=Path, default=OUT_ROOT,
+                        help="Root for extracted cruise products; defaults to the historical root.")
     args = parser.parse_args(argv)
 
     comp = pd.read_parquet(COMP_PATH)
     complete = set(comp[comp["status"] == "complete"]["cruise"])
-    all_cruises = {p.name for p in RAW_ROOT.iterdir() if p.is_dir()}
-    targets = sorted(c for c in all_cruises if c in complete)
+    downloads = pd.read_parquet(REPO_ROOT / "ncei/manifests/round2_download_log.parquet")
+    first_batch = downloads[
+        downloads["channel"].eq("platforms_tree")
+        & downloads["status"].str.startswith("first_batch_complete:", na=False)
+    ]
+    complete.update(first_batch["survey_id"].astype(str))
+    targets = sorted(complete)
     if args.cruises:
         targets = [c for c in targets if c in set(args.cruises)]
     if not targets:
@@ -519,16 +632,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     import multiprocessing as mp
+    from .batch import extract_record, input_manifest
 
+    output_root = args.output_root.resolve()
     for cruise in targets:
-        files = sorted(f for f in (RAW_ROOT / cruise).rglob("*.gz") if not f.name.endswith(".part"))
-        files = [f.relative_to(RAW_ROOT) for f in files]
-        formats = {rel.as_posix(): resolve_mb_format(rel) for rel in files}
-        manifest_path = OUT_ROOT / cruise / "extraction_manifest.parquet"
+        manifest_path = output_root / cruise / "extraction_manifest.parquet"
         existing = pd.read_parquet(manifest_path) if manifest_path.exists() else None
         rows: list[dict] = []
         if not args.merge_only:
-            tasks = [(cruise, ordinal, rel, *formats[rel.as_posix()]) for ordinal, rel in enumerate(files)]
+            inputs = input_manifest(cruise, OUT_ROOT, True)
+            tasks = [(cruise, record, output_root) for record in inputs.to_dict("records")]
             if not tasks:
                 manifest = pd.DataFrame(columns=["cruise", "file_ordinal", "relpath", "filekey", "status"])
                 manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -537,11 +650,11 @@ def main(argv: list[str] | None = None) -> int:
                            "depth_sign_raw": "no_depth_values", "sign_flip": 1.0, "n_rows": 0,
                            "n_pass_basic": 0, "points_raw_path": "", "points_checked_path": "",
                            "status": "no_gz_files"}
-                (OUT_ROOT / cruise / "extraction_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                (output_root / cruise / "extraction_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
                 print(json.dumps(summary, sort_keys=True), flush=True)
                 continue
             with mp.Pool(processes=max(1, min(args.workers, len(tasks)))) as pool:
-                results = pool.starmap(_process_wrapper, tasks)
+                results = pool.map(extract_record, tasks)
             rows = results
             manifest = pd.DataFrame(rows)
             manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -551,17 +664,19 @@ def main(argv: list[str] | None = None) -> int:
             manifest.to_csv(manifest_path.with_suffix(".tsv"), sep="\t", index=False)
         else:
             manifest = existing if existing is not None else pd.DataFrame(columns=["filekey", "file_ordinal", "status"])
-        summary = merge_cruise(cruise, manifest)
+        failed = manifest["status"].str.startswith("failed:")
+        if failed.any():
+            raise RuntimeError(f"{cruise}: {int(failed.sum())} failed extraction files; inspect {manifest_path}")
+        summary = merge_cruise(
+            cruise, manifest, staging_dir=output_root / cruise / "_staging",
+            output_dir=output_root / cruise,
+        )
         manifest.to_parquet(manifest_path, index=False)
         manifest.to_csv(manifest_path.with_suffix(".tsv"), sep="\t", index=False)
-        summary_path = OUT_ROOT / cruise / "extraction_summary.json"
+        summary_path = output_root / cruise / "extraction_summary.json"
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(summary, sort_keys=True))
     return 0
-
-
-def _process_wrapper(cruise: str, ordinal: int, rel_str: str, mb_format: int, format_note: str) -> dict:
-    return process_one_file(cruise, ordinal, Path(rel_str), mb_format, format_note)
 
 
 if __name__ == "__main__":

@@ -99,7 +99,10 @@ DIVERGENCE_AUDIT = MANIFEST_DIR / "intersect_divergence_audit.parquet"
 
 VALID_RUN_LABELS = ("sample", "test100", "full")
 AGGREGATION_VERSION = "ncei_cells_v0.1.0"
-SELECTION_POLICIES = ("basic", "basic_native_good")
+SELECTION_POLICIES = (
+    "basic", "basic_native_good", "basic_native_good_valid_ping_navigation",
+    "basic_source_quality",
+)
 
 # Per-PRD 1-arcmin = 1/60°.
 CELL_SIZE_DEG = 1.0 / 60.0
@@ -269,8 +272,12 @@ def selection_columns(selection_policy: str) -> list[str]:
     if selection_policy not in SELECTION_POLICIES:
         raise ValueError(f"unknown selection policy: {selection_policy}")
     columns = ["lon", "lat", "depth_m_positive_down", "point_check_pass_basic"]
-    if selection_policy == "basic_native_good":
+    if selection_policy in {"basic_native_good", "basic_native_good_valid_ping_navigation"}:
         columns.append("native_quality_state")
+    if selection_policy == "basic_native_good_valid_ping_navigation":
+        columns.append("valid_ping_navigation")
+    if selection_policy == "basic_source_quality":
+        columns.append("source_quality_usable")
     return columns
 
 
@@ -281,8 +288,12 @@ def point_selection_mask(points: pd.DataFrame, selection_policy: str = "basic") 
     if missing:
         raise ValueError(f"{selection_policy} selection requires columns: {sorted(missing)}")
     mask = points["point_check_pass_basic"].to_numpy(dtype=bool)
-    if selection_policy == "basic_native_good":
+    if selection_policy in {"basic_native_good", "basic_native_good_valid_ping_navigation"}:
         mask = mask & points["native_quality_state"].eq("good").fillna(False).to_numpy(dtype=bool)
+    if selection_policy == "basic_native_good_valid_ping_navigation":
+        mask = mask & points["valid_ping_navigation"].fillna(False).to_numpy(dtype=bool)
+    if selection_policy == "basic_source_quality":
+        mask = mask & points["source_quality_usable"].fillna(False).to_numpy(dtype=bool)
     return mask
 
 

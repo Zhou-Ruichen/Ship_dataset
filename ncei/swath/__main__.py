@@ -15,6 +15,8 @@ COMMANDS = {
     "coverage": ("coverage", "Compare round-2 coverage with the strict layer."),
     "quality-revision": ("quality_revision", "Rebuild isolated round-2 quality products."),
     "batch": ("batch", "Process selected staged cruises end to end."),
+    "navigation-revision": ("navigation_revision", "Audit inputs and compare source-navigation revisions."),
+    "navigation-case-review": ("navigation_review", "Review exact source pings and reaggregate affected cells."),
 }
 
 ALIASES = {
