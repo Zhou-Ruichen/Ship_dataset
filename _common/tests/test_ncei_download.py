@@ -266,6 +266,55 @@ class TestNceiDownload(unittest.TestCase):
             with patch("ncei.download.__main__.inventory", return_value=good):
                 self.assertEqual(main(args), 0)
 
+    def test_cli_raw_root_and_queue_order(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            work, raw_root = root / "work", root / "tree"
+            catalog = root / "catalog.tsv"
+            catalog.write_text("surveyId\nS2\nS1\n")
+            url1 = SHIPS + "ship/S1/multibeam/data/version1/MB/s1.gz"
+            url2 = SHIPS + "ship/S2/multibeam/data/version1/MB/"
+            write_json(work / "trees.json", {
+                "S1": {"error": None, "files": {"s1.gz": [url1, 1]}},
+                "S2": {"error": None, "files": {
+                    "large.gz": [url2 + "large.gz", 3000],
+                    "small.gz": [url2 + "small.gz", 1000],
+                }},
+            })
+            args = ["diff", "--catalog", str(catalog), "--work", str(work),
+                    "--raw-root", str(raw_root), "--queue-order"]
+            self.assertEqual(main(args), 0)
+            todo = json.loads((work / "todo.json").read_text())
+            self.assertEqual([(x["survey_id"], x["rel"]) for x in todo], [
+                ("S2", "small.gz"), ("S2", "large.gz"), ("S1", "s1.gz"),
+            ])
+            present = raw_root / "S1/s1.gz"
+            present.parent.mkdir(parents=True)
+            present.write_bytes(b"x")
+            self.assertEqual(main(args), 0)
+            self.assertEqual(len(json.loads((work / "todo.json").read_text())), 2)
+
+    def test_fetch_writes_to_raw_root(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            raw_root = root / "tree"
+            url = SHIPS + "ship/S1/multibeam/data/version1/MB/a.gz"
+            item = {"survey_id": "S1", "url": url, "expected": 3}
+            transport = Mock()
+            transport.next_proxy.return_value = ""
+
+            def success(url, dest, **kwargs):
+                dest.write_bytes(b"abc")
+                kwargs["headers"].write_text("HTTP/2 200\nContent-Length: 3\n\n")
+                return 200, 3, 0
+
+            transport.curl.side_effect = success
+            result = fetch([item], root / "raw", root / "work", transport,
+                           workers=1, attempts=1, platforms_root=raw_root)
+            self.assertEqual(result["failed"], 0)
+            self.assertEqual((raw_root / "S1/a.gz").read_bytes(), b"abc")
+            self.assertFalse((root / "raw/platforms_tree/S1/a.gz").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

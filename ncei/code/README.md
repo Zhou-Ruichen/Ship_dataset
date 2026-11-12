@@ -25,7 +25,9 @@ archived per `docs/code_archive.md`.
 - Round-2 swath chain (stages 33–37, 43): `python -m ncei.swath <command>`
   (`ncei/swath/`).
 - Frozen analyses (Step 08 validation pack 14–22, network bias 27,
-  interpolation holdout 29): `ncei/analysis/`.
+  interpolation holdout 29) and the completed seamount-candidate delivery:
+  archived; recover the source at commit `1900142`. Reports and products
+  remain under `ncei/docs/` and `ncei/derived/`.
 - Download-value ranking (stage 38): `python -m ncei.download rank`.
 
 Old `ncei/code/NN_*.py` paths in historical reports and manifests resolve

@@ -1,6 +1,7 @@
 """Command line entry point for the unified round-2 downloader."""
 
 import argparse
+import csv
 import json
 import sys
 import time
@@ -40,6 +41,8 @@ def parser():
     ap.add_argument("--channel", choices=["platforms_tree", "r2r", "m77t_static"],
                     default="platforms_tree")
     ap.add_argument("--raw", type=Path, default=DEFAULT_RAW)
+    ap.add_argument("--raw-root", type=Path,
+                    help="41-compatible platforms_tree root for diff/fetch/run")
     ap.add_argument("--log", type=Path, default=DEFAULT_LOG)
     ap.add_argument("--work", type=Path, default=DEFAULT_WORK)
     ap.add_argument("--out", type=Path, help="verification output directory")
@@ -51,6 +54,8 @@ def parser():
     ap.add_argument("--tag", default="ncei-download")
     ap.add_argument("--disk-floor-gb", type=float, default=400)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--queue-order", action="store_true",
+                    help="fetch whole surveys in catalog order, small files first within each")
     ap.add_argument("--gzip", default="gzip")
     ap.add_argument("--extraction-dir", type=Path)
     ap.add_argument("--max-rounds", type=int, default=0,
@@ -93,10 +98,20 @@ def main(argv=None):
     transport = Transport([p.strip() for p in args.proxies.split(",") if p.strip()] or [""])
     args.work.mkdir(parents=True, exist_ok=True)
     floor = int(args.disk_floor_gb * GIB)
+    survey_order = None
+    if args.queue_order:
+        with args.catalog.open(newline="") as stream:
+            survey_order = {row["surveyId"]: i for i, row in enumerate(
+                csv.DictReader(stream, delimiter="\t"))}
+
+    def compare(items):
+        return diff(items, args.raw, args.work, survey_order=survey_order,
+                    platforms_root=args.raw_root)
 
     def download(todo):
         return fetch(todo, args.raw, args.work, transport, workers=args.workers,
-                     attempts=args.attempts, tag=args.tag, min_free_bytes=floor)
+                     attempts=args.attempts, tag=args.tag, min_free_bytes=floor,
+                     platforms_root=args.raw_root)
 
     if args.command == "inventory":
         if args.channel != "platforms_tree":
@@ -106,7 +121,7 @@ def main(argv=None):
         return int(bool(report_errors(trees)))
     if args.command == "diff":
         trees, items = get_items(args, transport)
-        diff(items, args.raw, args.work)
+        compare(items)
         return int(bool(report_errors(trees)))
     if args.command == "fetch":
         if args.plan:
@@ -129,11 +144,11 @@ def main(argv=None):
         # Recover successful records left by an interrupted 41 or fetch pass.
         merge(args.work, args.log)
         while True:
-            check_space(args.raw, floor)
+            check_space(args.raw_root or args.raw, floor)
             round_number += 1
             trees, items = get_items(args, transport, enumerate_remote=True)
             errors = report_errors(trees)
-            todo = diff(items, args.raw, args.work)
+            todo = compare(items)
             if not todo and not errors:
                 print("run: complete; no pending files or failed inventories", flush=True)
                 return 0
@@ -144,7 +159,7 @@ def main(argv=None):
                     merge(args.work, args.log)
             if args.max_rounds and round_number >= args.max_rounds:
                 # Diff again so a successful last batch can finish at the limit.
-                remaining = diff(items, args.raw, args.work)
+                remaining = compare(items)
                 return int(bool(remaining or errors))
             time.sleep(args.interval)
 

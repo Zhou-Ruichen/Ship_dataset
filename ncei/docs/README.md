@@ -28,7 +28,7 @@ bypass) run through the same dispatcher; `python -m ncei.trackline --help`
 lists every command. The round-2 swath chain is
 `python -m ncei.swath <command>` (stages 33–37, 43).
 
-Run the trackline chain from repo root via `python -m ncei.trackline <command>` (stage numbers work as aliases). Commands accepting `--run-label full` retain the `--confirm-full` gate. Frozen analyses (Step 08 pack 14–22, 27, 29) live under `ncei/analysis/`.
+Run the trackline chain from repo root via `python -m ncei.trackline <command>` (stage numbers work as aliases). Commands accepting `--run-label full` retain the `--confirm-full` gate. The frozen analyses (Step 08 pack 14–22, 27, 29) and completed seamount-candidate delivery were removed from the working tree after archival; their reports and products remain available, and the source is recoverable at commit `1900142`.
 
 ## Three branches (do not collapse)
 

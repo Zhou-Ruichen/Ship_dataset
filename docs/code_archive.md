@@ -82,3 +82,66 @@ resolve old paths found in historical reports and product manifests.
 | `jamstec/multibeam/code/10b_generate_stratified_spatial_splits_T1.py` | `jamstec/multibeam/analysis/10b_generate_stratified_spatial_splits_T1.py` |
 | `jamstec/multibeam/code/11_train_residual_baselines_T1.py` | `jamstec/multibeam/analysis/11_train_residual_baselines_T1.py` |
 | `jamstec/multibeam/code/plot_multibeam_figures.py` | `jamstec/multibeam/analysis/plot_multibeam_figures.py` |
+
+## Streaming swath replacement (2026-11-12)
+
+Last commit containing the removed code: `1900142`. This snapshot retains
+the quality and navigation commands referenced in
+`.trellis/tasks/10-25-ship-processing-repair/swath_result.md`.
+Use `git show 1900142:<path>` to inspect the retained source version.
+Existing products remain on disk. The current entry point is
+`python -m ncei.swath {census,run,points,coverage}`.
+
+| Removed path or code | Purpose | Retained products and reports |
+| --- | --- | --- |
+| `ncei/swath/batch.py` | Staging-to-L1/L2 batch orchestration | `processing_revision_20261025/swath/{first_batch,navigation_affected_extension}` |
+| `ncei/swath/extract.py` | Raw-to-staging extraction and two L1 tables | `mb_round2/*/{_staging,points_raw,points_checked}`; 10-25 source reconstruction |
+| `ncei/swath/file_cells.py` | Stage-35 L2 wrapper | `mb_round2/*/file_cells_1min` |
+| `ncei/swath/manifest_fragment.py` | Stage-36 standalone source fragment | `mb_round2/mb_round2_source_manifest_fragment.*` |
+| `ncei/swath/quality_revision.py` | Fixed first-batch revision and seamount comparison | `mb_round2/_runs/20261021_quality_revision` |
+| `ncei/swath/navigation_revision.py` | Six-cruise source-navigation revision comparison | `processing_revision_20261025/swath/*comparison*` |
+| `ncei/swath/navigation_review.py` | Two confirmed-invalid source-navigation cases | `processing_revision_20261025/swath/navigation_review*` |
+| `_common/mbsystem.py` U3/U0-to-raw parquet and SQLite join helpers | Parse/join staging input for the removed extractor | Historical staging above; source-ping parser remains in `_common/mbsystem.py` |
+
+The obsolete extraction API (`extract.process_one_file`, `extract.merge_cruise`,
+and `_common.mbsystem.raw_from_object`) was also imported by
+`/mnt/data2/06-Projects/11-swot-ssl-encoder/scripts/process_ew0202_v1.py`.
+Its last available source snapshot is the pre-deletion HEAD `1900142`.
+Future source reconstruction uses `python -m ncei.swath run` or
+`python -m ncei.swath points`.
+
+Old command aliases 33/34/35/36/37/43 were removed with their dispatch entries.
+The format census and coverage modules were replaced in place to read the
+new source and L2 layout.
+
+## Frozen analyses and R2 calibration (2026-11-12)
+
+Last commit containing the removed files: `1900142`. Reports, products and
+figures remain in place; `git show 1900142:<path>` restores the source.
+
+| Path | Purpose | produced_results | evidence | Last containing commit |
+|---|---|---|---|---|
+| `ncei/analysis/14_validate_gridded_products_step08.py` | Step08 preflight/smoke/full model validation | strict/expanded global validation metrics | `ncei/analysis/14_validate_gridded_products_step08.py:L64-L99,L255-L263,L1310-L1386` | `1900142` |
+| `ncei/analysis/15_strict_vs_expanded_compare_step08.py` | Step08 strict versus expanded sensitivity | strict/expanded coverage and RMSE comparison | `ncei/analysis/15_strict_vs_expanded_compare_step08.py:L46-L88,L670-L723` | `1900142` |
+| `ncei/analysis/16_non_primary_coverage_diagnostics_step08.py` | Step08 non-primary coverage diagnostics | supplementary SB and regional MRAR diagnostics | `ncei/analysis/16_non_primary_coverage_diagnostics_step08.py:L64-L98,L785-L796` | `1900142` |
+| `ncei/analysis/17_step08_final_global_validation_report.py` | Step08 final report and policy tables | Step08 final ranking/policy anchor | `ncei/analysis/17_step08_final_global_validation_report.py:L54-L65,L618-L630` | `1900142` |
+| `ncei/analysis/18_step08_ranking_bootstrap.py` | paired cluster bootstrap ranking uncertainty | 1,000-iteration CIs/rank probabilities | `ncei/analysis/18_step08_ranking_bootstrap.py:L64-L99,L683-L775` | `1900142` |
+| `ncei/analysis/19_step08_publication_tables.py` | Step08 publication tables | publication strict/comparison tables | `ncei/analysis/19_step08_publication_tables.py:L101-L151` | `1900142` |
+| `ncei/analysis/20_step08_gapfill_error_structure.py` | Step08 gap-fill error attribution | gap-fill RMSE attribution | `ncei/analysis/20_step08_gapfill_error_structure.py:L51-L71,L621-L630` | `1900142` |
+| `ncei/analysis/21_step08_publication_figures.py` | Step08 publication figures/data | six Step08 publication figures | `ncei/analysis/21_step08_publication_figures.py:L54-L65,L130-L166,L527-L592` | `1900142` |
+| `ncei/analysis/22_step08_publication_summary.py` | Step08 publication summary/manifest | publication_ready_step08_summary.md | `ncei/analysis/22_step08_publication_summary.py:L48-L56,L401-L452,L457-L537` | `1900142` |
+| `ncei/analysis/27_sb_crossover_network_bias_1min.py` | crossover-network constant-offset prototype | network 61.64 m versus Step23 23.86 m heldout median abs residual | `ncei/analysis/27_sb_crossover_network_bias_1min.py:L24-L31,L130-L142`; `.trellis/tasks/archive/2026-09/09-03-sb-network-bias-prototype/result.md:L21-L45` | `1900142` |
+| `ncei/analysis/29_sb_interpolation_holdout.py` | GMT interpolation holdout for SB value | 1,840.89 -> 731.12 -> 673.19 m old-control pooled RMSE | `ncei/analysis/29_sb_interpolation_holdout.py:L36-L65,L430-L489`; `docs/数据产品规范与下游接入.md:L170-L180` | `1900142` |
+| `ncei/analysis/seamount_candidate_delivery.py` | 58-seamount candidate point/90 km cell delivery | 29,356,223 delivered points and complete candidate-cell tables | `ncei/analysis/seamount_candidate_delivery.py:L30-L36,L664-L697`; `.trellis/tasks/10-21-mb-round2-quality-revision/result.md:L573-L610` | `1900142` |
+| `_common/r2_calibration.py` | one-off R2 threshold calibration driver | calibration tables used to freeze classifier | `_common/r2_calibration.py:L39-L58,L298-L348` | `1900142` |
+| `_common/calibration/r2_borderline.csv` | R2 borderline calibration table | 129-line calibration evidence | `_common/calibration/r2_borderline.csv:L1` | `1900142` |
+| `_common/calibration/r2_borderline.png` | R2 calibration scatter figure | borderline density/bbox figure | `_common/calibration/r2_borderline.png (binary); _common/r2_calibration.py:L56-L58` | `1900142` |
+| `_common/calibration/r2_calibration_summary.txt` | R2 calibration summary | frozen-threshold summary | `_common/calibration/r2_calibration_summary.txt:L1` | `1900142` |
+| `_common/calibration/r2_hard_mb_files.csv` | hard multibeam calibration examples | 12 hard-MB records plus header | `_common/calibration/r2_hard_mb_files.csv:L1` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1/MGL1104-9999-eight-ping.mb58` | MB58 eight-ping binary fixture | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1/MGL1104-9999-eight-ping.mb58:L1`; `_common/README.md:L45-L47` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1/golden_provenance.json` | SCS fixture provenance | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1/golden_provenance.json:L1`; `_common/README.md:L45-L47` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1/synthetic_all_u3.tsv` | synthetic U3 listing fixture | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1/synthetic_all_u3.tsv:L1`; `_common/README.md:L45-L47` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1/synthetic_good_u0.tsv` | synthetic U0 listing fixture | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1/synthetic_good_u0.tsv:L1`; `_common/README.md:L45-L47` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1a/synthetic_invalid_time_u0.tsv` | invalid-time U0 fixture | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1a/synthetic_invalid_time_u0.tsv:L1`; `_common/README.md:L45-L47` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1a/synthetic_invalid_time_u3.tsv` | invalid-time U3 fixture | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1a/synthetic_invalid_time_u3.tsv:L1`; `_common/README.md:L45-L47` | `1900142` |
+| `_common/tests/fixtures/scs_v2_stage_c1a/synthetic_missing_time_u3.tsv` | missing-time U3 fixture | archived SCS test input | `_common/tests/fixtures/scs_v2_stage_c1a/synthetic_missing_time_u3.tsv:L1`; `_common/README.md:L45-L47` | `1900142` |

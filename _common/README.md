@@ -14,13 +14,8 @@ repository root and use ordinary imports.
 | `script_utils.py` | `setup_logging` (dual sink: DEBUG file + console) and `markdown_table` / `ensure_columns` report helpers for stage scripts. |
 | `mbsystem.py` | mblist U3/U0 listing parser and SQLite join for round-2 swath L1 extraction (`ncei/swath/extract.py`). Entry point `raw_from_object(...)`. |
 | `r2_classifier.py` | Pure R2 sb/mb classifier (threshold + spatial spread) routing NCEI tracklines; `classify(lon, lat) -> R2Result`. |
-| `io_helpers.py` | Streaming lon/lat readers for NCEI `.nc` and `.xyz` trackline files (used by the calibration driver). |
+| `io_helpers.py` | Streaming lon/lat readers for NCEI `.nc` and `.xyz` trackline files, used by the R2 classifier's real-data tests. |
 | `singlebeam_bias.py` | Shared estimators for constant singlebeam track bias. |
-| `r2_calibration.py` | Runnable calibration driver: scans `ncei/tracklines_{nc,xyz}/`, writes per-file classification plus borderline-band CSV/plot for threshold tuning. |
-
-`calibration/` holds the committed output of the calibration run
-(`r2_borderline.csv`, `r2_borderline.png`, `r2_hard_mb_files.csv`,
-`r2_calibration_summary.txt`).
 
 ## Tests
 
@@ -35,8 +30,6 @@ root:
 - `test_mb_round2_quality.py` — round-2 extract/source/quality-revision
   tests (imports `ncei.swath` and `ncei.trackline` modules; uses a real
   staging shard when present).
-- `fixtures/` — small mb58/U3/U0 sample files (kept from the archived SCS
-  chain; no current test imports them).
 
 ```bash
 python -m unittest _common.tests.test_r2_classifier -v

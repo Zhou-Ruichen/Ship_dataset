@@ -84,10 +84,11 @@ def platform_parts(url: str) -> tuple[str, str, str]:
     return tuple(safe_relative(unquote(x)) for x in (ship, survey, tail))
 
 
-def target_path(raw: Path, item: dict) -> Path:
+def target_path(raw: Path, item: dict, platforms_root: Path | None = None) -> Path:
     """Read both platforms layouts; write new cruises in the 41 layout."""
     channel = item.get("channel", "platforms_tree")
-    base = raw / CHANNEL_DIRS[channel]
+    base = (platforms_root if channel == "platforms_tree" and platforms_root is not None
+            else raw / CHANNEL_DIRS[channel])
     survey = safe_relative(item["survey_id"])
     if channel == "platforms_tree":
         ship, url_survey, rel = platform_parts(item["url"])

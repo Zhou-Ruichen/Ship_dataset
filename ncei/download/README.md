@@ -48,6 +48,18 @@ Compare the cached `trees.json` with disk without network requests:
 python -m ncei.download diff --work /tmp/tierB_gapfill
 ```
 
+For 41-compatible invocations, `--raw-root PATH` points directly to the
+`platforms_tree` directory instead of `--raw` pointing to `raw_round2`.
+`--queue-order` keeps each survey together in catalog order and sorts files by
+listed size within a survey. Both options apply to `diff`, `fetch`, and `run`:
+
+```bash
+python -m ncei.download diff --queue-order \
+  --catalog ncei/derived/mbbdb_value_ranking/order_zero_pool_queue.tsv \
+  --raw-root /mnt/data1/pub/ship/ncei/raw_round2/platforms_tree \
+  --work /mnt/data1/pub/ship/ncei/_work/zeropool_gapfill
+```
+
 Fetch the resulting `todo.json`, resuming `.part` files:
 
 ```bash

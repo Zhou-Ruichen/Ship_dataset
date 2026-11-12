@@ -37,11 +37,12 @@ def missing_reason(item: dict, path: Path) -> str | None:
     return None
 
 
-def diff(items: list[dict], raw: Path, work: Path) -> list[dict]:
+def diff(items: list[dict], raw: Path, work: Path, *, survey_order=None,
+         platforms_root: Path | None = None) -> list[dict]:
     todo = []
     targets = {}
     for item in items:
-        path = target_path(raw, item)
+        path = target_path(raw, item, platforms_root)
         if path in targets and targets[path] != item["url"]:
             raise ValueError(f"different URLs map to the same file: {path}")
         targets[path] = item["url"]
@@ -49,13 +50,17 @@ def diff(items: list[dict], raw: Path, work: Path) -> list[dict]:
         if reason:
             todo.append({**item, "reason": reason})
     todo.sort(key=lambda n: n.get("expected") or 0)
+    if survey_order is not None:
+        # Stable sort: whole surveys finish in catalog order, small files first.
+        todo.sort(key=lambda n: survey_order[n["survey_id"]])
     write_json(work / "todo.json", todo)
     print(f"diff: {len(todo)} files to fetch", flush=True)
     return todo
 
 
 def fetch(todo: list[dict], raw: Path, work: Path, transport, *,
-          workers=32, attempts=3, tag="tierA-gapfill", min_free_bytes=0) -> dict:
+          workers=32, attempts=3, tag="tierA-gapfill", min_free_bytes=0,
+          platforms_root: Path | None = None) -> dict:
     work.mkdir(parents=True, exist_ok=True)
     logfile = work / f"download-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.jsonl"
     lock = threading.Lock()
@@ -66,7 +71,7 @@ def fetch(todo: list[dict], raw: Path, work: Path, transport, *,
     def one(item):
         if stopped.is_set():
             return
-        target = target_path(raw, item)
+        target = target_path(raw, item, platforms_root)
         digest, size, exact, port = None, 0, None, None
         status = "ok"
         try:
