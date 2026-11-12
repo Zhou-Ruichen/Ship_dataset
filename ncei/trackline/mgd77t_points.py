@@ -1,7 +1,8 @@
-"""Source-field mode for the existing static MGD77T fragment entry."""
+"""Preserve MGD77T observations in point tables and one-minute cells."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import multiprocessing as mp
@@ -21,6 +22,9 @@ from . import file_cells, manifest, merge_cells, point_qc, standardize_xyz
 from .mgd77t import DATA_FIELDS, decode_time, iter_mgd77t, read_header
 from .mgd77t_netcdf import CODE_FIELDS
 
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LEGACY_ROOT = REPO_ROOT / "ncei/derived/sb_round2_static"
 
 VERSION = "ncei_mgd77t_source_fields_v1"
 REJECT_CODES = (3, 4, 5, 6)
@@ -464,11 +468,7 @@ def summarize_batch(reports: list[dict], root: Path, evidence_root: Path | None 
     return summary
 
 
-def run_source_fields(args) -> int:
-    if args.output_root is None:
-        raise ValueError("--source-fields requires an explicit --output-root")
-    if args.workers not in (1, 2):
-        raise ValueError("source-field mode requires --workers 1 or 2")
+def run_points(args: argparse.Namespace) -> int:
     root = args.output_root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     prediction_path = args.classification_manifest
@@ -509,3 +509,20 @@ def run_source_fields(args) -> int:
     (root / "comparison_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2), flush=True)
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m ncei.trackline mgd77t-points", description=__doc__)
+    parser.add_argument("--tracks", nargs="*", default=None)
+    parser.add_argument("--workers", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument("--source-root", type=Path, default=REPO_ROOT / "ncei/raw_round2/mgd77t_static")
+    parser.add_argument("--legacy-root", type=Path, default=LEGACY_ROOT)
+    parser.add_argument("--evidence-root", type=Path, help="Optional historical source-comparison tables; not required for conversion.")
+    parser.add_argument("--no-legacy-comparison", action="store_true", help="Do not read historical point products or their manifest.")
+    parser.add_argument("--classification-manifest", type=Path, help="Optional retained instrument predictions, independent of point comparisons.")
+    parser.add_argument("--chunk-size", type=int, default=100_000)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--overwrite", action="store_true")
+    args = parser.parse_args(argv)
+    return run_points(args)

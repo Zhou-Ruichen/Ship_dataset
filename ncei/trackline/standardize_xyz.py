@@ -64,6 +64,8 @@ REPO_ROOT = ROOT_DIR.parent  # ship/
 from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 from _common.script_utils import setup_logging
 
+from .point_coordinates import normalize_lon, sanitize_lat
+
 XYZ_DIR = ROOT_DIR / "tracklines_xyz"
 MANIFEST_DIR = ROOT_DIR / "manifests"
 DOCS_DIR = ROOT_DIR / "docs"
@@ -125,24 +127,6 @@ def get_output_paths(run_label: str) -> dict[str, Path]:
 # ---------------------------------------------------------------------------
 # XYZ read + standardize helpers
 # ---------------------------------------------------------------------------
-def normalize_lon(lon: np.ndarray) -> np.ndarray:
-    """Wrap any lon > 180 to (-180, 180]. Leaves NaNs alone."""
-    out = lon.copy()
-    mask = np.isfinite(out) & (out > 180.0)
-    if mask.any():
-        out[mask] = out[mask] - 360.0
-    return out
-
-
-def sanitize_lat(lat: np.ndarray) -> np.ndarray:
-    """Replace out-of-[-90, 90] values with NaN (defensive; should not fire)."""
-    out = lat.copy()
-    mask = np.isfinite(out) & ((out < -90.0) | (out > 90.0))
-    if mask.any():
-        out[mask] = np.nan
-    return out
-
-
 def read_xyz_full(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Read a .xyz file into (lon, lat, depth) float64 arrays, finite-xy filtered.
 
@@ -749,7 +733,3 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(f"Report: {paths['report_md']}")
     return 0 if not errors else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

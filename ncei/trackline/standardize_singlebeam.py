@@ -62,6 +62,8 @@ REPO_ROOT = ROOT_DIR.parent  # ship/
 from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 from _common.script_utils import setup_logging
 
+from .point_coordinates import normalize_lon, sanitize_lat
+
 NC_DIR = ROOT_DIR / "tracklines_nc"
 MANIFEST_DIR = ROOT_DIR / "manifests"
 DOCS_DIR = ROOT_DIR / "docs"
@@ -126,25 +128,7 @@ def masked_to_float_array(values) -> np.ndarray:
     return np.asarray(arr, dtype=np.float64).reshape(-1)
 
 
-def normalize_lon(lon: np.ndarray) -> np.ndarray:
-    """Wrap any lon > 180 to (-180, 180]. Leaves NaNs alone."""
-    out = lon.copy()
-    mask = np.isfinite(out) & (out > 180.0)
-    if mask.any():
-        out[mask] = out[mask] - 360.0
-    return out
-
-
-def sanitize_lat(lat: np.ndarray) -> np.ndarray:
-    """Replace out-of-[-90, 90] values with NaN (defensive; should not fire)."""
-    out = lat.copy()
-    mask = np.isfinite(out) & ((out < -90.0) | (out > 90.0))
-    if mask.any():
-        out[mask] = np.nan
-    return out
-
-
-def decode_time(ds, n_points: int) -> tuple[Optional[np.ndarray], bool]:
+def decode_netcdf_time(ds, n_points: int) -> tuple[Optional[np.ndarray], bool]:
     """Return (timestamp ndarray of length n_points, has_time bool).
 
     Returns (None, False) when time is absent or all-masked or not decodable.
@@ -245,7 +229,7 @@ def standardize_one_track(
 
         # Time decoding (aligned to full track first; we slice with finite_xy
         # after).
-        time_full, has_time = decode_time(ds, n_points=lon_full.size)
+        time_full, has_time = decode_netcdf_time(ds, n_points=lon_full.size)
 
         gobs_full = read_per_point_or_nan(ds, "gobs", n_points=lon_full.size)
         faa_full = read_per_point_or_nan(ds, "faa", n_points=lon_full.size)
@@ -753,7 +737,3 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(f"Report: {paths['report_md']}")
     return 0 if not errors else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

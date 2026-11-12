@@ -9,47 +9,47 @@ python -m ncei.trackline --help
 python -m ncei.trackline file-cells --help
 ```
 
-The package covers NetCDF singlebeam, XYZ singlebeam/multibeam, the regional
-MRAR branch, and static MGD77T. Commands run one stage, not an automatic chain.
-Original stage numbers remain aliases: `python -m ncei.trackline 25` is
-`python -m ncei.trackline global-bias`.
+The package covers NetCDF singlebeam, XYZ singlebeam and multibeam, regional
+MRAR, and static MGD77T. Run each row from the repository root with
+`python -m ncei.trackline <command>`. Run `--help` after a command to see its
+inputs and options.
 
-## Run the stages
-
-Each row is a complete command to run from the repository root. The named
-inputs must already exist. Stage-specific `--help` lists the unchanged options.
-
-| Stage | Example | Result |
+| Command | Reads | Writes |
 | --- | --- | --- |
-| 01 | `python -m ncei.trackline manifest --run-label sample --sample-n-files 5` | Trackline source manifest. |
-| 02 | `python -m ncei.trackline standardize-nc --run-label sample --sample-n-files 5` | NetCDF singlebeam L1 points. |
-| 03 | `python -m ncei.trackline standardize-xyz --run-label sample --sample-n-files 5` | XYZ L1 points, routed by instrument class. |
-| 04 | `python -m ncei.trackline clean-mrar --run-label sample --sample-n-rows 1000` | MRAR bathymetry and land-mask tables. |
-| 05 | `python -m ncei.trackline point-qc --run-label sample --sample-n-files 5` | Entry manifest and checked points. |
-| 06 | `python -m ncei.trackline supplementary-qc --run-label sample --sample-n-files 5` | Supplementary checks and divergence audit. |
-| 07 | `python -m ncei.trackline file-cells --run-label sample` | One-minute cells per track. |
-| 08 | `python -m ncei.trackline merge-cells --run-label sample --limit-files-per-branch 5` | Merged branch cells. |
-| 09 | `python -m ncei.trackline source-overlap --run-label sample --limit-files-per-branch 5` | Within-source overlap residuals. |
-| 10 | `python -m ncei.trackline branch-overlap --run-label sample --limit-rows-per-pair 1000` | Cross-branch overlap residuals. |
-| 11 | `python -m ncei.trackline policy-audit --run-label sample` | Quality-policy calibration evidence. |
-| 12 | `python -m ncei.trackline apply-policy --run-label sample` | Cell-quality sidecar. |
-| 13 | `python -m ncei.trackline validation-cells --run-label sample` | Validation-cell products. |
-| 23 | `python -m ncei.trackline track-bias` | Six-region track-bias estimates and controls. |
-| 24 | `python -m ncei.trackline crossover` | Six-region geometric crossover audit. |
-| 25 | `python -m ncei.trackline global-bias` | Global track biases and adjusted cells. |
-| 26 | `python -m ncei.trackline global-crossover` | Global crossover evidence. |
-| 28 | `python -m ncei.trackline disposition` | Six-region track-quality dispositions. |
-| 30 | `python -m ncei.trackline global-disposition` | Global dispositions and final singlebeam cells. |
-| 31 | `python -m ncei.trackline global-grid` | Immutable merged global one-minute grid. |
-| 39 | `python -m ncei.trackline mgd77t-xyz --surveys HNRO05RR` | Static MGD77T converted to XYZ. |
-| 40 | `python -m ncei.trackline mgd77t-fragments --tracks hnro05rr --workers 1` | Standalone static MGD77T L1/L2 and source fragment. |
-| | `python -m ncei.trackline mgd77t-nc --input /path/survey.m77t --header /path/survey.h77t --output /new/root/survey.nc` | Source-preserving NetCDF, without changing existing products. |
+| `manifest` | `ncei/tracklines_nc/`, `ncei/tracklines_xyz/` | `ncei/manifests/trackline_source_manifest.parquet` with source and instrument class. |
+| `standardize-nc`, `standardize-xyz` | Source manifest and NetCDF or XYZ files | Per-track L1 `points_raw/` and standardization manifests. |
+| `clean-mrar` | The three quadrant text files under `ncei/archive/zhoushuai_processed_M/` | Standardized bathymetry points, land mask, and cleaning audit. |
+| `point-qc` | Source and L1 manifests, raw points, and MRAR cleaning audit | `bathymetry_entry_manifest.parquet` and `points_checked/` with basic quality flags. |
+| `supplementary-qc` | Entry and L1 manifests, checked and raw points | Supplementary entry manifest and `intersect_divergence_audit.parquet`. |
+| `file-cells` | Supplementary manifest, divergence audit, and checked points | `file_cells_1min/` and a manifest of per-track one-minute cells. |
+| `merge-cells` | File-cell manifest and its Parquet files | Branch `cells_1min/` datasets, partitioned by `lat_band_10deg`. |
+| `quality-policy` | File and branch cells and manifests, packaged rules and frozen calibration | Within-branch residuals and cross-branch comparisons under `overlap_bias_1min/` and `cross_branch_overlap_1min/`, then cell flags and summaries under `quality_flags_1min/`. |
+| `validation-cells` | Branch cells, cell quality flags, and JAMSTEC primary validation cells | Strict, expanded, supplementary, and regional cell products plus their catalog in `validation_cells_1min/`. |
+| `regional-quality` | Six frozen region role tables, strict MB and SB cells, and raw SB points | Regional track bias and controls, crossover evidence, then track dispositions and reject-arm controls. |
+| `global-bias` | Source manifest, strict MB, SB file cells | `sb_track_bias_global/`, `singlebeam/file_cells_1min_adjusted/`, and coverage figures. |
+| `global-crossover` | Source manifest, raw SB points, regional crossover audit | `global_sb_crossover_audit/` with tile events and global summaries. |
+| `global-disposition` | Adjusted cells, global bias and crossover evidence, regional hard QC | `sb_track_quality_global/`, `singlebeam/file_cells_1min_final_r2/`, and final regional controls. |
+| `global-grid` | Strict MB cells and final SB cells | `global_grid_1min_r2/`, partitioned by `lat_band_10deg`. |
+| `mgd77t-points` | Static `.m77t/.h77t` and optional retained classifications | Source-preserving point tables, per-file and merged cells, and source manifests under the explicit output root. |
+| `mgd77t-crossovers` | MGD77T point products | Six-region crossovers and summaries for both point selection policies. |
+| `mgd77t-netcdf` | One complete source or an inventory CSV, with legacy NetCDF for alignment where supplied | Source-preserving NetCDF, optional single-source row mapping, or batch mappings and comparisons. |
+| `source-corrections` | Delivered trackline, legacy FAA and swath products, formal headers, and swath evidence | Source correction states and evidence under `source_corrections/`. |
 
-Stages 01-13 retain their `sample`/`test100`/`full` choices where supported,
-`--confirm-full`, and `--overwrite` behavior. Sample mode does not imply an
-isolated product root: standardization and point-QC stages still use their
-original per-track directories. Global stages retain their existing-output
-guards; `global-grid` refuses an existing round.
+Trackline branch products are under `ncei/derived/{singlebeam,multibeam,regional_mrar}/`;
+the branch label for `multibeam/` is `multibeam_ncei`. Numeric aliases remain
+for unchanged stages (for example, `25` is `global-bias`). Run-label stages
+retain their `sample`/`test100`/`full` choices and `--confirm-full` where
+supported. Sample mode adds suffixes to manifests and selected product
+directories. Standardization, point checks and per-file aggregation still
+write to their established per-track directories.
+
+`quality-policy --run-label full --confirm-full` runs the two overlap stages
+and applies the 16 rules in `config/quality_policy_enforced_rules.tsv`.
+`--calibration-dir` selects the frozen calibration tables (default:
+`ncei/derived/quality_policy_calibration_1min/`). Sample and test100 runs
+write suffixed overlap outputs and still use the complete cross-branch table
+for the policy sidecar. Run `validation-cells` separately; it reads the
+published sidecar and merged branches. `global-grid` refuses an existing round.
 
 ## Reuse the calculation functions
 
@@ -63,9 +63,12 @@ from ncei.trackline.file_cells import aggregate_track_file
 
 `file_cells.py` supplies the same aggregator to `ncei.swath`. Selection defaults
 to `basic`; `basic_native_good` also requires a recorded native `good` state.
-Table schemas, scientific version labels, output directories, log names, and
-report names are unchanged. New product manifests record the package command.
-The complete old-path/module/command mapping is in `docs/code_archive.md`.
+Read per-track Parquet by the paths in its manifest. Read a merged grid or
+validation dataset at its directory with a Hive-aware reader, for example
+`pyarrow.dataset.dataset(path, format="parquet", partitioning="hive")`.
+Join the quality sidecar to branch cells on `(branch, cell_id)`. The
+[data product guide](../../docs/数据产品规范与下游接入.md) lists schemas and
+downstream reading conventions.
 
 ## Preserve MGD77T observations, quality and time
 
@@ -74,7 +77,7 @@ the repository root; `--header` is the formal survey documentation, not the
 `SURVEY_ID` column heading in the observation file:
 
 ```bash
-/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-nc \
+/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-netcdf \
   --input /path/survey.m77t \
   --header /path/survey.h77t \
   --output /new/root/survey.nc \
@@ -170,13 +173,22 @@ for records in iter_mgd77t("/path/survey.m77t", chunk_size=100_000):
 the extra trailing empty field found in static-tree files and retains the
 original width in `source_field_count`.
 
-`legacy-faa-revision --help` describes the explicit batch inputs for rebuilding
-the 15-cruise legacy FAA revision, comparing every source field and numeric
-variable, remapping the previously used locations, and inventorying additional
-complete local sources. `--verify-only` checks existing new products without
-converting them. The isolated 2026-10-25 delivery is
-`ncei/derived/processing_revision_20261025/legacy_faa/`; its result record is
-`.trellis/tasks/10-25-ship-processing-repair/legacy_faa_result.md`.
+Convert an explicit list of complete sources and their corresponding legacy
+NetCDF files with:
+
+```bash
+python -m ncei.trackline mgd77t-netcdf \
+  --inventory /path/source_inventory.csv --output-root /new/batch
+```
+
+The inventory uses `cruise_id`, `source_file`, `formal_header`,
+`legacy_netcdf`, `source_observations`, and `legacy_observations`. The
+batch writes `netcdf/<cruise_id>.nc`, `row_mapping/<cruise_id>.parquet`,
+and source-field and cruise comparison tables. Use the same arguments
+with `--verify-only` to check existing NetCDF files and mappings against
+the source and refresh the comparison tables. The six-cruise example
+inventory is in
+`ncei/derived/processing_revision_20261025/legacy_faa_additional/source_inventory.csv`.
 
 `source-corrections` structures the delivered sources' physical-correction
 declarations (sound speed, attitude bias, draft, tide, vertical datum,
@@ -194,24 +206,16 @@ only up to the first `SB2100DR` record). Outputs are
 tables under `source_corrections/`; see that directory's README for state
 semantics and join keys.
 
-`legacy-faa-revision --additional-inventory <inventory.csv> --output-root
-<new/root>` converts an explicit list of complete local sources with the same
-converter, coordinate alignment and all-record comparison. It does not require
-the original 15-cruise comparison tables or previously used-position table.
-The six-cruise delivery is
-`ncei/derived/processing_revision_20261025/legacy_faa_additional/`.
-
 ## Preserve source quality in static MGD77T point tables
 
-The existing XYZ command still writes its original three-column layout. The
-fragment command defaults to its historical XYZ mode. Add `--source-fields`
-and an explicit output root to read complete `.m77t/.h77t` sources directly:
+Read complete `.m77t/.h77t` sources directly into point tables and cells at
+an explicit output root:
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 NUMEXPR_NUM_THREADS=1 POLARS_MAX_THREADS=1 \
-/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-fragments \
-  --source-fields --workers 2 --tracks ar1-06 \
+/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-points \
+  --workers 2 --tracks ar1-06 \
   --source-root ncei/raw_round2/mgd77t_static \
   --output-root /new/root
 ```
@@ -223,8 +227,8 @@ their absence does not prevent conversion. `--no-legacy-comparison` disables
 all reads of those products and their classification manifest:
 
 ```bash
-/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-fragments \
-  --source-fields --workers 1 --tracks ar1-06 --no-legacy-comparison \
+/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-points \
+  --workers 1 --tracks ar1-06 --no-legacy-comparison \
   --source-root ncei/raw_round2/mgd77t_static \
   --output-root /new/independent-root
 ```
@@ -283,7 +287,7 @@ records are in `comparison/`; `--resume` reuses completed tracks.
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 NUMEXPR_NUM_THREADS=1 POLARS_MAX_THREADS=1 \
-/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline crossover \
+/opt/miniforge3/envs/torch29/bin/python -m ncei.trackline mgd77t-crossovers \
   --source-points-root ncei/derived/processing_revision_20261025/trackline \
   --output-root ncei/derived/processing_revision_20261025/trackline/crossovers
 ```

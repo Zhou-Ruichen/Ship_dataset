@@ -469,7 +469,3 @@ def main(argv: list[str] | None = None) -> int:
     }, indent=2) + "\n", OUT_ROOT / "product_manifest.json")
     print(f"Wrote {len(events)} global crossovers; six-region counts match={spot.matched.all()}.")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

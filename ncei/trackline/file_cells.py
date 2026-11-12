@@ -82,6 +82,8 @@ REPO_ROOT = ROOT_DIR.parent           # ship/
 from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 from _common.script_utils import markdown_table, setup_logging
 
+from .quality_inputs import repo_path
+
 MANIFEST_DIR = ROOT_DIR / "manifests"
 DOCS_DIR = ROOT_DIR / "docs"
 LOG_DIR = ROOT_DIR / "output" / "logs"
@@ -227,11 +229,6 @@ def compose_output_path(branch: str, track_id: str, source_tag: str) -> Path:
     if branch == "regional_mrar":
         return OUT_REG_DIR / f"{track_id}.parquet"
     raise ValueError(f"unknown branch {branch!r}")
-
-
-def repo_path(rel_path: str) -> Path:
-    """Resolve a repo-root-relative path string to a Path (absolute)."""
-    return REPO_ROOT / rel_path
 
 
 # ---------------------------------------------------------------------------
@@ -1408,7 +1405,3 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Manifest: {paths['manifest_pq']}")
     print(f"Report:   {paths['report_md']}")
     return 0 if not errors else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

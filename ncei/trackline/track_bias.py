@@ -10,7 +10,6 @@ constructed; it is diagnostic only.
 
 from __future__ import annotations
 
-import argparse
 import os
 from pathlib import Path
 
@@ -58,15 +57,6 @@ BIAS_COLUMNS = [
 ]
 GEBCO_BINS = [-np.inf, 100.0, 500.0, np.inf]
 GEBCO_LABELS = ["<100 m", "100-<500 m", ">=500 m"]
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="python -m ncei.trackline track-bias", description=__doc__)
-    parser.add_argument(
-        "--overwrite", action="store_true",
-        help="Replace this script's existing D1 outputs. Without it, a complete prior run is left unchanged.",
-    )
-    return parser.parse_args(argv)
 
 
 def output_paths() -> list[Path]:
@@ -442,11 +432,10 @@ def build_report(
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> None:
-    args = parse_args(argv)
+def run_track_bias(*, overwrite: bool) -> None:
     expected = output_paths()
     existing = [path for path in expected if path.exists()]
-    if existing and not args.overwrite:
+    if existing and not overwrite:
         if len(existing) == len(expected):
             print("Complete D1 output set already exists; no files changed.")
             return
@@ -522,7 +511,3 @@ def main(argv: list[str] | None = None) -> None:
     atomic_write_parquet(summary, OUTPUT_ROOT / "track_bias_summary.parquet")
     atomic_write_text(report, REPORT_PATH)
     print(f"Wrote {len(expected)} D1 files for {len(TILES)} frozen regions.")
-
-
-if __name__ == "__main__":
-    main()

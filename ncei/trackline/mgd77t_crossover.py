@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import time
@@ -106,7 +107,7 @@ def attach_source_identity(
     return events
 
 
-def run_source_crossovers(args) -> int:
+def run_source_crossovers(args: argparse.Namespace) -> int:
     started = time.monotonic()
     root, output = args.source_points_root.resolve(), args.output_root.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -193,3 +194,15 @@ def run_source_crossovers(args) -> int:
     }
     (output / "method.json").write_text(json.dumps(description, indent=2) + "\n")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m ncei.trackline mgd77t-crossovers", description=__doc__)
+    parser.add_argument("--source-points-root", type=Path, required=True)
+    parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument(
+        "--selection-policies", nargs="+", choices=("basic", "basic_source_quality"),
+        default=["basic", "basic_source_quality"],
+    )
+    parser.add_argument("--overwrite", action="store_true")
+    return run_source_crossovers(parser.parse_args(argv))

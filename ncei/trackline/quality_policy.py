@@ -13,8 +13,8 @@ merged cells, and does not read external grids.
 
 Run from repo root (/mnt/data2/00-Data/ship):
 
-    python -m ncei.trackline apply-policy --run-label sample --overwrite
-    python -m ncei.trackline apply-policy --run-label full --confirm-full
+    python -m ncei.trackline quality-policy --run-label sample --overwrite
+    python -m ncei.trackline quality-policy --run-label full --confirm-full
 
 Depth-bin filter semantics
 --------------------------
@@ -56,11 +56,14 @@ from typing import Iterable, Sequence
 import numpy as np
 import pandas as pd
 import pyarrow.dataset as ds
-import pyarrow.parquet as pq
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent  # ncei/
 REPO_ROOT = ROOT_DIR.parent   # ship/
+
+from .quality_inputs import BRANCHES, branch_cells_dir, read_required_parquet
+from .quality_overlap import cross_overlap_paths, run_branch_overlap, run_source_overlap
+from .run_labels import suffix_for_run
 
 from _common.file_io import atomic_write_parquet, atomic_write_text, atomic_write_tsv
 from _common.script_utils import setup_logging
@@ -68,19 +71,11 @@ from _common.script_utils import setup_logging
 DERIVED_DIR = ROOT_DIR / "derived"
 DOCS_DIR = ROOT_DIR / "docs"
 LOG_DIR = ROOT_DIR / "output" / "logs"
-RULES_PATH = REPO_ROOT / ".trellis" / "tasks" / "05-11-singlebeam-integration" / "research" / "quality_policy_enforced_rules.tsv"
+RULES_PATH = SCRIPT_DIR / "config" / "quality_policy_enforced_rules.tsv"
 
 CALIBRATION_DIR = DERIVED_DIR / "quality_policy_calibration_1min"
-LAT_DEPTH_CALIBRATION = CALIBRATION_DIR / "quality_calibration_by_lat_depth.parquet"
-SOURCE_PAIR_CALIBRATION = CALIBRATION_DIR / "quality_calibration_by_source_pair.parquet"
 CROSS_OVERLAP_CELLS = DERIVED_DIR / "cross_branch_overlap_1min" / "cross_overlap_cells.parquet"
 
-BRANCHES = ("singlebeam", "multibeam_ncei", "regional_mrar")
-BRANCH_CELL_DIRS = {
-    "singlebeam": DERIVED_DIR / "singlebeam" / "cells_1min",
-    "multibeam_ncei": DERIVED_DIR / "multibeam" / "cells_1min",
-    "regional_mrar": DERIVED_DIR / "regional_mrar" / "cells_1min",
-}
 EXPECTED_FULL_ROWS = {
     "singlebeam": 14_611_054,
     "multibeam_ncei": 5_960,
@@ -200,10 +195,6 @@ SLICE_FIELDS = {
 # ---------------------------------------------------------------------------
 # Path / logging / atomic-write helpers
 # ---------------------------------------------------------------------------
-def suffix_for_run(run_label: str) -> str:
-    return "" if run_label == "full" else f"_{run_label}"
-
-
 def output_dir_for_run(run_label: str) -> Path:
     return DERIVED_DIR / f"quality_flags_1min{suffix_for_run(run_label)}"
 
@@ -699,12 +690,11 @@ class SliceTables:
                     self.source_pair[col] = pd.to_numeric(self.source_pair[col], errors="coerce")
 
     @staticmethod
-    def load() -> "SliceTables":
-        if not LAT_DEPTH_CALIBRATION.exists():
-            raise FileNotFoundError(f"Step 06A by_lat_depth calibration not found: {LAT_DEPTH_CALIBRATION}")
-        if not SOURCE_PAIR_CALIBRATION.exists():
-            raise FileNotFoundError(f"Step 06A by_source_pair calibration not found: {SOURCE_PAIR_CALIBRATION}")
-        return SliceTables(pd.read_parquet(LAT_DEPTH_CALIBRATION), pd.read_parquet(SOURCE_PAIR_CALIBRATION))
+    def load(calibration_dir: Path) -> SliceTables:
+        return SliceTables(
+            pd.read_parquet(calibration_dir / "quality_calibration_by_lat_depth.parquet"),
+            pd.read_parquet(calibration_dir / "quality_calibration_by_source_pair.parquet"),
+        )
 
     def lookup_lat_depth(self, cells: pd.DataFrame, slice_key: str, slice_field: str) -> pd.Series:
         if self.lat_depth.empty:
@@ -817,21 +807,8 @@ class EvalContext:
 # ---------------------------------------------------------------------------
 # Input loading
 # ---------------------------------------------------------------------------
-def read_required_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"required input not found: {path}")
-    if columns is None:
-        return pd.read_parquet(path)
-    schema_names = set(pq.read_schema(path).names)
-    read_cols = [col for col in columns if col in schema_names]
-    missing = [col for col in columns if col not in schema_names]
-    if missing:
-        raise ValueError(f"{path} missing required columns: {missing}")
-    return pd.read_parquet(path, columns=read_cols)
-
-
 def read_branch_cells(branch: str, run_label: str, logger: logging.Logger) -> pd.DataFrame:
-    path = BRANCH_CELL_DIRS[branch]
+    path = branch_cells_dir(branch, DERIVED_DIR)
     if not path.exists():
         raise FileNotFoundError(f"Step 04B cells dataset not found for {branch}: {path}")
     dataset = ds.dataset(str(path), format="parquet", partitioning="hive")
@@ -1151,6 +1128,8 @@ def make_report(
     summaries: dict[str, pd.DataFrame],
     invariant_lines: list[str],
     paths: dict[str, Path],
+    calibration_dir: Path,
+    cross_overlap_cells: Path,
 ) -> str:
     lines: list[str] = []
     lines.append("# NCEI Step 06B — Cell Quality Flags Report")
@@ -1160,7 +1139,7 @@ def make_report(
     lines.append(f"Policy enforce version: `{POLICY_ENFORCE_VERSION}`")
     lines.append(f"Elapsed: {elapsed_s:.1f}s")
     lines.append("")
-    lines.append("This report is generated at runtime by `ncei/trackline/apply_policy.py`. The script writes a sidecar quality manifest and does not mutate Step 04B cells.")
+    lines.append("The `quality-policy` command writes a quality sidecar for the Step 04B branch cells.")
     if run_label != "full":
         lines.append("")
         lines.append("> Sample/test100 note: row counts and distributions reflect a stratified subset of each branch, not the full production population.")
@@ -1211,9 +1190,10 @@ def make_report(
     lines.append("## 8. Cross-links")
     lines.append("")
     lines.append("- Spec: `.trellis/spec/backend/pipeline-design-decisions.md` §13 (data layers) / §14 (branch labels) / §15 (Step 05B cross-branch overlap) / §16 (Step 06 prerequisites) / §17 (Step 06A quality policy calibration).")
-    lines.append("- Enforced rules TSV: `.trellis/tasks/05-11-singlebeam-integration/research/quality_policy_enforced_rules.tsv` (18 cols × 16 rows; this script's only rule source).")
+    lines.append(f"- Enforced rules: `{RULES_PATH}`.")
     lines.append("- Semantic lock report: `ncei/docs/step06b_semantic_lock_report.md` (Step 06B implementation contract — §1.2 filter grammar, §1.3 invariant rule, §1.4 AUV Sentry handling).")
-    lines.append("- Predecessor (Step 06A): `ncei/trackline/policy_audit.py` + `ncei/derived/quality_policy_calibration_1min/`.")
+    lines.append(f"- Frozen calibration tables: `{calibration_dir}`.")
+    lines.append(f"- Cross-branch overlap evidence: `{cross_overlap_cells}`.")
     lines.append("")
     return "\n".join(lines)
 
@@ -1227,18 +1207,7 @@ def tsv_subset(flags: pd.DataFrame, run_label: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m ncei.trackline apply-policy",
-        description=(
-            "Step 06B — apply enforced quality-policy rules to NCEI Step 04B branch cells. "
-            "Run from repo root (/mnt/data2/00-Data/ship)."
-        )
-    )
-    parser.add_argument("--run-label", choices=VALID_RUN_LABELS, default="sample")
-    parser.add_argument("--confirm-full", action="store_true", help="Required when --run-label=full")
-    parser.add_argument("--overwrite", action="store_true", help="Replace existing Step 06B outputs")
-    args = parser.parse_args(argv)
-
+def run_policy(args: argparse.Namespace, cross_overlap_cells: Path) -> int:
     paths = output_paths(args.run_label)
     logger = setup_logging(paths["log"], "ncei_apply_quality_policy")
     t0 = datetime.now()
@@ -1263,8 +1232,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         first_match_rules, invariant_rules = load_rules(RULES_PATH)
         logger.info("Loaded %d first_match rules + %d invariant rules from %s", len(first_match_rules), len(invariant_rules), RULES_PATH)
-        tables = SliceTables.load()
-        cross = read_cross_overlap_index(CROSS_OVERLAP_CELLS)
+        tables = SliceTables.load(args.calibration_dir)
+        cross = read_cross_overlap_index(cross_overlap_cells)
         logger.info("Loaded %d Step 05B cross-overlap rows", len(cross))
 
         branch_frames: list[pd.DataFrame] = []
@@ -1285,7 +1254,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         summaries = build_summaries(flags)
 
         elapsed_s = (datetime.now() - t0).total_seconds()
-        report_text = make_report(run_label=args.run_label, elapsed_s=elapsed_s, flags=flags, summaries=summaries, invariant_lines=invariant_lines, paths=paths)
+        report_text = make_report(
+            run_label=args.run_label, elapsed_s=elapsed_s, flags=flags, summaries=summaries,
+            invariant_lines=invariant_lines, paths=paths, calibration_dir=args.calibration_dir,
+            cross_overlap_cells=cross_overlap_cells,
+        )
 
         atomic_write_parquet(flags, paths["flags_parquet"])
         atomic_write_tsv(tsv_subset(flags, args.run_label), paths["flags_tsv"])
@@ -1312,5 +1285,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m ncei.trackline quality-policy",
+        description="Compute overlap residuals and apply the approved cell quality policy.",
+    )
+    parser.add_argument("--run-label", choices=VALID_RUN_LABELS, default="sample")
+    parser.add_argument("--limit-files-per-branch", type=int, help="Cap within-branch file inputs for sample/test100.")
+    parser.add_argument("--limit-rows-per-pair", type=int, help="Cap cross-branch overlaps for sample/test100.")
+    parser.add_argument("--calibration-dir", type=Path, default=CALIBRATION_DIR, help="Frozen calibration tables.")
+    parser.add_argument("--confirm-full", action="store_true")
+    parser.add_argument("--overwrite", action="store_true")
+    args = parser.parse_args(argv)
+    if args.run_label == "full" and not args.confirm_full:
+        parser.error("--run-label=full requires --confirm-full")
+    for stage in (run_source_overlap, run_branch_overlap):
+        status = stage(args)
+        if status:
+            return status
+    # Sample overlap tables cap the pair counts. Policy evidence still uses
+    # the complete cross-branch table, as in the original sample policy run.
+    cross_cells = cross_overlap_paths("full")["cells_pq"] if args.run_label == "full" else CROSS_OVERLAP_CELLS
+    return run_policy(args, cross_cells)

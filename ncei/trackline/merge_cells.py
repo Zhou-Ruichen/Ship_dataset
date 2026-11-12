@@ -53,11 +53,13 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as ds
-import pyarrow.parquet as pq
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent          # ncei/
 REPO_ROOT = ROOT_DIR.parent           # ship/
+
+from .quality_inputs import read_parquet_schema, repo_path
+from .run_labels import suffix_for_run
 
 from _common.file_io import atomic_write_parquet, atomic_write_text
 from _common.script_utils import markdown_table, setup_logging
@@ -180,10 +182,6 @@ MRAR_SOURCE_TYPE_VALUES = frozenset({"mrar_zhoushuai", "mrar_processed", "ncei_m
 # ---------------------------------------------------------------------------
 # Paths / atomic writes / logging
 # ---------------------------------------------------------------------------
-def suffix_for_run(run_label: str) -> str:
-    return "" if run_label == "full" else f"_{run_label}"
-
-
 def cells_output_dir(branch: str, run_label: str) -> Path:
     """Return the branch-specific Step 04B dataset root.
 
@@ -203,17 +201,9 @@ def get_output_paths(run_label: str) -> dict[str, Path]:
     }
 
 
-def repo_path(rel_path: str) -> Path:
-    return REPO_ROOT / rel_path
-
-
 # ---------------------------------------------------------------------------
 # Input inspection / selection
 # ---------------------------------------------------------------------------
-def read_parquet_schema(path: Path) -> list[str]:
-    return pq.read_schema(path).names
-
-
 def find_manual_review_reason_column(paths: Iterable[Path], logger: logging.Logger) -> str | None:
     """Inspect a small set of per-file-cell parquets for a reason column."""
     inspected = 0
@@ -899,7 +889,3 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - pipeline stage top-level guard
         logger.exception("ABORTED with error: %r", exc)
         return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

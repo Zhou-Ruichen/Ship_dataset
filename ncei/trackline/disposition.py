@@ -54,7 +54,6 @@ and margin. Script 27's network solver is not an input to this task.
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 from datetime import datetime, timezone
@@ -131,16 +130,6 @@ QUALITY_COLUMNS = [
 
 from . import crossover as SCRIPT24
 from . import track_bias as SCRIPT23
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="python -m ncei.trackline disposition", description=__doc__)
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Replace this script's existing outputs. Without it, a complete prior run is left unchanged.",
-    )
-    return parser.parse_args(argv)
-
 
 def output_paths() -> list[Path]:
     paths = [REPORT_PATH]
@@ -722,17 +711,16 @@ def build_report(
     add("")
     add("```bash")
     add("cd /mnt/data2/00-Data/ship")
-    add(f"{sys.executable} -m ncei.trackline disposition --overwrite")
+    add(f"{sys.executable} -m ncei.trackline regional-quality --overwrite")
     add("```")
     add("")
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> None:
-    args = parse_args(argv)
+def run_disposition(*, overwrite: bool) -> None:
     expected = output_paths()
     existing = [path for path in expected if path.exists()]
-    if existing and not args.overwrite:
+    if existing and not overwrite:
         if len(existing) == len(expected):
             print("Complete Step 28 output set already exists; no files changed.")
             return
@@ -838,7 +826,3 @@ def main(argv: list[str] | None = None) -> None:
         f"Wrote {len(expected)} Step 28 files: {len(quality_all)} quality rows, "
         f"{int(quality_all['disposition'].eq('reject').sum())} rejected tracks."
     )
-
-
-if __name__ == "__main__":
-    main()

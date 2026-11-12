@@ -235,7 +235,3 @@ def main(argv: list[str] | None = None) -> int:
     atomic_write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", MANIFEST_PATH)
     print(json.dumps(manifest["counts"], sort_keys=True))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

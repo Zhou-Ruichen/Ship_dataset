@@ -56,13 +56,10 @@ crossover parquets already exist; with --overwrite (or with any of the six
 missing) it recomputes everything. A rerun without --overwrite therefore
 changes no file.
 
-Usage (from repo root):
-    python -m ncei.trackline crossover [--overwrite]
 """
 
 from __future__ import annotations
 
-import argparse
 import logging
 import os
 import sys
@@ -997,7 +994,7 @@ def write_report(
     a("")
     a("```bash")
     a("cd /mnt/data2/00-Data/ship")
-    a(f"{run_info['python']} -m ncei.trackline crossover --overwrite")
+    a(f"{run_info['python']} -m ncei.trackline regional-quality --overwrite")
     a("```")
     a("")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1007,29 +1004,14 @@ def write_report(
     logger.info("wrote %s", path)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m ncei.trackline crossover", description="True SB crossover audit, six frozen region tiles")
-    parser.add_argument(
-        "--overwrite", action="store_true",
-        help="recompute even if all six per-region outputs exist",
-    )
-    parser.add_argument("--source-points-root", type=Path, help="Read revised MGD77T points with original-observation continuity.")
-    parser.add_argument("--output-root", type=Path, help="Explicit separate output for the source-point mode.")
-    parser.add_argument("--selection-policies", nargs="+", choices=("basic", "basic_source_quality"), default=["basic", "basic_source_quality"])
-    args = parser.parse_args(argv)
-    if args.source_points_root is not None:
-        if args.output_root is None:
-            parser.error("--source-points-root requires --output-root")
-        from .mgd77t_crossover import run_source_crossovers
-        return run_source_crossovers(args)
-
+def run_crossovers(*, overwrite: bool) -> int:
     t_start = _time.time()
     logger = setup_logging(LOG_DIR / "24_true_crossover_audit.log", "ncei_true_crossover_audit")
-    logger.info("true crossover audit start (overwrite=%s)", args.overwrite)
+    logger.info("true crossover audit start (overwrite=%s)", overwrite)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     existing = [OUT_DIR / f"crossovers_{t}.parquet" for t in REGIONS]
-    if all(p.exists() for p in existing) and not args.overwrite:
+    if all(p.exists() for p in existing) and not overwrite:
         logger.info(
             "all six crossovers_<tile>.parquet exist; skip (minimal skip-if-exists "
             "resumability; pass --overwrite to recompute)"
@@ -1080,9 +1062,9 @@ def main(argv: list[str] | None = None) -> int:
             events, counts = orient_and_filter(res, rt, bbox, logger)
             pair_stats, track_stats = pair_and_track_stats(events, rt)
 
-        atomic_write_parquet(events, OUT_DIR / f"crossovers_{tile}.parquet", logger)
-        atomic_write_parquet(pair_stats, OUT_DIR / f"pair_stats_{tile}.parquet", logger)
-        atomic_write_parquet(track_stats, OUT_DIR / f"track_stats_{tile}.parquet", logger)
+        atomic_write_parquet(events, OUT_DIR / f"crossovers_{tile}.parquet")
+        atomic_write_parquet(pair_stats, OUT_DIR / f"pair_stats_{tile}.parquet")
+        atomic_write_parquet(track_stats, OUT_DIR / f"track_stats_{tile}.parquet")
 
         rows, qrow = region_summary_rows(tile, events, rt, time_qc)
         summary_rows.extend(rows)
@@ -1108,16 +1090,12 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     qc_df = pd.DataFrame(list(time_qc.values()))
-    atomic_write_parquet(qc_df, OUT_DIR / "nc_time_qc.parquet", logger)
-    atomic_write_parquet(pd.DataFrame(summary_rows), OUT_DIR / "region_summary.parquet", logger)
-    atomic_write_parquet(pd.DataFrame(qc_rows), OUT_DIR / "region_time_qc_summary.parquet", logger)
+    atomic_write_parquet(qc_df, OUT_DIR / "nc_time_qc.parquet")
+    atomic_write_parquet(pd.DataFrame(summary_rows), OUT_DIR / "region_summary.parquet")
+    atomic_write_parquet(pd.DataFrame(qc_rows), OUT_DIR / "region_time_qc_summary.parquet")
 
     run_info = {"python": sys.executable, "runtime_s": _time.time() - t_start}
     write_report(REPORT_PATH, summary_rows, qc_rows, region_notes, run_info,
                  global_median_abs, logger)
     logger.info("done in %.1f s", _time.time() - t_start)
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

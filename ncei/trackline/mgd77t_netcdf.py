@@ -284,23 +284,35 @@ def convert_mgd77t(
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--input", type=Path, required=True)
-    ap.add_argument("--output", type=Path, required=True)
+    ap = argparse.ArgumentParser(prog="python -m ncei.trackline mgd77t-netcdf", description=__doc__)
+    mode = ap.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--input", type=Path, help="Convert a single MGD77T observation file.")
+    mode.add_argument("--inventory", type=Path, help="Convert or verify an explicit FAA source inventory CSV.")
+    ap.add_argument("--output", type=Path, help="New NetCDF path for a single source.")
+    ap.add_argument("--output-root", type=Path, help="Output directory for an inventory batch.")
     ap.add_argument("--header", type=Path)
     ap.add_argument("--source-url", default="")
     ap.add_argument("--header-url", default="")
     ap.add_argument("--legacy-netcdf", type=Path)
     ap.add_argument("--mapping-output", type=Path)
+    ap.add_argument("--verify-only", action="store_true", help="Check an existing inventory batch without converting it.")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args(argv)
+    if args.inventory:
+        if args.output_root is None:
+            ap.error("--inventory requires --output-root")
+        if any((args.output, args.header, args.source_url, args.header_url, args.legacy_netcdf, args.mapping_output)):
+            ap.error("single-source options cannot be used with --inventory")
+        from .mgd77t_faa import run_batch
+
+        return run_batch(args.inventory, args.output_root, verify_only=args.verify_only, overwrite=args.overwrite)
+    if args.output is None:
+        ap.error("--input requires --output")
+    if args.output_root or args.verify_only:
+        ap.error("--output-root and --verify-only require --inventory")
     print(convert_mgd77t(
         args.input, args.output, header_path=args.header, source_url=args.source_url,
         header_url=args.header_url, legacy_netcdf=args.legacy_netcdf,
         mapping_output=args.mapping_output, overwrite=args.overwrite,
     ))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

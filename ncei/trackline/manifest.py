@@ -543,7 +543,3 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Errors: {len(errors):,}")
     print(f"Report: {paths['report_md']}")
     return 0 if not errors else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

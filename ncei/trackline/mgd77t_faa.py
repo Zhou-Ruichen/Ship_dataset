@@ -1,8 +1,7 @@
-"""Produce and independently compare an explicit, source-complete legacy FAA batch."""
+"""Convert and independently verify an explicit batch of MGD77T surveys."""
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 from datetime import datetime, timezone
@@ -12,9 +11,9 @@ import netCDF4
 import numpy as np
 import polars as pl
 
-from .mgd77t import DATA_FIELDS, HEADER_FIELDS, read_header, read_mgd77t
+from .mgd77t import DATA_FIELDS, HEADER_FIELDS
 from .mgd77t_netcdf import (
-    CODE_FIELDS, NUMERIC_FIELDS, TIME_UNITS, align_legacy_rows, convert_mgd77t, read_numeric,
+    CODE_FIELDS, NUMERIC_FIELDS, TIME_UNITS, convert_mgd77t, read_numeric,
 )
 
 
@@ -86,8 +85,7 @@ def _independent_time(rows: list[list[str]]) -> tuple[np.ndarray, np.ndarray, np
 
 def verify_one(
     track: str, source: Path, header_path: Path, legacy: Path, new: Path,
-    mapping_path: Path, previous_fields: pl.DataFrame | None = None,
-    previous_alignment: pl.DataFrame | None = None,
+    mapping_path: Path,
 ) -> tuple[dict, list[dict]]:
     rows, physical_lines, widths = _source_rows(source)
     fields = []
@@ -134,8 +132,9 @@ def verify_one(
         mapped = old_rows >= 0
         ii = old_rows[mapped]
         assert np.array_equal(ii, np.arange(len(old["time"])))
-        assert mapping["old_netcdf_row_0based"][0] is None
-        assert not mapped[0]
+        source_indices = np.flatnonzero(mapped)
+        assert np.array_equal(source_indices, np.arange(source_indices[0], source_indices[0] + len(ii)))
+        first_restored = not mapped[0]
         # Coordinates establish correspondence independently of row-number offsets.
         for name, field in (("lon", "LON"), ("lat", "LAT")):
             before = read_numeric(old[name], len(ii))
@@ -151,20 +150,10 @@ def verify_one(
                 difference = (difference + 180) % 360 - 180
             delta = np.abs(difference)
             assert not delta.size or delta.max() <= 1e-9, (track, name, delta.max())
-            if previous_fields is not None:
-                prior = previous_fields.filter((pl.col("cruise_id") == track) & (pl.col("variable") == name)).row(0, named=True)
-                assert prior["aligned_rows"] == len(ii)
-                assert prior["source_missing"] == np.isnan(raw).sum()
-                assert prior["source_missing_netcdf_zero"] == ((np.isnan(raw)) & (before == 0)).sum()
-                assert prior["true_source_zero"] == (raw == 0).sum()
         old_time = read_numeric(old["time"])
         finite_time = np.isfinite(assumed[mapped])
         delta = np.abs(assumed[mapped][finite_time] - old_time[finite_time])
         assert not delta.size or delta.max() <= 1e-6
-        if previous_alignment is not None:
-            prior = previous_alignment.filter(pl.col("cruise_id") == track).row(0, named=True)
-            assert prior["source_rows"] == n and prior["netcdf_rows"] == len(ii)
-            assert prior["source_missing_time"] == int((~np.isfinite(assumed[mapped])).sum())
         with header_path.open(encoding="utf-8-sig", newline="") as handle:
             header_rows = list(csv.reader(handle, delimiter="\t"))
         header_names = tuple(header_rows[0]) if header_rows[0][0] == "SURVEY_ID" else HEADER_FIELDS
@@ -179,7 +168,7 @@ def verify_one(
         faa, depth = _numeric(rows, "FREEAIR"), _numeric(rows, "CORR_DEPTH")
         return {
             "cruise_id": track, "source_rows": n, "old_netcdf_rows": len(ii), "new_netcdf_rows": n,
-            "first_observation_restored": True, "raw_fields_checked": len(DATA_FIELDS),
+            "first_observation_restored": bool(first_restored), "raw_fields_checked": len(DATA_FIELDS),
             "header_fields_checked": len(header_names), "numeric_fields_checked": len(NUMERIC_FIELDS) + len(CODE_FIELDS),
             "faa_missing": int(np.isnan(faa).sum()), "faa_finite": int(np.isfinite(faa).sum()),
             "faa_true_zero": int((faa == 0).sum()), "depth_missing": int(np.isnan(depth).sum()),
@@ -190,98 +179,16 @@ def verify_one(
             "source_institution": ds.Source_Institution,
             "legacy_aligned_faa_missing": int(np.isnan(faa[mapped]).sum()),
             "legacy_missing_faa_written_zero": int((np.isnan(faa[mapped]) & (read_numeric(old["faa"]) == 0)).sum()),
-            "restored_first_faa_missing": bool(np.isnan(faa[0])),
+            "restored_first_faa_missing": bool(first_restored and np.isnan(faa[0])),
             "numeric_and_raw_mismatches": 0,
         }, fields
 
 
-def verify_used_locations(paired: Path, output_root: Path, expected_path: Path) -> pl.DataFrame:
-    used = pl.read_parquet(paired, columns=[
-        "region", "cruise_id", "source_row_index", "longitude", "latitude", "faa_ship_mgal",
-    ])
-    mappings = pl.read_parquet(output_root / "row_mapping.parquet")
-    joined = used.join(
-        mappings.filter(pl.col("old_netcdf_row_0based").is_not_null()),
-        left_on=["cruise_id", "source_row_index"], right_on=["cruise_id", "old_netcdf_row_0based"],
-        how="left", validate="m:1",
-    )
-    assert joined.height == used.height and joined["new_netcdf_row_0based"].null_count() == 0
-    products = []
-    for track in used["cruise_id"].unique().sort():
-        subset = joined.filter(pl.col("cruise_id") == track)
-        new_i = subset["new_netcdf_row_0based"].to_numpy()
-        old_i = subset["source_row_index"].to_numpy()
-        with netCDF4.Dataset(output_root / "netcdf" / f"{track}.nc") as ds:
-            faa = read_numeric(ds["faa"])[new_i]
-            lon = read_numeric(ds["lon"])[new_i]
-            lat = read_numeric(ds["lat"])[new_i]
-            legacy = Path(ds.legacy_netcdf_file)
-        with netCDF4.Dataset(legacy) as old:
-            before = read_numeric(old["faa"])[old_i]
-        assert np.allclose(before, subset["faa_ship_mgal"], rtol=0, atol=1e-9, equal_nan=True)
-        longitude_difference = (lon - subset["longitude"].to_numpy() + 180) % 360 - 180
-        assert np.all(np.abs(longitude_difference) <= 1e-6)
-        assert np.allclose(lat, subset["latitude"], rtol=0, atol=1e-6)
-        products.append(subset.with_columns(
-            pl.Series("faa_revised_mgal", faa, nan_to_null=True),
-            pl.Series("source_faa_missing", np.isnan(faa)),
-            pl.Series("source_faa_true_zero", faa == 0),
-        ))
-    result = pl.concat(products)
-    result.rename({
-        "source_row_index": "old_netcdf_row_0based",
-        "faa_ship_mgal": "faa_legacy_mgal",
-        "longitude": "longitude_legacy",
-        "latitude": "latitude_legacy",
-    }).write_parquet(output_root / "used_locations_remapped.parquet")
-    counts = result.group_by(["region", "cruise_id"]).agg(
-        pl.len().alias("saved_locations"),
-        (pl.col("faa_ship_mgal") == 0).sum().alias("saved_zero_faa"),
-        pl.col("source_faa_missing").sum().alias("source_missing_faa"),
-        (pl.col("source_faa_missing") & (pl.col("faa_ship_mgal") == 0)).sum().alias("missing_written_as_zero"),
-        pl.col("source_faa_true_zero").sum().alias("true_zero_faa"),
-        (~pl.col("source_faa_missing")).sum().alias("source_finite_faa"),
-    ).sort(["region", "cruise_id"])
-    expected = pl.read_csv(expected_path).sort(["region", "cruise_id"])
-    assert counts.rows() == expected.select(counts.columns).rows()
-    counts.write_csv(output_root / "used_location_comparison.csv")
-    return counts
-
-
-def inventory_complete_sources(static_root: Path, legacy_root: Path, output: Path) -> pl.DataFrame:
-    matches = []
-    for source in sorted(static_root.glob("*/*.m77t")):
-        legacy = legacy_root / f"{source.stem.lower()}.nc"
-        if not legacy.exists():
-            continue
-        records = read_mgd77t(source)
-        header_path = source.with_suffix(".h77t")
-        header = read_header(header_path, records.raw["SURVEY_ID"][0])
-        with netCDF4.Dataset(legacy) as ds:
-            n_old = len(ds["time"])
-        try:
-            _, alignment = align_legacy_rows(records, legacy)
-            state = alignment["alignment_method"]
-            start = alignment["legacy_source_start_index_0based"]
-        except ValueError as error:
-            state, start = str(error), None
-        matches.append({
-            "cruise_id": source.stem.lower(), "source_file": str(source.resolve()),
-            "formal_header": str(header_path.resolve()), "source_bytes": source.stat().st_size,
-            "source_observations": len(records), "legacy_netcdf": str(legacy.resolve()),
-            "legacy_observations": n_old, "source_institution": header.fields["INST_SRC"],
-            "coordinate_alignment": state, "legacy_source_start_index_0based": start,
-            "rebuilt_this_batch": False,
-        })
-    table = pl.DataFrame(matches)
-    table.write_csv(output / "additional_complete_source_inventory.csv")
-    return table
-
-
-def summarize_source_codes(output_root: Path) -> pl.DataFrame:
+def summarize_source_codes(output_root: Path, cruises: list[str]) -> pl.DataFrame:
     """Report original code states, including unspecified codes, without selection."""
     counts = []
-    for path in sorted((output_root / "netcdf").glob("*.nc")):
+    for cruise in sorted(cruises):
+        path = output_root / "netcdf" / f"{cruise}.nc"
         with netCDF4.Dataset(path) as ds:
             for field in CODE_FIELDS:
                 codes, numbers = np.unique(ds.groups["source_fields"][field][:], return_counts=True)
@@ -296,20 +203,19 @@ def summarize_source_codes(output_root: Path) -> pl.DataFrame:
     return table
 
 
-def process_additional_inventory(args) -> int:
-    root = args.output_root
+def run_batch(inventory_path: Path, root: Path, *, verify_only: bool, overwrite: bool) -> int:
+    inventory = pl.read_csv(inventory_path)
     root.mkdir(parents=True, exist_ok=True)
-    inventory = pl.read_csv(args.additional_inventory)
     manifest, comparisons, fields, mappings = [], [], [], []
     for item in inventory.to_dicts():
         track = item["cruise_id"]
         source, header, legacy = (Path(item[key]) for key in ("source_file", "formal_header", "legacy_netcdf"))
         new = root / "netcdf" / f"{track}.nc"
         mapping = root / "row_mapping" / f"{track}.parquet"
-        if not args.verify_only:
+        if not verify_only:
             manifest.append(convert_mgd77t(
                 source, new, header_path=header, legacy_netcdf=legacy,
-                mapping_output=mapping, overwrite=args.overwrite,
+                mapping_output=mapping, overwrite=overwrite,
             ))
         row, field_rows = verify_one(track, source, header, legacy, new, mapping)
         assert row["source_rows"] == item["source_observations"]
@@ -324,7 +230,7 @@ def process_additional_inventory(args) -> int:
     pl.DataFrame(comparisons).write_csv(root / "cruise_comparison.csv")
     pl.DataFrame(fields).write_csv(root / "field_comparison.csv")
     inventory.with_columns(pl.lit(True).alias("rebuilt_this_batch")).write_csv(root / "source_inventory.csv")
-    summarize_source_codes(root)
+    summarize_source_codes(root, inventory["cruise_id"].to_list())
     counters = (
         "source_rows", "old_netcdf_rows", "new_netcdf_rows", "faa_missing", "faa_finite",
         "faa_true_zero", "depth_missing", "utc_missing", "source_time_missing",
@@ -334,90 +240,7 @@ def process_additional_inventory(args) -> int:
     )
     summary = {"cruises": len(comparisons), **{
         name: sum(row[name] for row in comparisons) for name in counters
-    }, "restored_first_observations": len(comparisons), "numeric_raw_time_mapping_mismatches": 0}
+    }, "restored_first_observations": sum(row["first_observation_restored"] for row in comparisons), "numeric_raw_time_mapping_mismatches": 0}
     (root / "comparison_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2), flush=True)
     return 0
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--source-root", type=Path)
-    ap.add_argument("--metadata-root", type=Path)
-    ap.add_argument("--legacy-root", type=Path)
-    ap.add_argument("--output-root", type=Path, required=True)
-    ap.add_argument("--paired-locations", type=Path)
-    ap.add_argument("--static-root", type=Path)
-    ap.add_argument("--additional-inventory", type=Path, help="Convert the complete-source inventory independently of the original 15-cruise evidence.")
-    ap.add_argument("--verify-only", action="store_true")
-    ap.add_argument("--overwrite", action="store_true")
-    args = ap.parse_args(argv)
-    if args.additional_inventory:
-        return process_additional_inventory(args)
-    if any(getattr(args, name) is None for name in (
-        "source_root", "metadata_root", "legacy_root", "paired_locations", "static_root",
-    )):
-        ap.error("the original batch requires source, metadata, legacy and static roots and paired locations")
-    root = args.output_root
-    root.mkdir(parents=True, exist_ok=True)
-    previous_fields = pl.read_csv(args.source_root.parent / "legacy_field_comparison.csv")
-    previous_alignment = pl.read_csv(args.source_root.parent / "legacy_track_alignment.csv")
-    manifest, comparisons, field_checks, mappings = [], [], [], []
-    for item in json.loads((args.source_root / "download_plan.json").read_text()):
-        track = item["cruise"]
-        source = args.source_root / f"{track}.m77t"
-        header = args.metadata_root / f"{track}.h77t"
-        legacy = args.legacy_root / f"{track}.nc"
-        new = root / "netcdf" / f"{track}.nc"
-        mapping = root / "row_mapping" / f"{track}.parquet"
-        if not args.verify_only:
-            manifest.append(convert_mgd77t(
-                source, new, header_path=header, source_url=item["url"],
-                header_url=item["url"].replace(".m77t", ".h77t"),
-                legacy_netcdf=legacy, mapping_output=mapping, overwrite=args.overwrite,
-            ))
-        row, fields = verify_one(
-            track, source, header, legacy, new, mapping, previous_fields, previous_alignment,
-        )
-        comparisons.append(row)
-        field_checks.extend(fields)
-        mappings.append(pl.read_parquet(mapping))
-        print(f"{track}: {row['new_netcdf_rows']} records compared; FAA missing={row['faa_missing']}", flush=True)
-    if manifest:
-        pl.DataFrame(manifest).write_csv(root / "conversion_manifest.csv")
-    pl.concat(mappings).write_parquet(root / "row_mapping.parquet")
-    pl.DataFrame(comparisons).write_csv(root / "cruise_comparison.csv")
-    pl.DataFrame(field_checks).write_csv(root / "field_comparison.csv")
-    used = verify_used_locations(
-        args.paired_locations, root, args.source_root.parent / "legacy_used_location_counts.csv",
-    )
-    inventory = inventory_complete_sources(args.static_root, args.legacy_root, root)
-    summarize_source_codes(root)
-    summary = {
-        "cruises": len(comparisons),
-        "source_observations": sum(row["source_rows"] for row in comparisons),
-        "old_netcdf_observations": sum(row["old_netcdf_rows"] for row in comparisons),
-        "new_netcdf_observations": sum(row["new_netcdf_rows"] for row in comparisons),
-        "faa_missing": sum(row["faa_missing"] for row in comparisons),
-        "legacy_aligned_faa_missing": previous_fields.filter(pl.col("variable") == "faa")["source_missing"].sum(),
-        "restored_first_observation_faa_missing": sum(row["faa_missing"] for row in comparisons) - previous_fields.filter(pl.col("variable") == "faa")["source_missing"].sum(),
-        "faa_finite": sum(row["faa_finite"] for row in comparisons),
-        "faa_true_zero": sum(row["faa_true_zero"] for row in comparisons),
-        "old_source_missing_time_written_epoch_zero": sum(row["old_missing_time_written_epoch_zero"] for row in comparisons),
-        "source_timezone_unspecified": sum(row["timezone_unspecified"] for row in comparisons),
-        "valid_source_time_timezone_unspecified": sum(row["valid_time_timezone_unspecified"] for row in comparisons),
-        "new_utc_missing": sum(row["utc_missing"] for row in comparisons),
-        "used_locations": used["saved_locations"].sum(),
-        "used_source_faa_missing": used["source_missing_faa"].sum(),
-        "used_source_faa_finite": used["source_finite_faa"].sum(),
-        "used_source_faa_true_zero": used["true_zero_faa"].sum(),
-        "additional_complete_sources": inventory.height,
-        "numeric_raw_time_mapping_mismatches": 0,
-    }
-    (root / "comparison_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2), flush=True)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

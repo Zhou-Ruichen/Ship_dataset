@@ -407,7 +407,3 @@ def main(argv: list[str] | None = None) -> int:
     atomic_write_text(json.dumps(manifest, indent=2) + "\n", PRODUCT_MANIFEST_PATH)
     print(f"Wrote {len(quality)} quality rows, {n_files} final files / {n_rows} cells; named validation passed.")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -34,11 +34,13 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as ds
-import pyarrow.parquet as pq
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = SCRIPT_DIR.parent          # ncei/
 REPO_ROOT = ROOT_DIR.parent           # ship/
+
+from .quality_inputs import branch_cells_dir, read_parquet_schema
+from .run_labels import suffix_for_run
 
 from _common.file_io import atomic_write_parquet, atomic_write_text
 from _common.script_utils import ensure_columns, setup_logging
@@ -52,11 +54,6 @@ VALIDATION_PRODUCT_VERSION = "ncei_validation_cells_v0.1.0"
 VALID_RUN_LABELS = ("sample", "test100", "full")
 
 QUALITY_FLAGS_PATH = DERIVED_DIR / "quality_flags_1min" / "cell_quality_flags_1min.parquet"
-BRANCH_CELL_DIRS = {
-    "singlebeam": DERIVED_DIR / "singlebeam" / "cells_1min",
-    "multibeam_ncei": DERIVED_DIR / "multibeam" / "cells_1min",
-    "regional_mrar": DERIVED_DIR / "regional_mrar" / "cells_1min",
-}
 JAMSTEC_CELLS_PATH = JAMSTEC_ROOT / "derived" / "cells_1min" / "cells.parquet"
 JAMSTEC_PRIMARY_PATH = (
     JAMSTEC_ROOT
@@ -219,10 +216,6 @@ INCLUDE_EXPANDED_SB_MEMBERSHIP_IN_CATALOG = True
 # ---------------------------------------------------------------------------
 # Paths / logging / writes
 # ---------------------------------------------------------------------------
-def suffix_for_run(run_label: str) -> str:
-    return "" if run_label == "full" else f"_{run_label}"
-
-
 def validation_root(run_label: str) -> Path:
     return DERIVED_DIR / f"validation_cells_1min{suffix_for_run(run_label)}"
 
@@ -283,7 +276,7 @@ def compute_lat_band(lat_center: pd.Series) -> pd.Series:
 def schema_names(path: Path) -> set[str]:
     if path.is_dir():
         return set(ds.dataset(str(path), format="parquet", partitioning="hive").schema.names)
-    return set(pq.read_schema(path).names)
+    return set(read_parquet_schema(path))
 
 
 def read_parquet_dataset(path: Path, columns: list[str], required: list[str], filters=None) -> pd.DataFrame:
@@ -367,7 +360,7 @@ def normalize_common_dtypes(df: pd.DataFrame) -> pd.DataFrame:
 def load_ncei_branch(branch: str, run_label: str, logger: logging.Logger) -> pd.DataFrame:
     flag_filter = (ds.field("branch") == branch)
     flags = read_parquet_dataset(QUALITY_FLAGS_PATH, NCEI_FLAG_COLUMNS, NCEI_REQUIRED_FLAG_COLUMNS, filters=flag_filter)
-    cells = read_parquet_dataset(BRANCH_CELL_DIRS[branch], NCEI_CELL_COLUMNS, NCEI_REQUIRED_CELL_COLUMNS)
+    cells = read_parquet_dataset(branch_cells_dir(branch, DERIVED_DIR), NCEI_CELL_COLUMNS, NCEI_REQUIRED_CELL_COLUMNS)
     if "lat_band_10deg" not in cells.columns:
         cells["lat_band_10deg"] = compute_lat_band(cells["lat_center"])
     if "lat_band_10deg" not in flags.columns:
@@ -956,7 +949,3 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - pipeline top-level guard
         logger.exception("ABORTED with error: %r", exc)
         return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
