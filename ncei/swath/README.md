@@ -1,213 +1,146 @@
-# Rebuild downloaded swath cruises
+# Rebuild downloaded multibeam cruises
 
-To rebuild a cruise from its existing staging shards without changing its
-production directory, run from the repository root:
-
-```bash
-python -m ncei.swath batch --cruises HNRO05RR \
-  --output-root /tmp/hnro05rr-rebuild
-python -m ncei.swath batch --cruises HNRO05RR \
-  --output-root /tmp/hnro05rr-rebuild --resume
-```
-
-`batch` writes L1 `points_raw`/`points_checked`, L2 `file_cells_1min`,
-extraction and aggregation summaries, a source-manifest fragment, and coverage
-statistics. L2 uses `basic_native_good`: the basic point checks and
-`native_quality_state == "good"`. Counts retain null, flagged, and unknown
-states in the L1 and extraction manifest.
-
-`--output-root` is required. Nonempty output requires `--resume` and matching
-saved parameters. Completed L1/L2 checkpoints are reused; a partial stage is
-continued. Output under an existing production cruise is rejected. New rounds
-inside `ncei/derived/mb_round2/` go under `_runs/`.
-
-## Select inputs or extract raw files
-
-`--input-root` defaults to `ncei/derived/mb_round2/`. Select all cruises with
-staging using `--all-staged` instead of `--cruises`:
+Run from the repository root. The streaming chain decodes one source file at a
+time, applies the current sounding selection, and retains the 1-arcmin cruise
+cells. Raw sources and existing products remain read-only.
 
 ```bash
-python -m ncei.swath batch --all-staged \
-  --input-root /tmp/selected-staging --output-root /tmp/selected-rebuild
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1 POLARS_MAX_THREADS=1
+python -m ncei.swath census --output-root ncei/derived/swath_rebuild_check/example
+python -m ncei.swath run --cruises RR0913 --workers 8 \
+  --output-root ncei/derived/swath_rebuild_check/example
+python -m ncei.swath run --cruises RR0913 --workers 8 --resume \
+  --output-root ncei/derived/swath_rebuild_check/example
+python -m ncei.swath coverage --output-root ncei/derived/swath_rebuild_check/example
 ```
 
-Add `--extract` to parse raw sources into the output root's `_staging/` and
-`_work/` directories before rebuilding L1/L2:
+Omit `--cruises` to process every platform-tree cruise with `status=ok` in
+`ncei/manifests/round2_download_log.parquet`. Explicit cruise IDs retain their
+supplied order; otherwise RR0913 is processed first when present. `--workers` controls concurrent source-file decoders within a
+cruise, with a positive worker count. A batch stops before its next cruise when data2 has less
+than 300 GB free.
+
+The default raw roots are `ncei/raw_round2/platforms_tree` and
+`/mnt/data1/pub/ship/ncei/raw_round2/platforms_tree`. Replace them with repeatable
+`--raw-root PATH` arguments. Both `<cruise>/` and `<ship>/<cruise>/` layouts are
+resolved. Historical extraction manifests supply existing filekeys and
+ordinals. New keys use the SHA-256 prefix of the path relative to the platform tree.
+A file present in both roots is read once, preferring the first root.
+
+
+For a separate code worktree, pass the existing data checkout and all external
+inputs as absolute paths:
 
 ```bash
-python -m ncei.swath batch --cruises HNRO05RR \
-  --output-root /tmp/hnro05rr-extracted --extract
+python -m ncei.swath run --data-root /mnt/data2/00-Data/ship \
+  --ledger /mnt/data2/00-Data/ship/ncei/manifests/round2_download_log.parquet \
+  --raw-root /mnt/data2/00-Data/ship/ncei/raw_round2/platforms_tree \
+  --raw-root /mnt/data1/pub/ship/ncei/raw_round2/platforms_tree \
+  --exclude-pings /mnt/data2/00-Data/ship/ncei/derived/swath_rebuild_check/reference_final/excluded_pings.parquet \
+  --output-root /mnt/data2/00-Data/ship/ncei/derived/swath_rebuild_20261112 \
+  --workers 32
 ```
 
-For products that require valid source ping navigation, choose the navigation
-policy explicitly:
+`--data-root` supplies the existing MB-System environment, historical
+extraction keys, and review records. `--ledger`, `--exclude-pings`, repeatable
+`--raw-root`, and `--output-root` can each point outside the code checkout.
+`coverage` accepts `--strict-path` and `--regions-yaml` for its two references.
+
+## Selection and aggregation
+
+The current selection requires `point_check_pass_basic`, native quality
+`good`, and `valid_ping_navigation`. It excludes the 19 source pings confirmed
+invalid in the HNRO07RR and HNRO05RR navigation reviews. Exact exclusion keys
+are `filekey`, `ping_navigation_record_index`, `epoch_us`, and
+`native_ping_counter`. Use `--exclude-pings TABLE.parquet` to provide a table
+with these four columns. `--no-exclusions` reproduces the numerical navigation
+selection for comparison.
+
+Source navigation is read using `mblist -P1 -L0 -U3 -OMNXYzH` without `-MA`.
+Beam listings use `-MA -U3/-U0 -OMN#XYzH`. U0 membership defines native good
+quality. Navigation joins use integer UTC microseconds and native ping
+counter. Repeated counters at different times remain distinct. Missing keys,
+duplicate identities, inconsistent order, and U0/U3 value disagreement fail
+the source file. MB84 requires its original uncompressed filename's `.prj`.
+
+Beam longitude is normalized to `[-180, 180)`. The basic checks accept finite
+longitude and latitude, latitude in `[-90, 90]`, and positive depth up to
+11,500 m. Cruise-wide depth sign follows the 10-25 convention: at least 95%
+negative finite depths, including zeros in the denominator, flips the sign;
+otherwise it is unchanged. Numerical source navigation rejects nonfinite,
+out-of-range, and exactly `(0, 0)` coordinates. No radius or speed threshold
+enters selection.
+
+Temporary parquet shards retain candidate longitude, latitude, and raw depth
+for both possible depth signs. Once all files complete, the cruise depth sign
+is applied and `ncei.trackline.file_cells.aggregate_track_file` computes the
+same 23 output columns as the 10-25 official product, including the median of
+all selected soundings, the median of unique exact triples, and duplicate
+ratio. Large cruises are partitioned by complete cells before invoking that
+aggregator, so one cell's soundings and their order are preserved. Temporary files live under `<output-root>/_tmp/<cruise>/` and are removed
+after the cruise checkpoint is written. No staging or L1 products are written
+by `run`.
+
+For multiple supported formats, each format's file ping-time intervals are
+merged into a union and the unions are intersected pairwise. Temporal overlap
+sets cruise status `format_overlap` and produces no L2. Non-overlapping formats
+share one L2 with sorted labels such as `ncei_mb41_mb58` and `mb41_mb58`.
+Unsupported files remain listed and the supported files can produce L2.
+A supported decoding failure sets cruise status `failed`, produces no L2, and
+the batch proceeds to the next cruise. Exceptions and their tracebacks are
+retained in `files.parquet`.
+
+## Products
+
+| Path below the output root | Contents |
+| --- | --- |
+| `cells_1min/<cruise>.parquet` | Official 23-column cruise-cell contract |
+| `files.parquet` | Source keys, paths, formats, status, raw bytes, beam/quality/selection counts, ping-time bounds in UTC integer microseconds |
+| `cruises.parquet` | Cruise status, counts, format intervals and overlaps, elapsed seconds, the former stage-36 source fields |
+| `run_parameters.json` | Raw roots, selection policy and rule, exclusion-table path and SHA-256, MB-System version and code commit |
+| `excluded_pings.parquet` | The default 19 confirmed-invalid source ping identities |
+| `hnro14rr_sensitivity_beams.parquet` | 11,816 diagnosed beam identities, excluded from the default selection rules |
+| `census.parquet` | Cruise/format file counts, bytes, supported status |
+| `coverage_vs_strict_primary.parquet` | Global and six-region unique-cell coverage against the strict layer |
+| `_completed/<cruise>` | Completed cruise marker used by `--resume` |
+
+`cruises.parquet` includes `formats`, per-format file and beam counts in
+`format_counts`, each format's merged `intervals_us`, and pairwise
+`format_overlaps`. `format_overlap_us` sums pairwise overlap durations.
+A shared endpoint counts as overlap even when the duration is zero.
+`n_pass_basic`, `n_selected_basic_native_good`,
+`n_selected_before_exclusions`, `n_excluded_selected_beams`, and `n_selected`
+record the successive selection counts. `n_excluded_beams` counts all beams
+belonging to the listed invalid pings, including already rejected beams.
+
+`--resume` requires matching source and selection parameters, skips completed
+cruises, and rebuilds an incomplete cruise from its raw files. Interrupted
+manifest updates are recovered from `_checkpoints/`. Workers may change on
+resume. Existing L2 files are replaced only while rebuilding an incomplete
+cruise in that run's output directory.
+
+## Recreate checked soundings on demand
 
 ```bash
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-python -m ncei.swath batch --cruises HNRO07RR NT05-06 \
-  --output-root ncei/derived/processing_revision_20261025/swath/first_batch \
-  --extract --selection-policy basic_native_good_valid_ping_navigation --workers 2
+python -m ncei.swath points --cruise NT05-06 \
+  --output-root ncei/derived/swath_rebuild_check/points
+python -m ncei.swath points --cruise HNRO07RR \
+  --files 9cc351d9386a1a84 \
+  --bbox -0.1 -0.1 0.1 0.1 \
+  --output-root ncei/derived/swath_rebuild_check/local_points
 ```
 
-This policy selects `point_check_pass_basic`, native `good`, and
-`valid_ping_navigation`. The checked point table includes the readable boolean
-`point_selected_basic_native_good_valid_ping_navigation`; it retains rejected
-soundings, their original beam coordinates, depth, and native state.
-The existing `basic` and `basic_native_good` policies keep their meanings.
-`batch` still defaults to `basic_native_good`.
+`points_checked/<cruise>.parquet` retains all decoded soundings, their quality
+and checks, using the 10-25 `points_checked` column contract. Its selection
+boolean applies the current ping exclusions. File and geographic restrictions
+limit the delivered rows; cruise-wide depth sign and original point ordinals
+are retained. `--files` accepts filekeys, filenames, historical relative paths,
+or absolute source paths. Bounds are west, south, east, north and include both
+endpoints. The command reads all supported files to preserve whole-cruise
+point indices and depth-sign semantics. Rejected rows remain in the delivered
+point table.
 
-Source navigation is read with `mblist -P1 -L0 -U3 -OMNXYzH` without `-MA`.
-Each beam is matched on integer-microsecond epoch time and the native ping
-counter. Reused counters at different times remain distinct. Duplicate exact
-ping keys, missing or invalid times, unmatched beams, and inconsistent ping
-order stop that source file. There is no nearest-time match.
-
-Point and staging tables retain `parser_ping_index`, `native_ping_counter`,
-`beam_index`, `ping_navigation_record_index`, `ping_lon`, `ping_lat`,
-`valid_ping_navigation`, and `ping_navigation_reason`. Angles use decimal
-degrees. Indices are zero-based except the unchanged source-native ping
-counter. `ping_navigation_record_index` is the row in the retained per-ping
-table; `parser_ping_index` is the ping ordinal among extracted beam records.
-Times are UTC integer microseconds in staging (`time_us`, Unix epoch), and
-UTC-valued timezone-naive timestamps in L1 (`time`).
-
-Navigation reasons are `valid`, `nonfinite`, `out_of_range`, and
-`zero_navigation`. The zero test is exactly `(ping_lon == 0) & (ping_lat == 0)`;
-no near-origin radius or speed threshold enters selection. Legacy staging
-without these fields merges with null navigation and reason `not_extracted`.
-The old policies can still use it; the navigation policy requires newly
-extracted navigation for every beam.
-
-For MB84, extraction copies only the original uncompressed filename's `.prj`
-sidecar to the renamed work input. A missing or empty source sidecar fails
-that file before `mblist` runs; the extractor does not infer a UTM zone.
-`extraction_manifest` and `_work/<filekey>/source_metadata.json` record the
-source path, projection source path, and projection definition.
-Each `_work/<filekey>/ping_navigation.parquet` retains the per-ping values,
-validity, and exact matching keys after large intermediates are removed.
-
-Existing extraction manifests preserve historical file keys and ordinals.
-Without an input manifest, `--extract` enumerates gzip files in the cruise's
-raw directory. Both `platforms_tree/<cruise>/` and
-`platforms_tree/<ship>/<cruise>/` layouts are resolved. Extraction uses the
-retained MB-System environment and `_common.mbsystem`; it makes no network
-requests. Unsupported formats remain recorded; failed extraction stops the
-batch with its per-file manifest available for inspection.
-
-## Run an individual stage
-
-These stage commands retain the original production paths and arguments.
-Use `batch` for a new output root.
-
-| Stage | Example | Result |
-| --- | --- | --- |
-| 33 | `python -m ncei.swath census` | File-format counts for complete cruises. |
-| 34 | `python -m ncei.swath extract --cruises AR40 --workers 1` | Raw swath extraction and L1 merge. |
-| 35 | `python -m ncei.swath file-cells --cruises AR40` | L2 with the original `basic` selection. |
-| 36 | `python -m ncei.swath manifest` | Standalone source-manifest fragment. |
-| 37 | `python -m ncei.swath coverage` | Cell-union coverage against strict primary and six regions. |
-| 43 | `python -m ncei.swath quality-revision --workers 1 --resume` | The fixed first-batch quality revision and downstream comparison. |
-
-Stage numbers are aliases, for example `python -m ncei.swath 34 --help`.
-Every command accepts `--help` before processing, including the formerly
-argument-free stages 33, 36, and 37.
-
-## Quality revision and shared functions
-
-`quality_revision.py` keeps the stage-43 command intact: its thirteen-cruise
-comparison combines L1/L2 rebuilds, record exclusions, file/cruise quality
-tables, and candidate/residual analysis for the two 14-seamounts regions.
-Its existing arguments and isolated output restriction remain in force.
-Keeping this command together preserves the historical comparison and avoids
-splitting its shared state across a package and a one-off analysis script.
-The rebuild, exclusion, and quality-table functions remain importable.
-
-`batch` uses the same `extract.merge_cruise` and
-`ncei.trackline.file_cells.aggregate_track_file` functions, followed by
-`manifest_fragment.build_fragment` and `coverage.coverage_stats`. It does not
-read the 14-seamounts candidate lists or run the stage-43 regional comparison.
-Coverage and source fragments remain separate products awaiting review;
-neither command merges them into a released layer.
-
-## Compare a navigation revision
-
-The revision comparison reads the retained native-good L1/L2 and all records
-of each completed new cruise. It checks unchanged source identity, time,
-beam coordinates, depth, and native state, then reports per-file and per-cruise
-selection, invalid-navigation ping/beam counts, and cell changes.
-The near-origin count uses `abs(lon) < 0.1` and `abs(lat) < 0.1` only as a
-descriptive comparison with the original observation.
-
-```bash
-python -m ncei.swath navigation-revision audit
-python -m ncei.swath navigation-revision cases
-python -m ncei.swath navigation-revision compare \
-  --batch-roots ncei/derived/processing_revision_20261025/swath/first_batch \
-                ncei/derived/processing_revision_20261025/swath/navigation_affected_extension \
-  --reuse-comparison-root ncei/derived/processing_revision_20261025/swath/first_batch_comparison
-```
-
-`audit` checks the six revision cruises against their first-batch completion
-records and the successful download enumeration, including auxiliary files,
-sizes, source-specific MB84 projections, and `.part` absence. It retains the
-input table and output-size estimate. `cases` freshly extracts three known
-source files unless its new staging already exists, then compares them to
-the retained source records. `compare` requires completed batch summaries
-under the navigation policy and writes `file_navigation_comparison`,
-`cruise_navigation_comparison`, `cell_navigation_comparison`,
-`combined_ncei_cells`, and `comparison_summary.json` under the revision root.
-The combined depth remains the unweighted median of cruise-cell medians.
-`--reuse-comparison-root` reuses an already completed all-record comparison
-for the same old root and unchanged L1 paths and row counts.
-`retained_near_origin_points` lists every still-selected point in the
-descriptive near-origin window, including its source ping navigation.
-
-## Preserve a released selection during source-record review
-
-The bounded HNRO07RR follow-up keeps the published first-batch products
-unchanged. It directly reads the three identified SB2100DR sources and
-compares their navigation headers with the retained ping table, records
-14 exact invalid ping identities, and writes a small beam-selection overlay.
-Other source navigation remains `not_reviewed`, not reviewed good.
-
-```bash
-python -m ncei.swath navigation-case-review review
-python -m ncei.swath navigation-case-review combine \
-  --batch-roots ncei/derived/processing_revision_20261025/swath/first_batch \
-                ncei/derived/processing_revision_20261025/swath/navigation_affected_extension
-```
-
-The independent product root is
-`ncei/derived/processing_revision_20261025/swath/navigation_review/`.
-`ping_navigation_review` preserves file identity, navigation-record index,
-integer epoch microseconds, native ping counter, original source headers,
-decompressed byte offsets, and adjacent navigation evidence.
-`point_selection_overlay` retains all original beams for those pings and adds
-`point_selected_basic_native_good_valid_ping_navigation_case_review`.
-The research selection is the published selection minus these exact reviewed
-ping keys; it introduces no radius or speed threshold. Only affected cells
-are reaggregated, with untouched cruise cells reused. `combine` retains the
-unweighted median of cruise-cell medians and requires completed input batches.
-
-The known HNRO05RR follow-up uses the same implementation with explicit input
-and output directories. Its preceding zero-navigation interval crosses source
-files, so the review retains the exact preceding file/ping identity and reads
-the intervening source DR headers. No source-navigation search threshold is
-introduced.
-
-```bash
-python -m ncei.swath navigation-case-review review \
-  --cruise-dir ncei/derived/processing_revision_20261025/swath/navigation_affected_extension/HNRO05RR \
-  --output-root ncei/derived/processing_revision_20261025/swath/navigation_review_hnro05rr
-python -m ncei.swath navigation-case-review combine \
-  --batch-roots ncei/derived/processing_revision_20261025/swath/first_batch \
-                ncei/derived/processing_revision_20261025/swath/navigation_affected_extension \
-  --review-roots ncei/derived/processing_revision_20261025/swath/navigation_review \
-                 ncei/derived/processing_revision_20261025/swath/navigation_review_hnro05rr \
-  --output-root ncei/derived/processing_revision_20261025/swath/navigation_review_combined_cases
-```
-
-`--review-roots` combines the completed cruise cases into a new root, leaving
-the earlier single-case product untouched. New review invocations also retain
-small exact source byte ranges for the diagnosed pings and bracketing track
-records. The existing HNRO07RR evidence keeps its original headers and offsets.
+Historical revision commands and stage-number aliases were removed; their
+products remain at their original locations. Removed code can
+be retrieved using the commit recorded in `docs/code_archive.md`.

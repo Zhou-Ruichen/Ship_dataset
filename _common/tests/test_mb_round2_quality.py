@@ -1,4 +1,6 @@
-"""Regression checks for native quality, record lineage, and cell coverage."""
+"""Check streaming swath source identities, selection and cruise aggregation."""
+
+from __future__ import annotations
 
 import tempfile
 import unittest
@@ -7,199 +9,222 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 
-from ncei.swath import extract, manifest_fragment, quality_revision
-from ncei.trackline import file_cells
-
-ROOT = Path(__file__).resolve().parents[2]
+from ncei.swath import aggregation, decode, exclusions, format_times, pipeline, points, selection, sources
 
 
-class QualityRevisionTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.extract = extract
-        cls.aggregate = file_cells
-        cls.sources = manifest_fragment
-        cls.revision = quality_revision
+def source(root: Path, fmt: int = 41, key: str = 'key') -> sources.Source:
+    return sources.Source('TEST', root / 'source.gz', root, Path('TEST/source.gz'),
+                          7, key, fmt, 'test fixture', 10)
 
-    def test_rr1412_known_shard(self):
-        path = ROOT / "ncei/derived/mb_round2/RR1412/_staging/761d2c6f1c51988d.parquet"
-        df = pd.read_parquet(path)
-        stats = self.extract.staging_statistics(path)
-        self.assertEqual(
-            [stats[k] for k in ("n_rows", "n_good", "n_flagged", "n_null", "n_unknown")],
-            [189648, 163975, 25673, 0, 0],
-        )
-        df["depth_m_positive_down"] = df["depth_raw"]
-        df["point_check_pass_basic"] = (
-            np.isfinite(df["lon"]) & df["lon"].ge(-180) & df["lon"].lt(180)
-            & np.isfinite(df["lat"]) & df["lat"].between(-90, 90)
-            & np.isfinite(df["depth_raw"]) & df["depth_raw"].gt(0) & df["depth_raw"].le(11500)
-        )
-        mask = self.aggregate.point_selection_mask(df, "basic_native_good")
-        self.assertEqual(int(mask.sum()), 163975)
-        self.assertFalse(df.loc[mask, "native_quality_state"].eq("flagged").any())
-        self.assertEqual(int(self.aggregate.point_selection_mask(df).sum()), 189648)
 
-    def test_quality_missing_unknown_and_null(self):
-        df = pd.DataFrame({
-            "lon": [134.] * 6, "lat": [38.] * 6, "depth_m_positive_down": [2000.] * 6,
-            "point_check_pass_basic": [True, True, True, True, True, False],
-            "native_quality_state": ["good", "flagged", "null", "unknown", None, "good"],
+def beams(depth=(2000., 10000., 0., 2000., 2500.)) -> pd.DataFrame:
+    n = len(depth)
+    return pd.DataFrame({
+        'lon': [134.] * n, 'lat': [38.] * n, 'depth_raw': list(depth),
+        'native_quality_state': ['good', 'flagged', 'null', 'unknown', 'good'][:n],
+        'epoch_us': np.arange(n, dtype=np.int64) + 1_000_000,
+        'native_ping_counter': np.arange(n, dtype=np.int64) + 1,
+        'parser_ping_index': np.arange(n, dtype=np.int64),
+        'beam_index': np.zeros(n, dtype=np.int32), 'ping_navigation_record_index': np.arange(n),
+        'ping_lon': [134.] * n, 'ping_lat': [38.] * n,
+        'valid_ping_navigation': [True] * n, 'ping_navigation_reason': ['valid'] * n,
+    })
+
+
+class StreamingSwathTest(unittest.TestCase):
+    def test_quality_stages_and_exact_ping_exclusion(self):
+        frame = beams()
+        triples, counts = selection.grid_candidates(frame, {(4, 1_000_004, 5)})
+        self.assertEqual(counts['positive'], dict(n_pass_basic=4, n_selected_basic_native_good=2,
+                         n_selected_before_exclusions=2, n_excluded_selected_beams=1, n_selected=1))
+        self.assertEqual(counts['n_excluded_beams'], 1)
+        self.assertEqual(triples.depth_raw.tolist(), [2000.])
+        self.assertFalse(selection.excluded_pings(frame, {(4, 1_000_003, 5)}).any())
+
+    def test_depth_sign_is_cruise_wide_and_counts_zeros(self):
+        frame = beams((-2400., -2500., 0., -2000., -3000.))
+        triples, counts = selection.grid_candidates(frame, set())
+        self.assertEqual(selection.depth_sign(counts), ('mixed_sign', 1))
+        self.assertEqual(counts['positive']['n_selected'], 0)
+        self.assertEqual(counts['negative']['n_selected'], 2)
+        self.assertEqual(len(triples), 2)
+        self.assertEqual(selection.depth_sign(selection.depth_counts(np.full(20, -1.))), ('mostly_negative', -1))
+
+    def test_numeric_navigation_and_basic_depth(self):
+        frame = beams()
+        frame.loc[0, 'valid_ping_navigation'] = False
+        frame.loc[4, 'depth_raw'] = 11500.1
+        triples, counts = selection.grid_candidates(frame, set())
+        self.assertEqual(counts['positive']['n_selected'], 0)
+        self.assertEqual(counts['n_invalid_navigation_beams'], 1)
+        self.assertTrue(triples.empty)
+
+    def test_empty_beam_listing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'empty.tsv'
+            path.touch()
+            result = decode.read_beams(path, allow_null_depth=False)
+            self.assertTrue(result.empty)
+
+    def test_u0_exact_join_retains_native_good_with_invalid_navigation(self):
+        all_beams = pd.DataFrame([
+            ['1.000001', 1, 0, np.nan, 2., 100., 0.],
+            ['1.000001', 1, 1, 1., 2., np.nan, 0.],
+            ['2.000001', 1, 0, 1., 2., 110., 0.],
+        ], columns=decode.BEAM_COLUMNS)
+        good = all_beams.iloc[[0]].copy()
+        nav = pd.DataFrame({
+            'ping_navigation_record_index': [0, 1], 'epoch_us': [1_000_001, 2_000_001],
+            'native_ping_counter': [1, 1], 'ping_lon': [0., 1.], 'ping_lat': [0., 2.],
+            'valid_ping_navigation': [False, True], 'ping_navigation_reason': ['zero_navigation', 'valid'],
         })
-        self.assertEqual(self.aggregate.point_selection_mask(df, "basic_native_good").tolist(),
-                         [True, False, False, False, False, False])
-        no_quality = df.drop(columns="native_quality_state")
-        self.assertEqual(int(self.aggregate.point_selection_mask(no_quality).sum()), 5)
-        with self.assertRaisesRegex(ValueError, "native_quality_state"):
-            self.aggregate.point_selection_mask(no_quality, "basic_native_good")
+        result = decode.join_beams(all_beams, good, nav)
+        self.assertEqual(result.native_quality_state.tolist(), ['good', 'null', 'flagged'])
+        self.assertTrue(np.isnan(result.loc[0, 'lon']))
+        self.assertTrue(np.isnan(result.loc[0, 'lat']))
+        self.assertEqual(result.parser_ping_index.tolist(), [0, 0, 1])
+        with self.assertRaisesRegex(ValueError, 'duplicate U0'):
+            decode.join_beams(all_beams, pd.concat([good, good]), nav)
+        bad = good.copy()
+        bad.loc[:, 'depth_raw'] = 101.
+        with self.assertRaisesRegex(ValueError, 'mismatch'):
+            decode.join_beams(all_beams, bad, nav)
 
-    def test_merge_and_streaming_lineage_counts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            staging = root / "staging"
-            staging.mkdir()
-            df = pd.DataFrame({
-                "file_ordinal": np.full(5, 119, dtype=np.int32),
-                "point_index_in_file": [40, 41, 42, 43, 44],
-                "time_us": np.arange(5, dtype=np.int64) + 1000000,
-                "lon_raw": [134.] * 5, "lat_raw": [38.] * 5,
-                "lon": [134.] * 5, "lat": [38.] * 5,
-                "depth_raw": [2400., 10000., 0., 2000., 2500.],
-                "native_quality_state": ["good", "flagged", "null", "unknown", "good"],
+    def test_flat_ship_layouts_and_historical_file_keys(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            raw = root / 'raw'
+            history = root / 'history'
+            for directory in (raw / 'ship/TEST', raw / 'FLAT'):
+                directory.mkdir(parents=True)
+                (directory / 'source.mb41.gz').touch()
+            (history / 'TEST').mkdir(parents=True)
+            pd.DataFrame([{'relpath': 'TEST/source.mb41.gz', 'filekey': 'historical',
+                           'file_ordinal': 19, 'mb_format': 41, 'format_note': 'suffix'}]).to_parquet(
+                               history / 'TEST/extraction_manifest.parquet', index=False)
+            directories = sources.cruise_directories([raw], {'TEST', 'FLAT'}, {'TEST', 'FLAT'})
+            records = sources.discover('TEST', directories['TEST'], history)
+            self.assertEqual((records[0].filekey, records[0].file_ordinal), ('historical', 19))
+            flat = sources.discover('FLAT', directories['FLAT'], history)
+            self.assertEqual(flat[0].filekey, sources.file_key(Path('FLAT/source.mb41.gz')))
+            records[0].path.unlink()
+            missing = sources.discover('TEST', directories['TEST'], history)
+            self.assertFalse(missing[0].path.exists())
+            self.assertEqual(missing[0].filekey, 'historical')
+
+    def test_failed_supported_file_blocks_l2_and_batch_continues(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            bad = source(root)
+            next_source = source(root, key='next')
+            frame = beams()
+            frame.attrs.update(ping_time_start_us=1_000_000, ping_time_end_us=1_000_004,
+                               n_source_pings=5, n_invalid_navigation_pings=0)
+            def mock_decode(record, _temp, _environment):
+                if record.filekey == 'key':
+                    raise ValueError('source failure')
+                return frame
+            directories = {'TEST': [root], 'NEXT': [root]}
+            with patch.object(pipeline, 'discover', side_effect=[[bad], [next_source]]), \
+                    patch.object(pipeline, 'decode', side_effect=mock_decode):
+                self.assertEqual(pipeline.run(root, ['TEST', 'NEXT'], directories, {}, 1, False), 1)
+            summary = pd.read_parquet(root / 'cruises.parquet').set_index('cruise')
+            self.assertEqual(summary.loc['TEST', 'status'], 'failed')
+            self.assertEqual(summary.loc['NEXT', 'status'], 'completed')
+            self.assertFalse((root / 'cells_1min/TEST.parquet').exists())
+            self.assertTrue((root / '_completed/NEXT').exists())
+            self.assertFalse((root / '_tmp/NEXT').exists())
+            with patch.object(pipeline, 'discover', side_effect=AssertionError('must skip')):
+                self.assertEqual(pipeline.run(root, ['NEXT'], directories, {}, 1, True), 0)
+
+    def test_shared_aggregation_preserves_duplicates_and_unique_median(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            frame = pd.DataFrame({'lon': [134.] * 3, 'lat': [38.] * 3, 'depth_raw': [100., 100., 300.]})
+            shard = root / 'file.parquet'
+            frame.to_parquet(shard, index=False)
+            result = aggregation.aggregate_cruise([shard], root, root / 'cells.parquet', 'TEST', [41], 1, 3)
+            cells = pd.read_parquet(root / 'cells.parquet')
+            self.assertEqual(result['n_selected'], 3)
+            self.assertEqual(cells.median_depth_m.iloc[0], 100.)
+            self.assertEqual(cells.median_depth_m_unique_triples.iloc[0], 200.)
+            self.assertEqual(cells.n_unique_triples.iloc[0], 2)
+            self.assertEqual(len(cells.columns), 23)
+
+    def test_checked_points_keep_ieee_nan_and_historical_version(self):
+        frame = beams()
+        with tempfile.TemporaryDirectory() as name:
+            standard = points.checked_frame(frame, source(Path(name)), 10)
+            table = points.checked_table(standard, 1, {})
+        self.assertEqual(table['gobs'].null_count, 0)
+        self.assertTrue(np.isnan(table['gobs'].to_numpy()).all())
+        self.assertIn('exact source ping navigation', table['standardization_version'][0].as_py())
+        self.assertEqual(table['point_index_in_track'].to_pylist(), list(range(10, 15)))
+
+    def test_cell_partition_does_not_change_statistics(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            frame = pd.DataFrame({
+                'lon': [130., 131., 130., 132., 131., 130., 132.], 'lat': [38.] * 7,
+                'depth_raw': [100., 200., 100., 300., 250., 400., 350.],
             })
-            pq.write_table(pa.Table.from_pandas(df, schema=self.extract.STAGING_SCHEMA, preserve_index=False),
-                           staging / "filekey.parquet")
-            manifest = pd.DataFrame([{
-                "filekey": "filekey", "file_ordinal": 119, "status": "skipped_exists",
-                "mb_format": 41, "n_good": None, "n_rows": 5,
-            }])
-            old_extract_root, old_agg_root = self.extract.REPO_ROOT, self.aggregate.REPO_ROOT
-            self.extract.REPO_ROOT = self.aggregate.REPO_ROOT = root
-            try:
-                summary = self.extract.merge_cruise("TEST", manifest, staging_dir=staging, output_dir=root / "l1")
-                checked = root / summary["points_checked_path"]
-                merged = pd.read_parquet(checked)
-                self.assertEqual(merged["staging_row"].tolist(), list(range(5)))
-                self.assertEqual(merged["point_index_in_file"].tolist(), [40, 41, 42, 43, 44])
-                self.assertEqual(merged["native_quality_state"].tolist(), df["native_quality_state"].tolist())
-                self.assertEqual(summary["n_pass_basic"], 4)
-                self.assertEqual(summary["n_selected_basic_native_good"], 2)
-                self.assertEqual(manifest.iloc[0]["n_good"], 2)
-                self.assertEqual(summary["n_unknown"], 1)
-                outputs = []
-                for batch_size in (None, 2):
-                    output = root / f"cells_{batch_size}.parquet"
-                    result = self.aggregate.aggregate_track_file(
-                        input_path=checked, output_path=output, track_id="test",
-                        source_type="ncei_mb41", source_completeness="mb41_only",
-                        instrument_class_pred="multibeam", branch="multibeam_ncei",
-                        manual_review_flag=False, overwrite=False,
-                        selection_policy="basic_native_good", batch_size=batch_size,
-                    )
-                    self.assertEqual(result["n_selected"], 2)
-                    outputs.append(pd.read_parquet(output))
-                pd.testing.assert_frame_equal(*outputs)
-                result = self.aggregate.aggregate_track_file(
-                    input_path=checked, output_path=root / "excluded.parquet", track_id="test",
-                    source_type="ncei_mb41", source_completeness="mb41_only",
-                    instrument_class_pred="multibeam", branch="multibeam_ncei",
-                    manual_review_flag=False, overwrite=False, selection_policy="basic_native_good",
-                    batch_size=2, excluded_records=pd.DataFrame([{
-                        "filekey": "filekey", "file_ordinal": 119, "staging_row": 4,
-                    }]),
-                )
-                self.assertEqual(result["n_selected"], 1)
-                self.assertEqual(result["n_excluded_selected_records"], 1)
-            finally:
-                self.extract.REPO_ROOT, self.aggregate.REPO_ROOT = old_extract_root, old_agg_root
+            for partition_rows, filename in [(40_000_000, 'one'), (2, 'many')]:
+                shards = [root / 'first.parquet', root / 'second.parquet']
+                frame.iloc[:4].to_parquet(shards[0], index=False)
+                frame.iloc[4:].to_parquet(shards[1], index=False)
+                with patch.object(aggregation, 'TARGET_PARTITION_ROWS', partition_rows):
+                    aggregation.aggregate_cruise(shards, root, root / f'{filename}.parquet', 'TEST', [41], 1, len(frame))
+            pd.testing.assert_frame_equal(pd.read_parquet(root / 'one.parquet'), pd.read_parquet(root / 'many.parquet'),
+                                          check_exact=True)
 
-    def test_both_source_directory_layouts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            raw = root / "ncei/raw_round2/platforms_tree"
-            old_root = self.sources.REPO_ROOT
-            self.sources.REPO_ROOT = root
-            try:
-                for prefix, cruise in (("ship/", "SHIPPED"), ("", "FLAT")):
-                    path = raw / f"{prefix}{cruise}/sonar/data.gz"
-                    path.parent.mkdir(parents=True)
-                    path.touch()
-                    source, manifest = self.sources.resolve_source_paths(
-                        cruise, pd.DataFrame([{"relpath": f"{cruise}/sonar/data.gz"}]), raw
-                    )
-                    self.assertEqual(source, f"raw_round2/platforms_tree/{prefix}{cruise}")
-                    self.assertEqual(manifest.iloc[0]["source_relpath"], f"{prefix}{cruise}/sonar/data.gz")
-            finally:
-                self.sources.REPO_ROOT = old_root
+    def test_format_interval_union_does_not_fill_gaps(self):
+        left = format_times.interval_union([(0, 20), (10, 30), (50, 100)])
+        right = [(35, 40), (60, 80)]
+        self.assertEqual(left, [(0, 30), (50, 100)])
+        self.assertEqual(format_times.interval_intersection(left, right), [(60, 80)])
+        rows = [dict(mb_format=41, status='ok', n_rows=1, ping_time_start_us=0, ping_time_end_us=10),
+                dict(mb_format=58, status='ok', n_rows=1, ping_time_start_us=10, ping_time_end_us=20)]
+        summary = format_times.format_time_summary(rows)
+        self.assertTrue(summary['format_overlaps'])
+        self.assertEqual(summary['format_overlap_us'], 0)
+        self.assertEqual(aggregation.source_labels([41, 58]), ('ncei_mb41_mb58', 'mb41_mb58'))
 
-    def test_complete_edge_neighborhood_and_unique_cells(self):
-        grid = self.revision.expected_cells(132.00833333333333, 38.00833333333333)
-        duplicated = pd.concat([grid, grid])
-        metrics = self.revision.coverage_metric(set(duplicated["cell_id"]), grid)
-        self.assertEqual(metrics["core_coverage"], 1.)
-        self.assertEqual(metrics["ring_coverage"], 1.)
-        self.assertEqual(metrics["min_sector_coverage"], 1.)
-        cropped = grid.loc[grid["lon_center"].ge(132)]
-        truncated = self.revision.coverage_metric(set(cropped["cell_id"]), grid)
-        self.assertLess(truncated["ring_coverage"], 1.)
-        self.assertLess(truncated["core_coverage"], 1.)
+    def test_multiformat_overlap_stops_cruise_without_l2(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            records = [source(root, 41, 'first'), source(root, 58, 'second')]
+            frame = beams()
+            frame.attrs.update(ping_time_start_us=1_000_000, ping_time_end_us=1_000_004)
+            with patch.object(pipeline, 'decode', return_value=frame):
+                rows, summary = pipeline.process_cruise('TEST', records, root, {}, 1)
+            self.assertEqual(summary['status'], 'format_overlap')
+            self.assertEqual(summary['format_overlap_us'], 4)
+            self.assertEqual(summary['formats'], [41, 58])
+            self.assertFalse((root / 'cells_1min/TEST.parquet').exists())
+            pipeline.checkpoint(root, rows, summary)
+            self.assertFalse((root / '_completed/TEST').exists())
+            self.assertFalse((root / '_tmp/TEST').exists())
 
-    def test_diagnosis_and_final_file_quality_counts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            l1 = root / "TEST"
-            (l1 / "points_checked").mkdir(parents=True)
-            points = pd.DataFrame({
-                "filekey": ["key"] * 4, "file_ordinal": [0] * 4, "staging_row": [0, 1, 2, 3],
-                "lon": [134., 135., 134., 134.], "lat": [38.] * 4,
-                "depth_m_positive_down": [2400., 10000., 2500., np.nan],
-                "point_check_pass_basic": [True, True, True, False],
-                "native_quality_state": ["good", "good", "flagged", "null"],
-            })
-            points.to_parquet(l1 / "points_checked/points.parquet", index=False)
-            manifest = pd.DataFrame([{
-                "filekey": "key", "file_ordinal": 0, "source_relpath": "ship/TEST/data.gz",
-                "mb_format": 41, "n_rows": 4, "n_good": 2, "n_flagged": 1,
-                "n_null": 1, "n_unknown": 0, "n_pass_basic": 3,
-                "n_selected_basic_native_good": 2,
-            }])
-            empty = {column: 0 for column in manifest if column.startswith("n_")}
-            empty.update(filekey="empty", file_ordinal=1, source_relpath="ship/TEST/empty.gz", mb_format=41)
-            pd.concat([manifest, pd.DataFrame([empty])]).to_parquet(
-                l1 / "extraction_manifest.parquet", index=False,
-            )
-            diagnosis = root / "diagnosis.parquet"
-            pd.DataFrame([{
-                "staging_stem": "key", "file_ordinal": 0, "staging_row": 1,
-                "cell_id": "1min_7680_18900", "point_check_pass_basic": True,
-                "native_quality_state": "good",
-            }]).to_parquet(diagnosis, index=False)
-            records = self.revision.read_record_list(diagnosis)
-            self.assertEqual(records.iloc[0]["filekey"], "key")
-            self.assertIn("cell_id", records)
-            jam, strict = root / "jam.parquet", root / "strict.parquet"
-            pd.DataFrame({"cell_id": ["a"], "median_depth_file_balanced": [2390.]}).to_parquet(jam)
-            pd.DataFrame({"cell_id": ["a"], "representative_depth_m": [2390.]}).to_parquet(strict)
-            l2 = pd.DataFrame({
-                "track_id": ["test"], "cell_id": ["a"], "n_points_pass": [1], "median_depth_m": [2400.],
-            })
-            with patch.object(self.revision, "JAM", jam), patch.object(self.revision, "STRICT", strict), \
-                    patch.object(self.revision, "read_cells", return_value=l2):
-                files, cruises = self.revision.quality_tables(root, ["TEST"], root, diagnosis, diagnosis)
-            self.assertEqual(files.iloc[0]["n_selected"], 1)
-            self.assertEqual(files.iloc[0]["n_excluded_selected_records"], 1)
-            self.assertEqual(files.iloc[0]["n_cells_1min"], 1)
-            self.assertEqual(files.iloc[0]["flagged_proportion"], .25)
-            self.assertEqual(files.iloc[0]["r2_affected_record_count"], 1)
-            self.assertEqual(files.iloc[0]["source_relpath"], "ship/TEST/data.gz")
-            self.assertTrue(pd.isna(files.iloc[1]["flagged_proportion"]))
-            self.assertTrue(pd.isna(files.iloc[1]["has_native_edit_flag"]))
-            self.assertEqual(cruises.iloc[0]["n_selected"], 1)
-            self.assertEqual(cruises.iloc[1]["status"], "unprocessed_by_current_parser")
+    def test_points_subset_retains_whole_cruise_indices_and_sign(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            records = [source(root, 41, 'first'), source(root, 41, 'second')]
+            frame = beams()
+            with patch.object(points, 'decode', return_value=frame):
+                points.write_points(records, root / 'points.parquet', {'second'}, [133, 37, 135, 39], {})
+            result = pd.read_parquet(root / 'points.parquet')
+            self.assertEqual(result.point_index_in_track.tolist(), list(range(5, 10)))
+            self.assertEqual(result.point_index_in_file.tolist(), list(range(5)))
+            self.assertEqual(set(result.filekey), {'second'})
+            self.assertEqual(result[selection.SELECTION_COLUMN].sum(), 2)
+
+    def test_mb84_requires_its_original_projection(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            with self.assertRaises(FileNotFoundError):
+                decode.prepare_input(source(root, 84), root)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()
